@@ -64,11 +64,11 @@ type run struct {
 // GiveUp since its first failure (#659). An empty body makes the subject
 // the whole message, in the chat and in the mail (#778). chat: the chat took
 // it; err nil: the owner has it, or with no chat never will.
-func (r *run) tell(subject, body string) (chat bool, err error) {
+func (r *run) tell(subject, body string, freigabe ...int) (chat bool, err error) {
 	c, s := r.c, r.seen
 	r.tried[subject] = true
 	if c.chat() {
-		if err = post(r.ctx, c, subject, body); err == nil {
+		if err = post(r.ctx, c, subject, body, freigabe...); err == nil {
 			return true, nil
 		}
 		r.note("mitteilung an "+c.Person, err)
@@ -115,8 +115,8 @@ const maxBody, maxText = 4096, 1000
 
 var errBusy = errors.New("Bote: 429, zu viele Mitteilungen in dieser Minute")
 
-// post sends one message to bote-notify, its text cut until it fits.
-func post(ctx context.Context, c Config, subject, body string) error {
+// post sends one message to bote-notify, its text cut until it fits; a proposal's with its number (#1113).
+func post(ctx context.Context, c Config, subject, body string, freigabe ...int) error {
 	text := subject
 	if body != "" {
 		text += "\n\n" + body
@@ -124,6 +124,9 @@ func post(ctx context.Context, c Config, subject, body string) error {
 	var b bytes.Buffer
 	for n := maxText; ; n = n * 9 / 10 {
 		msg := map[string]any{"an": c.Person, "text": cut(text, n)}
+		for _, id := range freigabe {
+			msg["freigabe"] = id
+		}
 		b.Reset()
 		enc := json.NewEncoder(&b)
 		enc.SetEscapeHTML(false)
@@ -132,7 +135,12 @@ func post(ctx context.Context, c Config, subject, body string) error {
 			break
 		}
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.BoteURL, "/")+"/mitteilung", &b)
+	return bote(ctx, c, "/mitteilung", &b)
+}
+
+// bote posts one JSON body to bote-notify.
+func bote(ctx context.Context, c Config, path string, b io.Reader) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.BoteURL, "/")+path, b)
 	if err != nil {
 		return err
 	}
@@ -448,15 +456,18 @@ func (r *run) proposals() error {
 		headline := strings.Join(strings.Fields(cmp.Or(p.Card.Summary, p.Reason)), " ")
 		// one that fails blocks no other; it is told again on the next run,
 		// on the chat until the chat takes it (#659)
-		chat, e := r.tell(fmt.Sprintf("Freigabe #%d: %s · %s#%d", p.ID, headline, c.InboxURL, p.ID), "") // its card (#857)
+		chat, e := r.tell(fmt.Sprintf("Freigabe #%d: %s · %s#%d", p.ID, headline, c.InboxURL, p.ID), "", p.ID) // its card (#857)
 		if chat || e == nil && !c.chat() {
 			seen[p.ID] = true
 		} else if e != nil {
 			err = e
 		}
 	}
-	for id := range seen { // decided ones are forgotten, so the file stays small
+	for id := range seen { // decided ones are forgotten, so the file stays small, and their line in the chat goes (#1113)
 		if !isOpen[id] {
+			if c.chat() { // best effort: bote-notify logs how it went; one without /loeschen answers 404
+				bote(r.ctx, c, "/loeschen", strings.NewReader(fmt.Sprintf(`{"freigabe":%d}`, id)))
+			}
 			delete(seen, id)
 		}
 	}

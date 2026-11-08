@@ -13,7 +13,14 @@ short prefix of the text, never the target, Hermes' output or the whole
 text.
 
 A new proposal is one line like any other message (#778): approvals happen
-only in the Inbox, so there is no poll and no vote to count.
+only in the Inbox, so there is no poll and no vote to count. laib-notify sends
+it with "freigabe": N, and this keeps which message it was in
+/gesendet/freigaben.json (#1113): on Signal sent straight through
+signal-cli's daemon, whose send answers the timestamp (`hermes send` does not
+say it), on Telegram the message_id of `hermes send --json`. Once the proposal
+is decided, POST /loeschen {"freigabe": N} deletes it for everyone, within
+Signal's day or Telegram's 48 hours; past them, or on any failure, one log
+line and nothing else.
 POST /ablage (#521) is the Bote's filing: the laib-ablage plugin in Hermes
 sends a photo or PDF someone sent with "ablegen", with the same bearer, and
 this writes it into Paperless' consume folder as Bote/<sender>/<title>.<ext>
@@ -42,6 +49,15 @@ class Config:
     consume: str = "/consume"              # Paperless' consume folder (#521); missing: /ablage answers 503
     max_file: int = 25 << 20               # one document, as Homes' upload (haus#10)
     owner: tuple = (1000, 1000)            # Paperless' user (paperless.container USERMAP_UID): it removes what it filed
+    sent: str = "/gesendet/freigaben.json" # a proposal's notice, by its number: which message, to delete once decided (#1113)
+    telegram_api: str = "https://api.telegram.org"
+
+
+# how long after sending a message can still be deleted for everyone (#1113): Signal's own
+# rule for the sender, a day (Signal-Android MessageConstraintsUtil, remote config
+# global.normalDeleteMaxAgeInSeconds, default 1 day; signal-cli itself checks nothing);
+# a Telegram bot's own message, 48 hours (Bot API deleteMessage)
+KEEP = {"signal": 24 * 3600, "telegram": 48 * 3600}
 
 
 class Limiter:
@@ -77,8 +93,9 @@ def prepare_home(cfg):
                 os.replace(tmp, dst)
 
 
-def deliver(cfg, channels, text):
-    """The first channel that takes it, in order and within the deadline; None when none did."""
+def deliver(cfg, channels, text, ident=False):
+    """The first channel that takes it, in order and within the deadline, and with ident the sent
+    message's id where it can be deleted (KEEP); (None, None) when none did."""
     prepare_home(cfg)
     env = {k: v for k, v in os.environ.items() if k != "NOTIFY_TOKEN"}
     env["HERMES_HOME"] = cfg.hermes_home
@@ -88,28 +105,104 @@ def deliver(cfg, channels, text):
         if left <= 0:
             cfg.log(f"mitteilung: {platform} nicht versucht, Frist abgelaufen")
             continue
+        if ident and platform == "signal":  # hermes send does not say the timestamp: signal-cli's own send does
+            try:
+                return ch, str(signal_rpc(cfg, "send", {"message": text, **signal_to(ch)}, min(cfg.channel_timeout, left))["timestamp"])
+            except (OSError, ValueError, KeyError, TypeError) as e:
+                cfg.log(f"mitteilung: signal direkt nicht gesendet ({type(e).__name__}), über Hermes")
+                left = end - time.monotonic()
         try:
-            r = subprocess.run([*cfg.send, "--to", ch, "--file", "-"], input=text, text=True, env=env,
-                               capture_output=True, timeout=min(cfg.channel_timeout, left))
+            r = subprocess.run([*cfg.send, "--to", ch, "--file", "-", *(["--json"] if ident else [])], input=text, text=True,
+                               env=env, capture_output=True, timeout=min(cfg.channel_timeout, left))
             if r.returncode == 0:
-                return ch
+                return ch, sent_id(r.stdout) if ident and platform == "telegram" else None  # Signal's says no timestamp
             cfg.log(f"mitteilung: {platform} lehnt ab (rc={r.returncode})")  # Hermes' output names the target
         except (OSError, subprocess.TimeoutExpired) as e:
             cfg.log(f"mitteilung: {platform} nicht erreichbar: {type(e).__name__}")
-    return None
+    return None, None
 
 
-def signal_env(cfg):
-    """SIGNAL_HTTP_URL and SIGNAL_ACCOUNT from the platform .env; empty without Signal."""
+def sent_id(out):
+    """the message_id in hermes send --json's result (Telegram), else None"""
+    try:
+        got = json.loads(out).get("message_id")
+        return str(got) if got not in (None, "") else None
+    except (ValueError, AttributeError):
+        return None
+
+
+def signal_to(ch):
+    target = ch.split(":", 1)[1]
+    return {"groupId": target[6:]} if target.startswith("group:") else {"recipient": [target]}
+
+
+def signal_rpc(cfg, method, params, timeout):
+    """one JSON-RPC call to signal-cli's daemon (bote-signal); its result. The error's text is
+    not passed on: it names the number."""
+    url, account = signal_env(cfg)
+    if not url:
+        raise OSError("kein Signal")
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": {"account": account, **params}}).encode()
+    req = urllib.request.Request(url.rstrip("/") + "/api/v1/rpc", data=body, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        out = json.loads(r.read())
+    if out.get("error") is not None:
+        raise ValueError("signal-cli: Fehler %s" % (out["error"] or {}).get("code"))
+    return out["result"]
+
+
+_sent_lock = threading.Lock()
+
+
+def sent(cfg, change):
+    """reads freigaben.json without what can no longer be deleted, lets change edit it, writes it
+    back atomically (0600: it names the target); what change returned"""
+    with _sent_lock:
+        try:
+            with open(cfg.sent) as f:
+                book = json.load(f)
+        except (OSError, ValueError):
+            book = {}
+        now = time.time()
+        book = {k: v for k, v in book.items() if isinstance(v, dict) and now - v.get("at", 0) < KEEP.get(v.get("kanal", "").split(":")[0], 0)}
+        got = change(book)
+        tmp = cfg.sent + ".tmp"
+        with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+            json.dump(book, f)
+        os.replace(tmp, cfg.sent)
+        return got
+
+
+def unsend(cfg, rec):
+    """deletes one sent message for everyone; raises on failure"""
+    platform, target = rec["kanal"].split(":")[0], rec["kanal"].split(":")[1]
+    if platform == "signal":
+        signal_rpc(cfg, "remoteDelete", {"targetTimestamp": int(rec["id"]), **signal_to(rec["kanal"])}, cfg.channel_timeout)
+        return
+    token = platform_env(cfg).get("TELEGRAM_BOT_TOKEN", "")
+    body = json.dumps({"chat_id": target, "message_id": int(rec["id"])}).encode()
+    req = urllib.request.Request(f"{cfg.telegram_api}/bot{token}/deleteMessage", data=body, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=cfg.channel_timeout) as r:  # an HTTPError's text carries no URL, so no token
+        if not json.loads(r.read()).get("ok"):
+            raise ValueError("telegram: nicht gelöscht")
+
+
+def platform_env(cfg):
+    """the platform .env's lines (post-deploy's copy, credentials only)"""
     env = {}
     try:
         with open(os.path.join(cfg.hermes_src, ".env")) as f:
             for l in f:
                 k, _, v = l.strip().partition("=")
-                if k in ("SIGNAL_HTTP_URL", "SIGNAL_ACCOUNT"):
-                    env[k] = v
+                env[k] = v
     except OSError:
         pass
+    return env
+
+
+def signal_env(cfg):
+    """SIGNAL_HTTP_URL and SIGNAL_ACCOUNT from the platform .env; empty without Signal."""
+    env = platform_env(cfg)
     return env.get("SIGNAL_HTTP_URL", ""), env.get("SIGNAL_ACCOUNT", "")
 
 
@@ -204,13 +297,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         cfg = self.server.cfg
-        if self.path not in ("/mitteilung", "/ablage"):
+        if self.path not in ("/mitteilung", "/ablage", "/loeschen"):
             return self.reply(404, {"fehler": "unbekannter Pfad"})
         got = self.headers.get("Authorization", "")
         if not cfg.token or not hmac.compare_digest(got.encode(), ("Bearer " + cfg.token).encode()):
             return self.reply(401, {"fehler": "kein gültiger Token"})
         if self.path == "/ablage":
             return self.ablage(cfg)
+        if self.path == "/loeschen":
+            return self.loeschen(cfg)
         try:
             n = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -240,12 +335,46 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(429, {"fehler": "zu viele Mitteilungen, später noch einmal"})
         if len(text) > cfg.max_text:
             text = text[:cfg.max_text - 1] + "…"
-        ch = deliver(cfg, channels, text)
+        n = msg.get("freigabe")
+        n = n if type(n) is int and n > 0 else None  # a proposal's notice (#1113), never a bool
+        ch, mid = deliver(cfg, channels, text, ident=n is not None)
         kanal = ch.split(":")[0] if ch else ""
         cfg.log(f"mitteilung: an={person} kanal={kanal or '-'} {'ok' if ch else 'fehlgeschlagen'} text={text[:12]!r}…")
         if not ch:
             return self.reply(502, {"fehler": "kein Kanal hat die Mitteilung angenommen"})
+        if mid:
+            try:
+                sent(cfg, lambda book: book.update({str(n): {"kanal": ch, "id": mid, "at": time.time()}}))
+            except OSError as e:
+                cfg.log(f"mitteilung: #{n} nicht vorgemerkt: {type(e).__name__}")
         return self.reply(200, {"ok": True, "kanal": kanal})
+
+    def loeschen(self, cfg):
+        """{freigabe: N} → {ok, geloescht}: the notice of a decided proposal goes for everyone
+        (#1113). Best effort: anything that fails is one log line and a 200, never a retry."""
+        try:
+            n = int(self.headers.get("Content-Length", "0"))
+            got = json.loads(self.rfile.read(n) if 0 < n <= cfg.max_body else b"null")["freigabe"]
+            if type(got) is not int:
+                raise TypeError
+        except (ValueError, TypeError, KeyError):
+            return self.reply(400, {"fehler": "erwartet: {freigabe: <Nummer>}"})
+        try:
+            rec = sent(cfg, lambda book: book.pop(str(got), None))
+        except OSError as e:
+            cfg.log(f"loeschen: #{got} kein Vermerk lesbar: {type(e).__name__}")
+            return self.reply(200, {"ok": True, "geloescht": False})
+        if not rec:  # never sent with an id, or past its time (sent() dropped it)
+            cfg.log(f"loeschen: #{got} nichts zu löschen")
+            return self.reply(200, {"ok": True, "geloescht": False})
+        platform = rec["kanal"].split(":")[0]
+        try:
+            unsend(cfg, rec)
+        except (OSError, ValueError, KeyError, TypeError, IndexError) as e:
+            cfg.log(f"loeschen: #{got} {platform} fehlgeschlagen: {type(e).__name__}")
+            return self.reply(200, {"ok": True, "geloescht": False})
+        cfg.log(f"loeschen: #{got} {platform} ok")
+        return self.reply(200, {"ok": True, "geloescht": True})
 
     def ablage(self, cfg):
         """{titel, plattform, absender, name, daten: base64} → {ok, titel} (#521)"""

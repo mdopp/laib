@@ -499,8 +499,8 @@ func nextID(inbox string) (int, error) {
 }
 
 // Save writes one inbox entry. A new one starts laib-notify at once (#968),
-// so the owner hears of it in seconds, not on the timer's next pass; the
-// timer stays the fallback, so a red start fails nothing.
+// so the owner hears of it in seconds, and so does a decided one (#1113): its
+// chat line goes. The timer stays the fallback, so a red start fails nothing.
 func Save(inbox string, p *Proposal) error {
 	b, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
@@ -508,7 +508,7 @@ func Save(inbox string, p *Proposal) error {
 	}
 	path := filepath.Join(inbox, strconv.Itoa(p.ID)+".json")
 	_, had := os.Stat(path)
-	if err := atomicfile.Write(path+".tmp", path, b, 0o644); err != nil || had == nil {
+	if err := atomicfile.Write(path+".tmp", path, b, 0o644); err != nil || had == nil && p.Status == "open" {
 		return err
 	}
 	sysd.StartNoBlock(context.Background(), "laib-notify.service")
