@@ -115,6 +115,15 @@ class Check(unittest.TestCase):
         self.assertEqual(st["findings"][0]["severity"], "gelb")
         self.assertIn("photos.example.org", st["findings"][0]["detail"])
 
+    def test_the_lan_address_on_plain_http_is_not_an_address_without_certificate(self):
+        """#1043: the box's bare LAN address is an http:// site (ADR 0007: no certificate is valid for
+        an address, nothing on 443); a handshake to it gets Caddy's alert, which is no finding"""
+        cfg = config(HOSTS)
+        cfg["apps"]["http"]["servers"]["srv2"] = {"listen": [":80"], "routes": [{"match": [{"host": ["192.168.178.100"]}], "handle": []}]}
+        _, st = run(Admin(cfg).url, TLS(90, without={None}).port)
+        self.assertTrue(st["detail"].startswith("3 Adressen · Zertifikate gültig bis"), st["detail"])
+        self.assertEqual(st["findings"], [])
+
     def test_admin_api_down_is_not_measured(self):
         _, st = run("http://127.0.0.1:9", TLS(90).port)
         self.assertTrue(st["detail"].startswith("nicht gemessen: Caddys Admin-Schnittstelle antwortet nicht"), st["detail"])
