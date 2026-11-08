@@ -159,7 +159,10 @@ on every apply, each step changing only what differs:
   mich“ stack is uploaded through the API and handed to its person), view and add notes and
   tags, view and add correspondents (add: intake makes a new sender), view
   document types, custom fields and users (so a
-  household person is never taken for a sender), and its own UI settings
+  household person is never taken for a sender), delete documents (a
+  document scanned twice goes to Paperless' trash once the whole scan took
+  its metadata, owner 2026-11-08; only the household's and its own, and the
+  trash keeps it, restorable), and its own UI settings
   (`view_uisettings`: Paperless guards `/api/ui_settings/` with it, where a
   client reads which permissions it has; without it Paperless answers 403
   and a „nur für mich“ stack never starts). Its password is the box's

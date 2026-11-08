@@ -388,10 +388,12 @@ class Dokumente(unittest.TestCase):
         [u] = fake.users
         self.assertEqual((u["username"], u["is_superuser"], u["is_staff"], u["groups"]), ("dokumente", False, False, []))
         self.assertEqual(set(u["user_permissions"]), {"view_document", "add_document", "change_document", "view_note", "add_note", "view_tag", "add_tag",
-                                                      "view_correspondent", "add_correspondent", "view_documenttype", "view_customfield", "view_user", "view_uisettings"})
+                                                      "view_correspondent", "add_correspondent", "view_documenttype", "view_customfield", "view_user", "view_uisettings",
+                                                      "delete_document"})
         # view_uisettings: Paperless guards /api/ui_settings/ with it, where a client reads its own permissions
-        # add_document since „nur für mich“ (owner 2026-10-28): dokumente uploads a private stack itself; delete stays out
-        for c in u["user_permissions"]:
+        # add_document since „nur für mich“ (owner 2026-10-28): dokumente uploads a private stack itself; delete_document
+        # since its duplicate scans go to the trash (owner 2026-11-08); no other delete
+        for c in set(u["user_permissions"]) - {"delete_document"}:
             self.assertFalse(c.startswith("delete_") or "mail" in c or "workflow" in c or "group" in c or c == "change_user", c)
         self.assertEqual(fake.passwords["dokumente"], "dok-pw")
         self.assertIn("laib-secret: PAPERLESS_TOKEN=" + fake.tokens["dokumente"], r.stdout.splitlines())
@@ -412,12 +414,12 @@ class Dokumente(unittest.TestCase):
 
     def test_a_widened_user_is_narrowed_and_a_foreign_password_set_back(self):
         fake = Fake(users=[{"id": 5, "username": "dokumente", "is_superuser": True, "is_staff": True, "is_active": True, "groups": [1],
-                            "user_permissions": ["delete_document"]}])
+                            "user_permissions": ["delete_tag"]}])
         fake.passwords["dokumente"] = "by-hand"
         r = self.setup(fake)
         u = fake.users[0]
         self.assertEqual((u["is_superuser"], u["is_staff"], u["groups"]), (False, False, []))
-        self.assertNotIn("delete_document", u["user_permissions"])
+        self.assertNotIn("delete_tag", u["user_permissions"])
         self.assertEqual(fake.passwords["dokumente"], "dok-pw")
         self.assertIn("laib-secret: PAPERLESS_TOKEN=", r.stdout)
 
