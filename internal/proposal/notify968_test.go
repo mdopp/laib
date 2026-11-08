@@ -32,7 +32,8 @@ func starts(t *testing.T, fail bool) *[]string {
 }
 
 // #968: a new proposal starts laib-notify at once, without waiting for it;
-// saving it again (anchor, step, decision) does not.
+// saving it again while open (anchor, step) does not; its decision does
+// (#1113), so the chat line that announced it goes in seconds.
 func TestFilingStartsNotifyOnce(t *testing.T) {
 	ctx := context.Background()
 	got := starts(t, false)
@@ -49,8 +50,8 @@ func TestFilingStartsNotifyOnce(t *testing.T) {
 	if err := Approve(ctx, repo, inbox, p, "human:mdopp"); err != nil {
 		t.Fatal(err)
 	}
-	if len(*got) != 1 || (*got)[0] != "--user start --no-block laib-notify.service" {
-		t.Fatalf("want one non-blocking start, got %q", *got)
+	if len(*got) != 2 || (*got)[0] != "--user start --no-block laib-notify.service" || (*got)[1] != (*got)[0] {
+		t.Fatalf("want a non-blocking start on filing and one on the decision, got %q", *got)
 	}
 }
 
@@ -67,5 +68,23 @@ func TestFailingStartKeepsTheProposal(t *testing.T) {
 	}
 	if q, err := Get(inbox, p.ID); err != nil || q.Status != "open" || len(*got) != 1 {
 		t.Fatalf("%v %+v %q", err, q, *got)
+	}
+}
+
+// #1113: a rejection starts laib-notify too, so its chat line goes.
+func TestRejectingStartsNotify(t *testing.T) {
+	ctx := context.Background()
+	got := starts(t, false)
+	repo, inbox := setup(t)
+	os.WriteFile(filepath.Join(repo, "box.yml"), []byte("domain: y\n"), 0o644)
+	p, err := Create(ctx, repo, inbox, "ops", "rename domain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Reject(ctx, repo, inbox, p, "human:mdopp", ""); err != nil {
+		t.Fatal(err)
+	}
+	if len(*got) != 2 {
+		t.Fatalf("want a start on filing and one on the rejection, got %q", *got)
 	}
 }

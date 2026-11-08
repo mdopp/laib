@@ -211,7 +211,18 @@ Without a number at all, Discord or Matrix work.
    twenty in total per minute; `MEDIA:` is refused (Hermes would attach a
    file). The log names the person, the platform, the exit code and the
    first twelve characters, never the target or Hermes' output.
-   `render/people/people.json` is 0600. Known limit: Hermes mirrors a sent
+   `render/people/people.json` is 0600. A proposal's notice carries
+   `"freigabe": N` (#1113): on Signal bote-notify sends it straight through
+   signal-cli's daemon (`send` answers the timestamp, `hermes send` does
+   not say it), on Telegram with `hermes send --json` (its `message_id`),
+   and notes channel, id and time in `bote/gesendet/freigaben.json` (0600).
+   When the proposal leaves the Inbox (approved, rejected, stale, refiled),
+   laib-notify posts `POST /loeschen {"freigabe": N}` and the message goes for
+   everyone: Signal's `remoteDelete`, Telegram's `deleteMessage`. Signal lets
+   a sender do that for a day (Signal-Android's
+   `global.normalDeleteMaxAgeInSeconds`), Telegram a bot for 48 hours; past
+   that the note is dropped and nothing is sent. Any failure is one log line
+   (`loeschen: #N …`) and a 200: the decision never waits on it. Known limit: Hermes mirrors a sent
    message into the private copy's sessions, not the gateway's, so when the
    person answers, the Bote does not see what it sent. Home
    Assistant's template renders `rest_command.mitteilung` against it, and
