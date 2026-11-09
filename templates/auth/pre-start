@@ -89,6 +89,15 @@ bad = [k for k, v in reg.items() if not (re.fullmatch(r"[1-9][0-9]{0,2}", v) if 
 if bad:
     print("services/auth/values.yml: " + ", ".join(f"{k}={reg[k]!r}" for k in bad) +
           " is no value Authelia takes (AUTH_MAX_RETRIES a number 1-999, the times like 10m, 30m, 1h)", file=sys.stderr); sys.exit(1)
+# A passkey alone as two factors (owner 2026-11-09, revising 2026-11-02:
+# "solange es ein Fallback gibt, ist nur Passkey auch als Experiment OK"):
+# AUTH_PASSKEY_TWO_FACTORS on lets a passkey that verified its user
+# (fingerprint, PIN) satisfy two_factor. Authelia calls the option
+# experimental (checked against 4.39.x); password plus passkey or code stays.
+uv2 = E.get("AUTH_PASSKEY_TWO_FACTORS", "on").strip()
+if uv2 not in ("on", "off"):
+    print(f"services/auth/values.yml: AUTH_PASSKEY_TWO_FACTORS={uv2!r} is neither on nor off", file=sys.stderr); sys.exit(1)
+uv2 = "true" if uv2 == "on" else "false"
 conf = f"""---
 # rendered by laib pre-start (templates/auth); access rules come from /laib/laib-access.yml, OIDC clients from oidc-clients.yml
 theme: dark
@@ -134,19 +143,16 @@ session:
       authelia_url: 'https://auth.{DOMAIN}'
       default_redirection_url: '{E["LAIB_START_URL"]}'
 # Passkeys (owner, 2026-11-02): sign in with a passkey instead of name and
-# password. Authelia counts a passkey as one factor; where a route asks for
-# two (two_factor), it then asks for the password too, so a passkey and the
-# password replace password and code. Not the experimental option that lets
-# a passkey alone count as two.
-#
-# From outside the LAN a route may ask two factors where home asks one
-# (routes' outside:, laib#1131): the passkey is the second factor offered
-# first (default_2fa_method), a code from an app stays possible. A passkey
-# alone still counts as one: only the experimental option would change
-# that, and the owner chose against it (2026-11-02).
+# password. From outside the LAN a route may ask two factors where home asks
+# one (routes' outside:, laib#1131): the passkey is the second factor
+# offered first (default_2fa_method). With AUTH_PASSKEY_TWO_FACTORS on
+# (above) a passkey that verified its user counts as both; without user
+# verification, or with the option off, Authelia asks the password too.
+# Password plus passkey or plus a code from an app always stays.
 default_2fa_method: 'webauthn'
 webauthn:
   enable_passkey_login: true
+  experimental_enable_passkey_uv_two_factors: {uv2}
   display_name: 'Box {DOMAIN}'
 storage:
   encryption_key: '{S("AUTHELIA_STORAGE_KEY")}'

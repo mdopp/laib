@@ -130,13 +130,26 @@ class PreStart(unittest.TestCase):
         self.assertIn("default_redirection_url: 'https://admin.vm.test/'", conf)
         self.assertNotIn("laib.vm.test", conf)
 
-    def test_a_passkey_signs_in_and_counts_as_one_factor(self):
-        # owner 2026-11-02: passkeys for the box login; the experimental
-        # "a passkey alone is two factors" stays off
+    def test_a_verified_passkey_counts_as_two_factors_by_default(self):
+        # owner 2026-11-09 (revising 2026-11-02): a passkey alone from outside,
+        # as an experiment, as long as password plus passkey or code stays
         (self.cfg / "oidc.pem").write_text(KEY)
         _, _, conf = self.run_hook()
         self.assertIn("  enable_passkey_login: true", conf)
-        self.assertNotIn("experimental_enable_passkey_uv_two_factors", conf)
+        self.assertIn("  experimental_enable_passkey_uv_two_factors: true", conf)
+        self.assertIn("default_2fa_method: 'webauthn'", conf)
+        self.assertNotRegex(conf, r"(?m)^totp:\n\s+disable: true", "the code from an app stays as a fallback")
+
+    def test_the_owner_can_switch_it_off_and_a_typo_stops(self):
+        (self.cfg / "oidc.pem").write_text(KEY)
+        self.env["AUTH_PASSKEY_TWO_FACTORS"] = "off"
+        _, _, conf = self.run_hook()
+        self.assertIn("  experimental_enable_passkey_uv_two_factors: false", conf)
+        self.env["AUTH_PASSKEY_TWO_FACTORS"] = "ja"
+        (self.render / "authelia" / "laib-clients.yml").write_text(laib_clients())
+        p = subprocess.run([sys.executable, str(HOOK)], env=self.env, capture_output=True, text=True, timeout=120)
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn("AUTH_PASSKEY_TWO_FACTORS", p.stderr)
 
     def test_authelia_reads_the_one_list(self):
         unit = UNIT.read_text()
