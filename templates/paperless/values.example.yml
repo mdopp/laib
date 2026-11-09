@@ -34,3 +34,4 @@ PAPERLESS_MAIL_USER: ""                 # the mailbox's login, e.g. webmaster@ex
 PAPERLESS_MAIL_FILTER_TO: ""            # only mail to this address (an alias of the mailbox); empty: every mail in the folder
 PAPERLESS_MAIL_FOLDER: INBOX
 PAPERLESS_MAIL_PASSWORD: !secret PAPERLESS_MAIL_PASSWORD
+NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN       # the mail receipt through the Bote; empty without the Bote, then no message
