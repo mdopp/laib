@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.0](https://github.com/mdopp/laib/compare/v2.15.0...v2.16.0) (2026-11-09)
+
+
+### Features
+
+* **template:** paperless tells whoever filed a document by mail whether it arrived ([#1142](https://github.com/mdopp/laib/issues/1142)) ([4860637](https://github.com/mdopp/laib/commit/4860637084b911fa48488d6f3244edf7f778cded))
+
 ## [2.15.0](https://github.com/mdopp/laib/compare/v2.14.0...v2.15.0) (2026-11-09)
 
 
