@@ -6,6 +6,8 @@ SIGNAL_ACCOUNT: "+4915112345678"          # Signal: the Bote's own number, E.164
 SIGNAL_ALLOWED_USERS: "+4915198765432"    # who else may talk to the Bote on Signal, comma-separated (ADR 0016 §5); everyone in box.yml people with a signal: id may anyway (#586)
 PROFILE_NAME: "${ASSISTANT}"              # the Bote's Signal profile name, what the family sees above its messages; empty: left as it is
 PROFILE_AVATAR: homes-avatar.png          # its Signal picture, a PNG in this template's folder; empty: left as it is
+PROFILE_ABOUT: "Eure Box zu Hause · ${DOMAIN} · App: https://github.com/mdopp/homes-android/releases/latest/download/app-release.apk"   # its Signal description, at most 140 characters (Signal's limit; longer loses its last · parts); empty: left as it is
+APP_LINK: https://github.com/mdopp/homes-android/releases/latest/download/app-release.apk   # the Homes app's download (its latest release, as Homes's own setup card links it) in the welcome a person gets once; empty: the welcome names no app
 MATRIX_HOMESERVER: ""                   # Matrix: the Bote's homeserver, https://matrix.example.org; secret BOTE_MATRIX_TOKEN
 MATRIX_ALLOWED_USERS: ""                  # who may talk to the Bote on Matrix, comma-separated Matrix IDs
 MATRIX_TOKEN: !secret BOTE_MATRIX_TOKEN

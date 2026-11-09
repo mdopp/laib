@@ -97,6 +97,20 @@ cp "$(dirname "$0")/directory_plugin.py" "$DIR/__init__.py"
 printf 'name: laib-directory\nversion: "1"\ndescription: the Bote'"'"'s directory in front of the model, its screens verbatim (laib#471)\n' > "$DIR/plugin.yaml"
 rm -rf "$H/plugins/laib-persona"   # its name until ADR 0030
 ENABLED="laib-directory"
+# The welcome (owner, 2026-11-09): laib-directory puts this line in front of the Bote's first answer
+# to each person in box.yml people, once per person (laib-willkommen-gesendet.json notes who had it);
+# {name} is theirs. A sender who is nobody's gets no answer from Hermes, and no welcome.
+python3 - "$H/laib-willkommen.json" "${LAIB_ASSISTANT:-Homes}" "${LAIB_DOMAIN:-}" "${APP_LINK:-}" <<'PY'
+import json, sys
+path, assistant, domain, app = sys.argv[1:]
+wo = ["Alles im Überblick: https://www." + domain] if domain else []
+wo += ["Die App für dein Handy: " + app] if app else []
+text = "Hallo {name}, ich bin %s, eure Box zu Hause." % assistant
+if wo:
+    text += " " + " · ".join(wo)
+with open(path, "w") as f:
+    json.dump({"text": text}, f, ensure_ascii=False)
+PY
 # Who switched (#591): with the ha tool or the Automat wired, laib-journal notes the person who wrote
 # beside HA's context id in Laib's journal (home-assistant README, "Who switched"); the hand bote may note
 JOUR="$H/plugins/laib-journal"
@@ -254,7 +268,7 @@ Laib schreibt dem Admin hierher: Vorfälle (seit 10 Minuten rot), Updates und je
 Wenn du etwas nicht weißt, sag es. Geht es um einen Dienst der Box und kommst du nicht weiter, biete an, die Frage an den Admin weiterzugeben (laib escalate): Laib legt sie ihm als Box-Aufgabe hin, nichts davon verlässt das Haus.${UNBEANTWORTET}${ABLAGE}
 SOUL
 fi
-# The Bote's Signal profile (owner, 2026-11-09): PROFILE_NAME and the Homes picture, set through
+# The Bote's Signal profile (owner, 2026-11-09): PROFILE_NAME, PROFILE_ABOUT and the Homes picture, set through
 # signal-cli's daemon only when they differ from what was set last; a failure never makes this red.
 [ -z "${SIGNAL_ACCOUNT:-}" ] || python3 "$(dirname "$0")/signal_profile.py" || true
 echo "hermes config rendered: $H/.env, $H/config.yaml"
