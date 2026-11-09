@@ -143,9 +143,11 @@ func (p *Proposal) wish() bool {
 	return p.Boxless() && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") })
 }
 
-// Boxless: wishes and repairs only change nothing on the box; no run carries them.
+// Boxless: wishes, repairs and Einblicke change nothing on the box; no run carries them.
 func (p *Proposal) Boxless() bool {
-	return len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") && !strings.HasPrefix(f, "repairs/") })
+	return len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool {
+		return !strings.HasPrefix(f, "wishes/") && !strings.HasPrefix(f, "repairs/") && !strings.HasPrefix(f, "einblicke/")
+	})
 }
 
 // LockRepo serialises what moves main (#609): an approve's merge, a

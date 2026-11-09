@@ -285,7 +285,12 @@ snapshot refuses the action — `policy.yml envelope.snapshot: optional` is
 the only way around it. `write` and `read` go through an `os.Root` opened
 on the service's data path, so no symlink and no `..` leaves it; `exec`
 runs only in the service's own containers; `look` runs a read-only command
-there without budget or snapshot, because looking is unbounded.
+there without budget or snapshot, because looking is unbounded — except
+in the family's data (ADR 0032): a template's `private: sealed` (the
+archive) lets no verb inside, `private: approval` (Paperless, Immich,
+Radicale, Reitti, the file share, Vaultwarden) lets an agent look, read and
+exec only for an hour after a human approved an Einblick in the Inbox, and
+the journal keeps only the size of what came out.
 
 **Watching.** The ops hand watches the journal, `/ready` and `laib logs`
 on its tick (`operator.tick`, ten minutes); red lines also reach it through

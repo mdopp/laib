@@ -1,6 +1,7 @@
 name: vaultwarden
 title: Vaultwarden
 beschreibung: Passwörter der Familie
+private: approval     # ADR 0032: the family's data; an agent looks in for an hour after a human's Einblick, the journal keeps no output
 template: {registry: builtin, name: vaultwarden, version: 1}
 provides: [passwords]
 upstream: [https://github.com/dani-garcia/vaultwarden, https://github.com/dani-garcia/vaultwarden/wiki]   # where the Operator's web search looks first (#544)

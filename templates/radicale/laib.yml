@@ -1,6 +1,7 @@
 name: radicale
 title: Kalender
 beschreibung: Termine und Kontakte der Familie
+private: approval     # ADR 0032: the family's data; an agent looks in for an hour after a human's Einblick, the journal keeps no output
 template: {registry: builtin, name: radicale, version: 1}
 provides: [calendar, contacts]
 upstream: [https://github.com/Kozea/Radicale, https://radicale.org/]   # where the Operator's web search looks first (#544)
