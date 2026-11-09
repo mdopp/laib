@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.15.0](https://github.com/mdopp/laib/compare/v2.14.0...v2.15.0) (2026-11-09)
+
+
+### Features
+
+* **auth:** a verified passkey alone counts as two factors, experimental, with the fallbacks kept ([#1137](https://github.com/mdopp/laib/issues/1137)) ([dca112a](https://github.com/mdopp/laib/commit/dca112ae60ab8ed9874c652c83075bb82a193f9f)), closes [#1136](https://github.com/mdopp/laib/issues/1136)
+* **backup:** the copy off the box may be an S3 bucket with Object Lock (ADR 0033) ([#1129](https://github.com/mdopp/laib/issues/1129)) ([7963967](https://github.com/mdopp/laib/commit/79639670075f61c6247183b8fd9c2b3c3d97909c))
+* **envelope:** agents stay out of the family's data (ADR 0032) ([#1124](https://github.com/mdopp/laib/issues/1124)) ([2c356eb](https://github.com/mdopp/laib/commit/2c356eb5cd1dc1429b2a9e88c0db324bc4d2fa0c)), closes [#1123](https://github.com/mdopp/laib/issues/1123)
+* **registry:** every new image is one nightly card a person taps, with its changelog summary (ADR 0034) ([#1138](https://github.com/mdopp/laib/issues/1138)) ([5340037](https://github.com/mdopp/laib/commit/53400372bd64f8041b576723821f03a0cf1ea1b2))
+* **render:** files only at home, its share links for everyone ([#1135](https://github.com/mdopp/laib/issues/1135)) ([21af08f](https://github.com/mdopp/laib/commit/21af08f8e116c18231ba0637eab83d96f33329a8)), closes [#1133](https://github.com/mdopp/laib/issues/1133)
+* **render:** Homes asks the second factor from outside the LAN ([#1134](https://github.com/mdopp/laib/issues/1134)) ([2024537](https://github.com/mdopp/laib/commit/202453704767456ba16c8dda5da4e5590849c324)), closes [#1131](https://github.com/mdopp/laib/issues/1131)
+* **render:** no agent path into a person's archive unless they switch it on ([#1126](https://github.com/mdopp/laib/issues/1126)) ([f91372d](https://github.com/mdopp/laib/commit/f91372d6e187c469eaac6f87ec15ae913a24c11a)), closes [#1121](https://github.com/mdopp/laib/issues/1121)
+* **template:** auth tells a person about a login from a new network ([#1127](https://github.com/mdopp/laib/issues/1127)) ([6a972c0](https://github.com/mdopp/laib/commit/6a972c05964cb27ba2f27409c033a410565d8b0c)), closes [#1122](https://github.com/mdopp/laib/issues/1122)
+
+
+### Bug Fixes
+
+* **proposal:** a template update renames a reference to a secret's former name ([#1139](https://github.com/mdopp/laib/issues/1139)) ([cc63df9](https://github.com/mdopp/laib/commit/cc63df968492bb2c27635f10c99c82dddc378586))
+
 ## [2.14.0](https://github.com/mdopp/laib/compare/v2.13.0...v2.14.0) (2026-11-08)
 
 
