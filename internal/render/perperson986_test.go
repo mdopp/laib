@@ -20,7 +20,8 @@ import (
 
 // #986, ADR 0029: the persons' instances of one template share one name.
 // The golden case perperson has martin's and anna's notizbuch behind
-// notizen.<domain>, and lena signed in with none of her own.
+// notizen.<domain>, and lena signed in with none of her own. Martin's
+// switches the agent's path on (AGENT_PATH), anna's leaves it off (plan 12).
 
 func perPerson986(t *testing.T, secrets map[string]string) (*state.State, Output) {
 	t.Helper()
@@ -41,9 +42,10 @@ type ask986 struct{ path, session, sent string }
 
 // cases986: what each request must reach, from the state, not the text: a
 // person's own instance with its key, an agent's path to that instance
-// without a key, anyone else denied. The last one is the forged header on
-// a path Authelia lets through and Caddy cleans to another (/p/anna/../):
-// only the strip keeps it from martin's archive with martin's key.
+// without a key where its person switched it on, the login where not,
+// anyone else denied. /p/martin/../ is the forged header on
+// a path Authelia lets through and Caddy cleans to another:
+// only the strip keeps it from anna's archive with anna's key.
 func cases986(st *state.State) map[ask986]string {
 	port := map[string]int{}
 	for _, i := range st.Instances("notizen") {
@@ -61,7 +63,11 @@ func cases986(st *state.State) map[ask986]string {
 		{"/", "", "martin"}:                       "login",
 		{"/p/martin/api/search", "", ""}:          fmt.Sprint(port["martin"]),
 		{"/p/martin/api/search", "anna", "anna"}:  fmt.Sprint(port["martin"]),
-		{"/p/anna/../api/search", "", "martin"}:   "denied",
+		{"/p/anna/api/search", "", ""}:            "login",
+		{"/p/anna/api/search", "", "anna"}:        "login",
+		{"/p/anna/api/search", "anna", ""}:        key("anna"),
+		{"/p/anna/../api/search", "", "martin"}:   "login",
+		{"/p/martin/../api/search", "", "anna"}:   "denied",
 		{"/p/anna/../../suche", "lena", "martin"}: "denied",
 	}
 }
@@ -120,8 +126,8 @@ func serve986(site string, bypass []*regexp.Regexp, a ask986) string {
 func TestOneNameHandsEachPersonTheirOwnInstance(t *testing.T) {
 	st, out := perPerson986(t, nil)
 	site, bypass := site986(out)
-	if site == "" || len(bypass) != 2 {
-		t.Fatalf("want one notizen site and a bypass per person, got %d rules:\n%s", len(bypass), out["caddy/Caddyfile"])
+	if site == "" || len(bypass) != 1 {
+		t.Fatalf("want one notizen site and a bypass for martin's switched-on path only, got %d rules:\n%s", len(bypass), out["caddy/Caddyfile"])
 	}
 	if n := strings.Count(out["caddy/Caddyfile"], "notizen.example.home {"); n != 1 {
 		t.Fatalf("two instances, one name: want one site, got %d", n)
@@ -151,7 +157,7 @@ func TestOneNameHandsEachPersonTheirOwnInstance(t *testing.T) {
 	}
 }
 
-// laib net and laib-app check see the one name, with each person's path
+// laib net and laib-app check see the one name, with the path its person switched on
 func TestTheSharedNameIsOneNameOnTheMap(t *testing.T) {
 	st, _ := perPerson986(t, nil)
 	var names []NetName
@@ -160,7 +166,7 @@ func TestTheSharedNameIsOneNameOnTheMap(t *testing.T) {
 			names = append(names, n)
 		}
 	}
-	if len(names) != 1 || strings.Join(names[0].Bypass, " ") != "/p/anna/ /p/martin/" || !strings.HasPrefix(names[0].Upstream, "notizbuch je Person: anna 127.0.0.1:8481, martin 127.0.0.1:8480") {
+	if len(names) != 1 || strings.Join(names[0].Bypass, " ") != "/p/martin/" || !strings.HasPrefix(names[0].Upstream, "notizbuch je Person: anna 127.0.0.1:8481, martin 127.0.0.1:8480") {
 		t.Fatalf("want one name with both persons' paths, got %+v", names)
 	}
 }

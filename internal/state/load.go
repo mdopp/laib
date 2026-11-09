@@ -361,7 +361,7 @@ func (st *State) validate() []error {
 				fail("services/%s/laib.yml: host %q already published by %s", name, r.Host, prev)
 			}
 			if c.Person != "" && (r.Auth == "none" || len(r.Bypass) > 0) {
-				fail("services/%s/laib.yml: routes[%d]: a person's route has a login and no bypass: Remote-User picks the instance, /p/%s/ is its only way past Authelia (#986)", name, i, c.Person)
+				fail("services/%s/laib.yml: routes[%d]: a person's route has a login and no bypass: Remote-User picks the instance, /p/%s/ past Authelia only with AGENT_PATH set (#986)", name, i, c.Person)
 			}
 			hosts[r.Host] = name
 			if r.Auth != "none" && st.Box.Roles.SSO == "" {

@@ -2,3 +2,6 @@ ARCHIV_IMAGE: ghcr.io/mdopp/archiv:2ec8b462a9e6abd6e3d60b61bfbec6dd9fcd4160   # 
 PROXY: !secret ARCHIV_PROXY_SECRET
 HOMES_SECRET: !secret ARCHIV_HOMES_SECRET
 RADICALE_PASSWORD: !secret ARCHIV_RADICALE_PASSWORD
+# an agent's way to this person's archive at archiv.<domain>/p/<person>/, past the login with msgvault's key
+# (laib#1121): off. Only the person decides to set it ("on"), in their instance's values.yml, by a proposal.
+AGENT_PATH: 

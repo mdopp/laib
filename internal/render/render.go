@@ -740,9 +740,10 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 			}
 			// an agent reaches a person's instance at /p/<person>/, past
 			// Authelia (its bypass rule) and without the instance's key: the
-			// instance checks the key it is sent (#986)
+			// instance checks the key it is sent (#986); only where its
+			// person switched it on (AGENT_PATH, plan 12)
 			instances := st.Instances(r.Host)
-			for _, i := range instances {
+			for _, i := range state.AgentPaths(instances) {
 				p := i.Service.Contract.Person
 				fmt.Fprintf(&b, "%shandle /p/%s/* {\n%s\turi strip_prefix /p/%s\n%s\treverse_proxy 127.0.0.1:%d\n%s}\n", indent, p, indent, p, indent, i.Route.Port, indent)
 			}
@@ -802,10 +803,7 @@ func accessRules(st *state.State) []accessRule {
 				continue
 			}
 			done[r.Host] = true
-			for _, i := range st.Instances(r.Host) { // every person's path before the name's rule (#986)
-				r.Bypass = append(r.Bypass, "/p/"+i.Service.Contract.Person+"/")
-			}
-			for _, p := range r.Bypass {
+			for _, p := range agentBypass(st, r) {
 				rules = append(rules, accessRule{Domain: fqdn(st, r.Host), Policy: "bypass", Resource: strings.TrimSuffix(p, "/") + "/"})
 			}
 			rule := accessRule{Domain: fqdn(st, r.Host), Policy: policyOf(r)}
@@ -816,6 +814,16 @@ func accessRules(st *state.State) []accessRule {
 		}
 	}
 	return rules
+}
+
+// agentBypass is the route's bypass and, for a host the persons' instances
+// share, the path of each one whose person switched it on (#986, plan 12).
+func agentBypass(st *state.State, r state.Route) []string {
+	out := slices.Clone(r.Bypass)
+	for _, i := range state.AgentPaths(st.Instances(r.Host)) {
+		out = append(out, "/p/"+i.Service.Contract.Person+"/")
+	}
+	return out
 }
 
 func autheliaAccess(st *state.State) string {

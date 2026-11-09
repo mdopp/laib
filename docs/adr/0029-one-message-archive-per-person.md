@@ -50,7 +50,8 @@ seeing only their own.
      person never sees a key. A signed-in person without an instance gets
      the denied page.
    - **Agents:** an agent reaches an instance at `archiv.<domain>/p/<person>/`,
-     past Authelia, with that instance's key.
+     past Authelia, with that instance's key — only where the person
+     switched it on (amendment 2026-11-09).
    - **Strato:** one record for the name, once, not one per person.
 3. **The vault.** Each person's archive data, their WhatsApp and Signal
    keys, their IMAP password and a Discord bot token live in one encrypted folder (gocryptfs).
@@ -237,3 +238,13 @@ Radicale, outside the vault (decision 9; the calendar mirrors of #495).
    Removing a person's archive removes its account.
 3. **The limit, as before:** the contacts and calendars in Radicale are
    readable by the box's admin; only the archive's copy is in the vault.
+
+## Amendment 2026-11-09: no agent path unless the person switches it on
+
+The owner decided on 2026-11-09 (security plan, item 12 and decision H):
+the archive has one door, the person's login. `/p/<person>/` past Authelia
+exists only for an instance whose `values.yml` sets `AGENT_PATH`; it is
+off by default and stays off until the person asks for it (laib#1121).
+No assistant searches an archive for now, as decided in §2 (no key for
+the Bote). An instance without it has no bypass rule and no `/p/` handle;
+a request there is the login like any other.

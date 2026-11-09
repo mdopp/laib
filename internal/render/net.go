@@ -105,10 +105,10 @@ func Net(st *state.State) NetMap {
 				var each []string
 				for _, i := range is {
 					each = append(each, fmt.Sprintf("%s 127.0.0.1:%d", i.Service.Contract.Person, i.Route.Port))
-					r.Bypass = append(r.Bypass, "/p/"+i.Service.Contract.Person+"/")
 				}
 				up = c.Template.Name + " je Person: " + strings.Join(each, ", ")
 			}
+			r.Bypass = agentBypass(st, r)
 			nn := NetName{Name: a.Domain, Reach: cmp.Or(reach[r.Exposure], "LAN+Internet"), ForwardAuth: forwardAuth(st, name, r), Policy: a.Policy, Subject: strings.Join(a.Subjects, ", "), Upstream: up, Bypass: r.Bypass, LoginProbe: r.LoginProbe}
 			n.Names = append(n.Names, nn)
 			for _, h := range r.RedirectFrom {
