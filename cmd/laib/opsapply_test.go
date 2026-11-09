@@ -48,10 +48,11 @@ func opsBox(t *testing.T) (*cbox, *[]string) {
 	return c, &snaps
 }
 
-func opsPropose(t *testing.T, c *cbox, image string) int {
+// opsPropose: a setting, not an image — a new image is only a person's (ADR 0034)
+func opsPropose(t *testing.T, c *cbox, url string) int {
 	t.Helper()
 	c.env.Actor = "ops"
-	if rc := inbox.Propose(context.Background(), c.env, []string{"--set", "services/whoami/values.yml:IMAGE=" + image, "neueres whoami"}); rc != cli.ExitOK {
+	if rc := inbox.Propose(context.Background(), c.env, []string{"--set", "services/whoami/values.yml:PUBLIC_URL=" + url, "andere Adresse"}); rc != cli.ExitOK {
 		t.Fatalf("propose rc %d", rc)
 	}
 	ps, _ := proposal.List(cli.InboxDir(c.env), true)
@@ -63,7 +64,7 @@ func opsPropose(t *testing.T, c *cbox, image string) int {
 // snapshot first, verify, back on red. The kernel enforces it.
 func TestTheOperatorAppliesItsOwnFixInsideTheEnvelope(t *testing.T) {
 	c, snaps := opsBox(t)
-	id := opsPropose(t, c, "docker.io/traefik/whoami:v1.11")
+	id := opsPropose(t, c, "https://whoami.box.test/v11/")
 	if rc := cmdApply(context.Background(), c.env, []string{"--proposal", fmt.Sprint(id)}); rc != cli.ExitOK {
 		t.Fatalf("apply rc %d", rc)
 	}
@@ -92,7 +93,7 @@ func TestTheOperatorsApplyIsRefusedOutsideTheEnvelope(t *testing.T) {
 	if rc := cmdApply(context.Background(), c.env, []string{"whoami"}); rc != cli.ExitRefused {
 		t.Fatalf("the Operator applied without a proposal: rc %d", rc)
 	}
-	id := opsPropose(t, c, "docker.io/traefik/whoami:v1.12")
+	id := opsPropose(t, c, "https://whoami.box.test/v12/")
 	for range policy.DefaultBudget {
 		journal.Append(c.env.Paths.Journal, journal.Entry{Actor: "ops", Verb: "restart", Service: "whoami", Result: "green"})
 	}

@@ -57,6 +57,9 @@ func TestMcpArgvFromTypedArguments(t *testing.T) {
 		{"note", map[string]any{"kind": "incident", "text": `Neustart "grün" um 03:12`}, []string{"--kind", "incident", `Neustart "grün" um 03:12`}},
 		{"propose", map[string]any{"service": "whoami", "key": "IMAGE", "value": "ghcr.io/x/w:1.2", "reason": "Port 8080 \"belegt\""}, []string{"Port 8080 \"belegt\"", "--set", "services/whoami/values.yml:IMAGE=ghcr.io/x/w:1.2"}},
 		{"look", map[string]any{"service": "whoami", "command": []any{"cat", "/etc/a b"}}, []string{"whoami", "--", "cat", "/etc/a b"}},
+		{"propose", map[string]any{"reason": "Neue Versionen: whoami", "sets": []any{"whoami/IMAGE=ghcr.io/x/w:1@sha256:b"}, "notes": []any{"whoami/IMAGE=Neu."}, "sources": []any{"https://x"}}, // ADR 0034
+			[]string{"Neue Versionen: whoami", "--source", "https://x", "--set", "services/whoami/values.yml:IMAGE=ghcr.io/x/w:1@sha256:b", "--note", "whoami/IMAGE=Neu."}},
+		{"updates", map[string]any{"notes": true}, []string{"--notes"}},
 		{"escalate", map[string]any{"service": "caddy", "summary": "flattert seit 03:00"}, []string{"caddy", "flattert seit 03:00"}},
 		{"status", map[string]any{}, nil},
 		{"status", map[string]any{"fresh": true}, []string{"--fresh"}},
@@ -89,6 +92,9 @@ func TestMcpRefusesArgumentsOutsideTheSchema(t *testing.T) {
 		{"note", map[string]any{"kind": "panic", "text": "x"}},
 		{"propose", map[string]any{"service": "whoami", "key": "../box.yml:DOMAIN", "value": "x", "reason": "r"}},
 		{"propose", map[string]any{"service": "whoami", "key": "IMAGE", "value": "a\nb", "reason": "r"}},
+		{"propose", map[string]any{"reason": "r", "sets": []any{"nas/IMAGE=x"}}},
+		{"propose", map[string]any{"reason": "r", "sets": []any{"whoami/../box.yml:DOMAIN=x"}}},
+		{"propose", map[string]any{"reason": "r", "sets": []any{"whoami/IMAGE=a\nb"}}},
 		{"restart", map[string]any{"service": "whoami; rm -rf /"}},
 	} {
 		if argv, _, err := mcp.Argv(st, c.verb, c.args); err == nil {

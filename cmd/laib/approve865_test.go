@@ -29,8 +29,8 @@ func TestAnAgentHandApprovesWhatIsNotHumanClass(t *testing.T) {
 	os.MkdirAll(svc, 0o755)
 	for name, content := range map[string]string{
 		"laib.yml":        "name: vault\ndata:\n  - path: ${DATA_DIR}/vault\n    quiesce: true\n",
-		"values.yml":      "IMAGE: docker.io/vaultwarden/server:latest\n",
-		"vault.container": "[Container]\nImage=${IMAGE}\n\n[Install]\nWantedBy=default.target\n",
+		"values.yml":      "IMAGE: docker.io/vaultwarden/server:latest\nMODE: a\n",
+		"vault.container": "[Container]\nImage=${IMAGE}\nEnvironment=MODE=${MODE}\n\n[Install]\nWantedBy=default.target\n",
 	} {
 		os.WriteFile(filepath.Join(svc, name), []byte(content), 0o644)
 	}
@@ -44,10 +44,11 @@ func TestAnAgentHandApprovesWhatIsNotHumanClass(t *testing.T) {
 	realRestic := backup.ResticRun
 	t.Cleanup(func() { backup.ResticRun = realRestic })
 	backup.ResticRun = func(context.Context, *state.State, string, ...string) (string, error) { return "", nil }
-	// a new image of a service with data waits for a decision (#528) and is no human class
+	// a setting of a service with data waits for a decision (#528) and is no human class
+	// (a new image is, ADR 0034)
 	propose := func(hand, tag string) string {
 		t.Helper()
-		if out, code := mcp.Call(ctx, env, st, hand, "laib_propose", map[string]any{"reason": "vault: neues Image", "service": "vault", "key": "IMAGE", "value": "docker.io/vaultwarden/server:latest@sha256:" + tag}); code != cli.ExitOK {
+		if out, code := mcp.Call(ctx, env, st, hand, "laib_propose", map[string]any{"reason": "vault: anderer Modus", "service": "vault", "key": "MODE", "value": tag}); code != cli.ExitOK {
 			t.Fatalf("%s propose: exit %d: %s", hand, code, out)
 		}
 		open, _ := proposal.List(cli.InboxDir(env), true)

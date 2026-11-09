@@ -149,9 +149,11 @@ func TestAScriptForTheHostWaitsForAHuman(t *testing.T) {
 	}
 }
 
-// The dial still decides what is harmless: a newer tag of the same image is
-// a values change, and values are auto by default.
-func TestANewerImageTagIsStillAutomatic(t *testing.T) {
+// The dial still decides what is harmless: a setting is a values change,
+// and values are auto by default. A newer image is not (ADR 0034, the
+// owner's choice c, 2026-11-09): even a container without data
+// (AutoUpdate=registry) gets its new tag only on a person's tap.
+func TestANewerImageTagWaitsForAPerson(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
 	st, err := cli.LoadState(env)
@@ -163,12 +165,18 @@ func TestANewerImageTagIsStillAutomatic(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, out)
 	}
 	all, _ := proposal.List(cli.InboxDir(env), false)
-	if len(all) != 1 || all[0].Status != "approved" || all[0].DecidedBy != "laib" {
-		t.Fatalf("laib should approve a newer tag itself: %+v", all)
+	if len(all) != 1 || all[0].Status != "open" || all[0].Class != "human" {
+		t.Fatalf("a newer image waits for a person: %+v", all)
 	}
-	b, _ := os.ReadFile(filepath.Join(env.Paths.Quadlet, "whoami", "whoami.container"))
-	if !strings.Contains(string(b), "whoami:v1.11") {
-		t.Fatalf("not applied: %s", b)
+	if b, _ := os.ReadFile(filepath.Join(env.Paths.Quadlet, "whoami", "whoami.container")); strings.Contains(string(b), "whoami:v1.11") {
+		t.Fatalf("the new image was applied without a tap: %s", b)
+	}
+	if out, code := mcp.Call(ctx, env, st, "bote", "laib_propose", map[string]any{"args": `--set services/whoami/values.yml:GREETING=servus "freundlicher"`}); code != cli.ExitOK {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	all, _ = proposal.List(cli.InboxDir(env), false)
+	if i := slices.IndexFunc(all, func(p *proposal.Proposal) bool { return p.Reason == "freundlicher" }); len(all) != 2 || i < 0 || all[i].Status != "approved" || all[i].DecidedBy != "laib" {
+		t.Fatalf("laib should approve a setting itself: %+v", all)
 	}
 }
 
@@ -199,8 +207,8 @@ func TestATokenStrongerThanItsProposerIsRefused(t *testing.T) {
 
 // #528: a new image of a service with data (its container lacks
 // AutoUpdate=registry, its data has a database) is never the dial's: the
-// proposal waits for a person — inbox and Signal, it is no "human" class —
-// and the run that applies it takes a pre-update snapshot of the service
+// proposal waits for a person — since ADR 0034 as every new image, class
+// human — and the run that applies it takes a pre-update snapshot of the service
 // before it touches the box (#609: no longer before the merge); a snapshot
 // that fails rolls the run back and the box stays as it was.
 func TestANewImageOfAServiceWithDataWaitsAndIsSnapshottedFirst(t *testing.T) {
@@ -232,7 +240,7 @@ func TestANewImageOfAServiceWithDataWaitsAndIsSnapshottedFirst(t *testing.T) {
 	}
 	id := propose()
 	all, _ := proposal.List(cli.InboxDir(env), false)
-	if len(all) != 1 || all[0].Status != "open" || all[0].Class == "human" || len(all[0].Warnings) != 1 || !strings.Contains(all[0].Warnings[0], "vorher sichert Laib vault") || !slices.Equal(all[0].Snapshot, []string{"vault"}) {
+	if len(all) != 1 || all[0].Status != "open" || all[0].Class != "human" || len(all[0].Warnings) != 1 || !strings.Contains(all[0].Warnings[0], "vorher sichert Laib vault") || !slices.Equal(all[0].Snapshot, []string{"vault"}) {
 		t.Fatalf("the dial approved a data service's image, or the person is not told: %+v", all)
 	}
 	realRestic := backup.ResticRun

@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write # cosign signs keyless with this workflow's identity (ADR 0034)
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,12 +24,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: qmd/Containerfile
           push: true
           tags: ${{ github.event_name != 'pull_request' && format('ghcr.io/mdopp/laib-qmd:{0},ghcr.io/mdopp/laib-qmd:latest,', steps.v.outputs.qmd) || '' }}ghcr.io/mdopp/laib-qmd:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/mdopp/laib
+            org.opencontainers.image.revision=${{ github.sha }}
+      - uses: sigstore/cosign-installer@v3
+        if: github.event_name != 'pull_request'
+      - name: sign the image; Laib proposes a digest of ours only with this signature (ADR 0034)
+        if: github.event_name != 'pull_request'
+        run: cosign sign --yes ghcr.io/mdopp/laib-qmd@${{ steps.build.outputs.digest }}
       - name: the image runs qmd on the CPU build only, its index opens
         run: |
           img=ghcr.io/mdopp/laib-qmd:${{ github.sha }}

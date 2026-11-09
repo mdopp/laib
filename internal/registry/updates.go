@@ -30,9 +30,10 @@ import (
 // newest patch release (same major.minor) and the newest minor release
 // (same major) the registry has, the tag's shape kept. For a floating tag
 // (latest, stable, a bare major) and a digest pin, the registry's digest of
-// the tag when the box runs another one (#528); Auto says the nightly run
-// (laib-images.timer, --run) takes it itself, else the Operator's
-// aktualisierung proposes it. Reading only, except --run.
+// the tag when the box runs another one (#528), and for a floating tag the
+// digest it runs (Pin). Nothing pulls it (ADR 0034): the Operator's nightly
+// versionen proposes it, with --notes' changelog and signature. Reading
+// only, except --run.
 
 type ImageUpdate struct {
 	Service string `json:"service"`
@@ -44,10 +45,20 @@ type ImageUpdate struct {
 	Error   string `json:"error,omitempty"`
 	Paused  string `json:"paused,omitempty"`  // the host row: the drop-in that pauses OS updates (#486)
 	Digest  string `json:"digest,omitempty"`  // a floating tag or a digest pin: the registry's digest, when the box has another (#528)
-	Auto    bool   `json:"auto,omitempty"`    // the nightly run takes it (apply.AutoImage); else it is a proposal
+	Pin     string `json:"pin,omitempty"`     // a floating tag whose digest the box runs: that digest, to pin it (ADR 0034)
+	Auto    bool   `json:"auto,omitempty"`    // the laib row: self-update.sh takes it nightly; an image never (ADR 0034)
 	Latest  string `json:"latest,omitempty"`  // the laib row (#547): the newest release; never patch or digest, it is no proposal
 	At      string `json:"at,omitempty"`      // the laib row: when self-update.sh last looked
 	Running string `json:"running,omitempty"` // the laib row (#578): since when laib-images.service runs
+	// --notes (ADR 0034), for a new digest: the versions its labels name, its
+	// GitHub repository, what changed there (untrusted text, capped); for our
+	// own image (ghcr.io/mdopp/) why its signature fails
+	OldVersion string `json:"oldVersion,omitempty"`
+	NewVersion string `json:"newVersion,omitempty"`
+	Source     string `json:"source,omitempty"`
+	Notes      string `json:"notes,omitempty"`
+	Unsigned   string `json:"unsigned,omitempty"`
+	value      string // the value as it stands, for --notes
 }
 
 // RegistryURL is where a registry host's v2 API lives; tests swap it.
@@ -89,10 +100,9 @@ func ImageUpdates(ctx context.Context, st *state.State) []ImageUpdate {
 			}
 			cur := semverTag.FindStringSubmatch(tag)
 			ref, pin, pinned := strings.Cut(v.Literal, "@")
-			u := ImageUpdate{Service: name, Key: key, Image: ref[:strings.LastIndex(ref, ":")], Current: tag}
+			u := ImageUpdate{Service: name, Key: key, Image: ref[:strings.LastIndex(ref, ":")], Current: tag, value: v.Literal}
 			if cur == nil || pinned {
-				u.Auto = apply.AutoImage(svc, key)
-				u.Digest, u.Error = newDigest(ctx, host, repo, tag, ref, pin)
+				u.Digest, u.Pin, u.Error = newDigest(ctx, host, repo, tag, ref, pin)
 			}
 			if cur == nil {
 				out = append(out, u)
@@ -137,33 +147,52 @@ func ImageUpdates(ctx context.Context, st *state.State) []ImageUpdate {
 	return out
 }
 
-// newDigest is the registry's digest of the tag when the box runs another:
-// the pin's, else the local image's (podman keeps the index digest among
-// its RepoDigests), and the error in words.
-func newDigest(ctx context.Context, host, repo, tag, ref, pin string) (string, string) {
+// newDigest is the registry's digest of the tag: moved when the box runs
+// another — the pin's, else the local image's (podman keeps the index
+// digest among its RepoDigests) — and same, for an unpinned tag, when it
+// runs this one; and the error in words.
+func newDigest(ctx context.Context, host, repo, tag, ref, pin string) (moved, same, errText string) {
 	have := pin
 	if pin == "" {
 		have, _ = sysd.Run(ctx, "podman", "image", "inspect", "--format", "{{json .RepoDigests}}", ref)
 	}
 	resp, err := registryGet(ctx, host, repo, "/manifests/"+tag)
 	if err != nil {
-		return "", err.Error()
+		return "", "", err.Error()
 	}
 	resp.Body.Close()
-	if d := resp.Header.Get("Docker-Content-Digest"); d != "" && !strings.Contains(have, d) {
-		return d, ""
+	d := resp.Header.Get("Docker-Content-Digest")
+	if d != "" && !strings.Contains(have, d) {
+		return d, "", ""
+	} else if pin != "" {
+		return "", "", ""
 	}
-	return "", ""
+	return "", d, ""
 }
 
 // VersionTimeout bounds one ImageVersion (#959); tests shorten it.
 var VersionTimeout = 5 * time.Second
 
-// ImageVersion (#959) is the version an image's labels name, read from its
-// registry: the manifest (an index's for this platform), then the config
-// blob's labels, the OCI one before the vendors'. "" when it has none or the
-// registry does not answer in time: a card says it without.
+// ImageVersion (#959) is the version an image's labels name, the OCI one
+// before the vendors'. "" when it has none or the registry does not answer
+// in time: a card says it without.
 func ImageVersion(image string) string {
+	return version(imageLabels(image))
+}
+
+func version(labels map[string]string) string {
+	for _, l := range []string{"org.opencontainers.image.version", "io.hass.version", "org.label-schema.version"} {
+		if v := labels[l]; v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// imageLabels are an image's labels, read from its registry: the manifest
+// (an index's for this platform), then the config blob's; nil when the
+// registry does not answer in time.
+func imageLabels(image string) map[string]string {
 	ctx, cancel := context.WithTimeout(context.Background(), VersionTimeout)
 	defer cancel()
 	host, repo, ref := splitImage(image)
@@ -187,28 +216,23 @@ func ImageVersion(image string) string {
 		Config    struct{ Digest string }
 	}
 	if host == "" || !get("/manifests/"+ref, &m) {
-		return ""
+		return nil
 	}
 	if len(m.Manifests) > 0 {
 		i := max(0, slices.IndexFunc(m.Manifests, func(x entry) bool {
 			return x.Platform.OS == "linux" && x.Platform.Architecture == runtime.GOARCH
 		}))
 		if d := m.Manifests[i].Digest; !get("/manifests/"+d, &m) {
-			return ""
+			return nil
 		}
 	}
 	var cfg struct {
 		Config struct{ Labels map[string]string }
 	}
 	if m.Config.Digest == "" || !get("/blobs/"+m.Config.Digest, &cfg) {
-		return ""
+		return nil
 	}
-	for _, l := range []string{"org.opencontainers.image.version", "io.hass.version", "org.label-schema.version"} {
-		if v := cfg.Config.Labels[l]; v != "" {
-			return v
-		}
-	}
-	return ""
+	return cfg.Config.Labels
 }
 
 // registryTags lists a repository's tags through the registry v2 API, with
@@ -288,7 +312,7 @@ func hostUpdate(ctx context.Context, file string) (u ImageUpdate, ok bool) {
 	}
 	u.Service, u.Image, u.Current = "host", name, digest
 	host, repo, _ := strings.Cut(name[strings.LastIndex(name, ":")+1:], "/")
-	u.Patch, u.Error = newDigest(ctx, host, repo, u.Key, "", digest)
+	u.Patch, _, u.Error = newDigest(ctx, host, repo, u.Key, "", digest)
 	return u, true
 }
 
@@ -365,6 +389,11 @@ func Updates(ctx context.Context, env *cli.Env, args []string) int {
 		code = apply.ImageRun(ctx, env, st, backup.RcloneImage) // laib-images.timer's nightly run (#528)
 	}
 	ups := ImageUpdates(ctx, st)
+	if slices.Contains(args, "--notes") { // the nightly versionen's (ADR 0034)
+		for i := range ups {
+			ups[i].describe(ctx, env)
+		}
+	}
 	u, ok := laibRow(env.Paths.Home, cli.Version)
 	if u.Running = RunningSince(ctx); ok || u.Running != "" {
 		u.Service, u.Image, u.Current = "laib", "laib", cli.Version
@@ -394,8 +423,7 @@ func Updates(ctx context.Context, env *cli.Env, args []string) int {
 			continue
 		}
 		if u.Digest != "" || !semverTag.MatchString(u.Current) {
-			how := map[bool]string{true: "nachts automatisch", false: "als Vorschlag"}[u.Auto]
-			fmt.Fprintf(env.W(), "%-14s %s:%s  %s (%s) %s\n", u.Service, u.Image, u.Current, cmp.Or(u.Digest, "aktuell"), how, u.Error)
+			fmt.Fprintf(env.W(), "%-14s %s:%s  %s %s\n", u.Service, u.Image, u.Current, cmp.Or(u.Digest, "aktuell"), u.Error)
 			continue
 		}
 		fmt.Fprintf(env.W(), "%-14s %s:%s  patch %s  minor %s %s\n", u.Service, u.Image, u.Current, cmp.Or(u.Patch, "—"), cmp.Or(u.Minor, "—"), u.Error)

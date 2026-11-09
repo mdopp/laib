@@ -103,7 +103,9 @@ laib tell <person> "<text>"          one message to one person of box.yml people
                                      the person and the channel, never the text. Without a Bote on the box: sent false
                                      (laib scan, laib net geraete and laib tell are laib-haushalt's, in its container: the verb door hands
                                      each call over HTTP on 127.0.0.1:5902, ADR 0026, 0027)
-laib updates [--run|--now]           what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528); --run is laib-images.timer's nightly update, and first
+laib updates [--run|--now|--notes]   what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528), a floating tag's
+                                     digest the box runs (pin); --notes adds a new digest's versions, its changelog from GitHub (laib-haushalt's read)
+                                     and our own image's signature check (ADR 0034); --run is laib-images.timer's nightly run — it pulls nothing (ADR 0034) — and first
                                      the built-in hands' new default verbs as one proposal (#575);
                                      --now (tier apply, #578) starts laib-images.service now without waiting — Laib's own update, then the images —
                                      refused while it runs, a backup runs, the lock is held or laib is not green; the laib row shows `running` meanwhile
@@ -118,6 +120,8 @@ laib apply [service] [--proposal id] snapshot → write → reload → restart �
 laib rollback <service|commit>       git revert + apply
 laib propose "<reason>"              human with a shell: commit the working tree to a proposal branch
 laib propose --set services/x/values.yml:KEY=VALUE "<reason>"      agent: one value (repeatable)
+laib propose … --note <service>/<KEY>=<text>  an image's changelog summary for the card, one line, at most 400 characters (ADR 0034); over MCP
+                                     laib_propose takes sets (dienst/SCHLÜSSEL=wert, several values in one card) and notes
 laib propose --path <file>:<a.b.c>=<VALUE> "<reason>"  one value at a named path of box.yml or a values.yml (#598), as a line
                                      edit that rewrites only that top-level block and keeps its comments; VALUE is YAML (a scalar,
                                      or flow: {city: X}), empty removes it; a segment on a list names its "<segment>:" item
@@ -231,7 +235,8 @@ dropped from its reply. The built-in skills' menus:
 | `vorfall` | a red journal line, or a red a look sees for the first time (#792) | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_repair`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply`, `laib_planned` (what the service depends on, its planned stops, #978) — for a look's red the runner first reads each service's last real error line (`skills/lib/logzeilen.py`, else its last line), runs the `restart` diag offers when granted, looks again and notes in German what it saw and did, with the fix of a lesson for its finding (its script, #839, #861); still red, the model works it and may wake an unloaded model; an incident that waits 30 minutes (card lent, model failing) is `laib escalate`d once with what was seen and keeps waiting (#792); a session that ends red is escalated by the runner, once, unless the model did (#858) |
 | `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` — when the model fails, the runner writes the report its script made from status and journal (#858); it ends with the model's use in the last 24 hours (sessions, tokens in and out, minutes, #859) and, in a month's first report, the lessons the sessions were offered and the findings that came back (#861) |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
-| `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox`, `laib_diag` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287); the runner itself proposes a data service's newer image by digest and the value a status file offers (Home Assistant's `HA_INSTALL`, and the device firmware it can install as its own `HA_FIRMWARE`), each once while open; firmware Home Assistant cannot install only in the note (#528) |
+| `versionen` | daily, 05:30 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox` — `modell: kurz` (ADR 0034): its script reads `laib updates --notes` and files, once while open, one card with every new digest (`sets`) and per image the model's summary of its changelog (`notes`, one ask without tools each, at most twelve; no changelog or a busy model is one line), and once „Images festhalten“, the floating values pinned to what runs; our own image whose signature does not hold only in the note |
+| `aktualisierung` | weekly, Saturday 10:00 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox`, `laib_diag` — a newer patch release per pinned image becomes a proposal; minor releases only in the note (#287); the runner itself proposes the value a status file offers (Home Assistant's `HA_INSTALL`, and the device firmware it can install as its own `HA_FIRMWARE`), each once while open; firmware Home Assistant cannot install only in the note (#528) |
 | `lehre` | daily at `operator.reportAt` | `laib_propose`, `laib_note` — for each `vorfall` session whose proposal laib measured as effective, its script proposes `lessons/<probe>-<service>.md`, class human, once per finding (#544); the model condenses it in one short question without tools — cause, sign, fix, when not to apply it — and without an answer the transcription (finding, the cause the session saw, what fixed it) stands, marked (#861) |
 | `durchsicht` | daily, 06:30 | `laib_status`, `laib_logs`, `laib_state`, `laib_planned`, `laib_wish`, `laib_note` — the log review (#550, #551): the runner reads every service's warnings and errors of 24 hours itself (`laib logs --since 24h --lines 5000 --priority warning`), a line's own level decides whether it is an error, else its words, never the journal's priority; a line the container runtime wrote (`pasta`, `conmon`) and a shape in `ignore.yml`'s `logs` (`laib ignore --log`) are only counted, never a pattern (#915); lines become patterns per unit with numbers, ids, paths and timestamps taken out, compared with the last review (`OPERATOR_HOME/durchsicht.json`); the model sees only patterns new (three times or more), recurring (in the last review too) or growing (doubled), at most eight, each with count and an example line, no `laib context` — about 1,000 tokens; nothing of that asks no model and writes no note; a failed session is not remembered; at most three wishes. #975, #978: before the model sees a pattern the script checks it as a person would: a line in the window of a planned stop of its service or of one it depends on, as `laib planned` answers it (the same code diag holds a look's red by), is only counted; a new pattern quiet for six hours, or not seen since a planned restart of a green service, is over; one whose certificate Caddy obtained afterwards is resolved; the note ends with „Aussortiert, kein Wunsch: …“, which the morning report repeats; a wish's `saw` carries the pattern's „geprüft: …“ line and names a shown pattern's service, else the script refuses it |
 | `sicherung` | weekly, Sunday 05:00 | `laib_backup`, `laib_journal`, `laib_note` — no model (#858): its script runs `laib backup check` (the canary restore), reads the week's backups and writes the note, an incident when the check is red or no backup was green for a day; the morning report reads it (#287) |
@@ -783,12 +788,12 @@ includes the pull. Services with a database (immich, paperless,
 vaultwarden, Home Assistant, auth, radicale, audiobookshelf, media, beets)
 no longer carry `AutoUpdate=registry` — a rollback restores an image, not
 migrated data; their images change by proposal, snapshotted before the
-approval applies (#528). The mark is what `laib-images.timer` keys on: it
-runs `laib updates --run` nightly, 90 minutes after `backup.schedule`
-(box.yml `updates` narrows the days and the time), pulls the floating
-images of marked containers, restarts and verifies a service whose image
-moved and tags the previous image back on red. `podman-auto-update.timer`
-stays masked (ADR 0002 amendment).
+approval applies (#528). Since ADR 0034 every new image is a proposal a
+person taps, the mark only says whether laib snapshots first:
+`laib-images.timer` runs `laib updates --run` nightly, 90 minutes after
+`backup.schedule` (box.yml `updates` narrows the days and the time), and
+pulls nothing; the Operator's `versionen` proposes the new digests.
+`podman-auto-update.timer` stays masked (ADR 0002 amendment).
 ### Hooks: `pre-start` and `post-deploy`
 
 Both run in the hooks image (ADR 0004 amendment), never on the host:

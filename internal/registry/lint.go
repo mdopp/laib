@@ -156,8 +156,18 @@ func LintTemplate(env *cli.Env, dir string) int {
 			}
 		}
 	}
+	lintPins(env, dir, st.Services[name])
 	fmt.Printf("ok: %s (%d unit files, %d routes, %d secrets)\n", tpl, len(st.Services[name].Units), len(st.Services[name].Contract.Routes), len(st.Services[name].Contract.Secrets))
 	return cli.ExitOK
+}
+
+// lintPins warns of an image that floats (ADR 0034): pinned by digest.
+func lintPins(env *cli.Env, dir string, svc *state.Service) {
+	for _, key := range slices.Sorted(maps.Keys(svc.Values)) {
+		if strings.HasSuffix(key, "IMAGE") && !strings.Contains(svc.Values[key].Literal, "@") {
+			fmt.Fprintf(env.Errw(), "warning: %s: %s=%s floats; pin it as repo:tag@sha256:… (ADR 0034)\n", dir, key, svc.Values[key].Literal)
+		}
+	}
 }
 
 // lintInstances: two persons' instances (#986) name no container, pod,

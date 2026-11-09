@@ -15,6 +15,7 @@ flowchart LR
   report --> lehre
   week((wöchentlich)) --> nutzung
   week --> aktualisierung
+  night((05:30)) --> versionen
   week --> sicherung
 
   routineblick -- "ein Rot" --> vorfall
@@ -27,6 +28,7 @@ flowchart LR
   durchsicht -- "wish (≤ 3)" --> inbox
   nutzung -- "wish (≤ 3)" --> inbox
   aktualisierung -- "propose (Patch)" --> inbox
+  versionen -- "eine Karte: neue Images mit Zusammenfassung" --> inbox
   inbox -- "freigegebener Wunsch: wishes/" --> durchsicht
   durchsicht -- "note: Aussortiert …" --> journal[(Journal)]
   sicherung -- note --> journal
@@ -51,6 +53,7 @@ kernel's answers the skills read (one source, below).
 | daily, report hour | `morgenbericht` | the `report` note: the night, red first, and the lines its script always adds (the rate of the Operator's proposals, a lesson that keeps failing, due Box-Aufgaben, the model's day, durchsicht's „Aussortiert“, the wishes closed) | the owner: the Box page and the morning message |
 | daily, report hour | `lehre` | a lesson per solved incident, `lessons/<probe>-<service>.md`, a class-human proposal | the owner in the Inbox; once let in, every session's context and `vorfall`'s first aid |
 | weekly, Monday | `nutzung` | at most three wishes from the family's usage; a `watch` note | the owner in the Inbox |
+| daily, 05:30 | `versionen` | one card with every new image digest, each with the model's short summary of its changelog, and once the pins of the floating values (ADR 0034); a `watch` note | the owner in the Inbox |
 | weekly, Saturday | `aktualisierung` | at most three patch proposals with their reason; a `watch` note | the owner in the Inbox |
 | weekly, Sunday | `sicherung` | a note on the backup check and the canary restore | `morgenbericht` |
 
