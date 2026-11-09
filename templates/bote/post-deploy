@@ -254,4 +254,7 @@ Laib schreibt dem Admin hierher: Vorfälle (seit 10 Minuten rot), Updates und je
 Wenn du etwas nicht weißt, sag es. Geht es um einen Dienst der Box und kommst du nicht weiter, biete an, die Frage an den Admin weiterzugeben (laib escalate): Laib legt sie ihm als Box-Aufgabe hin, nichts davon verlässt das Haus.${UNBEANTWORTET}${ABLAGE}
 SOUL
 fi
+# The Bote's Signal profile (owner, 2026-11-09): PROFILE_NAME and the Homes picture, set through
+# signal-cli's daemon only when they differ from what was set last; a failure never makes this red.
+[ -z "${SIGNAL_ACCOUNT:-}" ] || python3 "$(dirname "$0")/signal_profile.py" || true
 echo "hermes config rendered: $H/.env, $H/config.yaml"

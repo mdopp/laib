@@ -142,6 +142,28 @@ The two ways (until #798 the Box page printed these steps):
 
 Without a number at all, Discord or Matrix work.
 
+**The Bote's Signal profile** (owner, 2026-11-09). Every message of the box
+on Signal (the Bote's answers, bote-notify's Freigaben, Zugangsanfragen,
+Quittungen, Anmelde-Meldungen) comes from this one account, so its profile
+is what the family sees above them: `PROFILE_NAME` (default `${ASSISTANT}`,
+box.yml `assistant`, the name the Bote calls itself in the SOUL) and
+`PROFILE_AVATAR` (default `homes-avatar.png` in this folder: the Homes app
+icon, rendered from haus-android's `art/icon.svg` at 512 px with the motif
+centred for Signal's circle). post-deploy hands both to signal-cli's daemon
+(`updateProfile` over `/api/v1/rpc` on the pod's loopback port 8085, the
+picture as a `data:image/png;base64,…` URI: the daemon reads no file of
+ours; `signal_profile.py`). The daemon is no REST API, so the REST image's
+`PUT /v1/profiles` is not there (#469). It notes the account, the name and
+the picture's hash in `${DATA_DIR}/bote/signal/laib-profil.json` and asks
+again only when one of them differs: a new name, a new picture, a new
+number. An empty value leaves that part of the profile as it is;
+`PROFILE_AVATAR: ""` and `PROFILE_NAME: ""` together turn it off. A daemon
+that does not answer or refuses is one line, `signal-profil: nicht gesetzt
+(…)`, and the deploy stays green; nothing is noted, so the next apply tries
+again. With a linked Bote (the second way above) this is the profile of the
+phone that owns the number. Only the box shows that Signal took the picture:
+look at the Bote's chat on a phone.
+
 ## Once, by hand
 
 1. Give the Bote its Signal number (Signal only): the steps above (#469).

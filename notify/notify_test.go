@@ -230,6 +230,27 @@ func TestAFailedSendIsJournaled(t *testing.T) {
 	}
 }
 
+// The mail's sender name is the assistant's, the name the family knows
+// (owner, 2026-11-09); a name in SMTP_FROM stays the owner's, and without
+// either it is Laib.
+func TestTheMailIsFromTheAssistant(t *testing.T) {
+	for _, tc := range []struct{ from, assistant, want string }{
+		{"box@example.home", "Homes", `From: "Homes" <box@example.home>`},
+		{"Die Box <box@example.home>", "Homes", `From: "Die Box" <box@example.home>`},
+		{"box@example.home", "", `From: "Laib" <box@example.home>`},
+	} {
+		addr, mails := fakeSMTP(t)
+		host, port, _ := net.SplitHostPort(addr)
+		c := Config{MailTo: "admin@example.home", SMTPHost: host, SMTPPort: port, SMTPSecurity: "none", SMTPFrom: tc.from, Assistant: tc.assistant}
+		if err := send(c, "Test", ""); err != nil {
+			t.Fatal(err)
+		}
+		if got := mails(); len(got) != 1 || !strings.Contains(got[0], tc.want+"\r\n") {
+			t.Fatalf("SMTP_FROM %q, assistant %q: want %s in %q", tc.from, tc.assistant, tc.want, got)
+		}
+	}
+}
+
 // #57, moved with the notifier (#443): the outside watchdog is pinged and
 // the stamp laib's /ready reads is written; without a URL nothing is sent.
 // That a red box pings too is #857 (messages857_test.go).

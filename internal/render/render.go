@@ -1130,7 +1130,7 @@ func haushaltUnit(st *state.State, secrets map[string]string) (string, map[strin
 // watchdog.last, which /ready reads.
 func notifyUnit(st *state.State, secrets map[string]string) (string, map[string]string) {
 	base := fmt.Sprintf("http://127.0.0.1:%d", st.Box.Laib.Port)
-	env := []string{"LAIB_MCP_URL", base + "/mcp", "LAIB_READY_URL", base + "/ready", "NOTIFY_HOME", "/notify", "LAIB_DOMAIN", st.Box.Domain,
+	env := []string{"LAIB_MCP_URL", base + "/mcp", "LAIB_READY_URL", base + "/ready", "NOTIFY_HOME", "/notify", "LAIB_DOMAIN", st.Box.Domain, "LAIB_ASSISTANT", st.Box.Assistant,
 		"WATCHDOG_URL", st.Box.Watchdog.URL, "LAIB_INBOX_URL", "https://" + fqdn(st, st.Box.Laib.Host) + "/inbox"}
 	sec := []string{"LAIB_TOKEN", secretValue(secrets, NotifyToken)}
 	if p := st.Box.Notify.Person; p != "" {
