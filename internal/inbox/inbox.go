@@ -54,7 +54,7 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 		switch args[i] {
 		case "--patch":
 			usePatch = true
-		case "--finding", "--evidence", "--undo", "--source": // the anchor (#544)
+		case "--finding", "--evidence", "--undo", "--source", "--note": // the anchor (#544); a note, ADR 0034's summary
 			if i+1 >= len(args) {
 				return env.Fail(fmt.Errorf("%s wants a value", args[i]))
 			}
@@ -66,6 +66,8 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 				anchor.Evidence = v
 			case "--undo":
 				anchor.Undo = v
+			case "--note":
+				note(&anchor, v)
 			default:
 				anchor.Sources = append(anchor.Sources, v)
 			}
@@ -223,9 +225,9 @@ func JudgeFor(st *state.State, actor string) proposal.Judge {
 				}
 			}
 		}
-		for i, c := range r.Changes { // a new digest: the versions it carries, for the card's words (#959)
-			if ImageVersion != nil && c.Op == "~" && strings.HasSuffix(c.Key, "IMAGE") && strings.Contains(c.New, "@") {
-				r.Changes[i].OldVersion, r.Changes[i].NewVersion = ImageVersion(c.Old), ImageVersion(c.New)
+		for i := range r.Changes {
+			if err := judgeImage(&r.Changes[i]); err != nil {
+				return proposal.Verdict{}, err
 			}
 		}
 		return proposal.Verdict{Human: r.Human, Mints: r.Mints, Added: r.Added, Removed: r.Removed, Facts: r.Facts, Ask: r.Ask, Snap: r.Snapshot, Changes: r.Changes, Lines: r.Lines}, nil
@@ -236,6 +238,47 @@ func JudgeFor(st *state.State, actor string) proposal.Judge {
 // has none or the registry does not answer; main sets it (#959).
 var ImageVersion func(image string) string
 
+// VerifyImage is "" when our own image by digest carries our CI's
+// signature, else why not; Runs whether the box runs an image by digest;
+// main sets both (ADR 0034).
+var VerifyImage func(image string) string
+var Runs func(image string) bool
+
+// judgeImage: a new digest carries the versions it names, for the card's
+// words (#959), and whether it pins what runs; our own image comes only
+// with our CI's signature, a digest it already runs passes (ADR 0034).
+func judgeImage(c *proposal.Change) error {
+	if c.Op != "~" || !strings.HasSuffix(c.Key, "IMAGE") || !strings.Contains(c.New, "@") {
+		return nil
+	}
+	if ImageVersion != nil {
+		c.OldVersion, c.NewVersion = ImageVersion(c.Old), ImageVersion(c.New)
+	}
+	c.Pin = Runs != nil && strings.HasPrefix(c.New, c.Old+"@") && Runs(c.New)
+	_, d, _ := strings.Cut(c.New, "@")
+	if VerifyImage == nil || !strings.HasPrefix(c.New, "ghcr.io/mdopp/") || strings.HasSuffix(c.Old, "@"+d) || c.Pin {
+		return nil
+	}
+	if why := VerifyImage(c.New); why != "" {
+		return fmt.Errorf("%s: %s ist nicht von Laibs CI signiert, Laib schlägt es nicht vor (ADR 0034): %s", c.Service, c.New, why)
+	}
+	return nil
+}
+
+// note is --note <service>/<KEY>=<text> (ADR 0034): one line, capped, as the card shows it.
+func note(a *proposal.Anchor, v string) {
+	k, text, _ := strings.Cut(v, "=")
+	if r := []rune(strings.Join(strings.Fields(text), " ")); len(r) > 400 {
+		text = string(r[:400]) + " …"
+	} else {
+		text = string(r)
+	}
+	if a.Notes == nil {
+		a.Notes = map[string]string{}
+	}
+	a.Notes[k] = text
+}
+
 // Present says whether laib diag shows a finding ("<probe> <service>")
 // now; main sets it to the diag chore's probes (#544).
 var Present func(ctx context.Context, env *cli.Env, st *state.State, finding string) bool
@@ -243,7 +286,7 @@ var Present func(ctx context.Context, env *cli.Env, st *state.State, finding str
 // Anchor stores what a proposal answers (#544). A proposal that rests on an
 // outside source is class human: what the web says, a person checks.
 func Anchor(inbox string, p *proposal.Proposal, a proposal.Anchor) error {
-	if a.Finding == "" && a.Evidence == "" && a.Undo == "" && a.Wish == "" && len(a.Sources) == 0 {
+	if a.Finding == "" && a.Evidence == "" && a.Undo == "" && a.Wish == "" && len(a.Sources) == 0 && len(a.Notes) == 0 {
 		return nil
 	}
 	p.Anchored(a)

@@ -1,14 +1,19 @@
 # ADR 0034 — Images are pinned by digest and change by proposal; our own are verified by their signature
 
 Applies when you add an image to a template, when you touch the nightly
-image run (`laib-images.timer`, `apply.ImageRun`), the weekly updates skill
-(`skills/aktualisierung`) or Laib's self-update, or when you weigh what a
-taken-over GitHub or registry account could put on the box.
+image run (`laib-images.timer`, `apply.ImageRun`), the nightly `versionen`
+skill or the weekly `aktualisierung`, Laib's self-update, an image
+workflow's signing step, or when you weigh what a taken-over GitHub or
+registry account could put on the box.
 
-- **Status:** Proposed, 2026-11-09 — the direction is the owner's (security
+- **Status:** Accepted, 2026-11-09 — the direction is the owner's (security
   plan, gap „Software kommt von selbst“: „Images per Prüfsumme festnageln,
   Updates als Vorschlag wie Template-Updates“, all recommendations taken
-  2026-11-09); the cadence for our own images below is the open choice.
+  2026-11-09), and so is the cadence: choice **(c) „Frage ruhig bei
+  allen“**, with a summary of what changed on the card („Ich will eine
+  grobe Zusammenfassung bei der Frage sehen, was sich geändert hat. Gerne
+  durch das LLM aus den Changelogs erstellt, kurz und bündig. Inhaltlich
+  das wichtigste nennen.“).
 - **Amends:** ADR 0002 (#528: images without data update nightly by
   themselves).
 
@@ -58,32 +63,71 @@ and reverts a red batch (#609).
    hardware key or a passkey as its second factor (an owner step, about ten
    minutes).
 
-## Open choice for the owner
+## The owner's choice: (c), every image by a tap
 
-How our own images (Homes, Dokumente, Werkstatt, Caddy, Frage, Bote's
-helpers) come in, because a Homes fix today reaches the box the next night
-without a tap:
+The choice was how our own images (Homes, Dokumente, Werkstatt, Caddy,
+Frage, Bote's helpers) come in: (a) like the rest, a nightly proposal the
+dial auto-approves; (b) human for third-party images, auto for our
+verified own (the recommendation); (c) everything human. The owner chose
+(c), 2026-11-09:
 
-- **(a) Same as the rest:** a nightly proposal the dial auto-approves. One
-  trail and a pin; a taken-over tag still lands, but visibly, and the
-  signature check (3) stops an image not built by this repo's CI.
-- **(b) Human for third-party images, auto for our verified own:** an
-  upstream's new `:latest` waits for a tap in the Inbox (grouped, once per
-  night); our own run as today once the signature holds.
-- **(c) Everything human.**
-
-Recommendation: (b). The signature is what tells our image from a
-stranger's; a tap per night for upstreams is the price, and it is one card.
+5. **Every newer digest waits for a tap.** An upstream's and our own: the
+   content review makes every new image of an existing container class
+   human („neue Software nur auf deinen Tipp“), with or without data, so
+   no dial and no agent approves it. Nothing pulls by itself any more.
+6. **One card per night, with what changed.** The Operator's `versionen`
+   skill (daily 05:30, `modell: kurz`) reads `laib updates --notes` and
+   files one grouped values proposal (`laib_propose` `sets`) with every
+   new digest. Per image the card shows its version change and a German
+   summary of one to three sentences, „Zusammenfassung (automatisch)“,
+   security fixes and breaking changes first, written by the box's own
+   model from the upstream's changelog: the GitHub releases between the
+   two version labels, else the commits between the two
+   `org.opencontainers.image.revision` labels, from the repository the
+   `org.opencontainers.image.source` label names. laib-haushalt reads
+   GitHub behind the door (the kernel holds no GitHub client, #797), with
+   its token when it has one, else unauthenticated, and waits for GitHub's
+   reset after a rate limit. No changelog, or a busy model: the card says
+   so in one line („Keine Änderungsnotizen gefunden.“ / „Keine
+   Zusammenfassung: das Modell war gerade beschäftigt.“) and the tap is
+   offered anyway; `modell: kurz` runs the script while the graphics card
+   is elsewhere and the ask answers why instead of waiting.
+7. **The changelog is untrusted.** The model only summarizes it, in one
+   ask without tools (#861); the prompt marks the text as foreign; the
+   script keeps three sentences of plain text without links, the kernel
+   one line of at most 400 characters (`--note`), and the card labels it
+   as automatic. The decision stays the person's.
+8. **Pinned once, then by digest.** The same skill files, once while open,
+   „Images festhalten“: each floating value pinned to the digest the box
+   runs (`laib updates` `pin`). The card says they run on as now; such a
+   pin of what runs needs no signature check.
 
 ## Consequences
 
-- `laib-images.timer` becomes the proposer, not the puller; `podman
-  auto-update` stays masked; `AutoUpdate=registry` keeps only its meaning
-  "no data a new image migrates" (the review's `auto`).
+- `laib-images.timer` no longer pulls or restarts anything; it still
+  removes the images nothing needs (#1071). The proposer is the Operator's
+  nightly `versionen`; `podman auto-update` stays masked;
+  `AutoUpdate=registry` keeps only its meaning "no data a new image
+  migrates": such a service is not snapshotted before its new image.
 - Every image change is a commit in the state repo with its digest: "what
   ran on the night of …" has an answer, and a rollback is a revert.
-- The kernel grows: the grouped proposal, the signature check (cosign or
-  `gh attestation` as a pinned tool), a lint. Not in the 2026-11-09 train:
-  the kernel stands near its cap and the cadence (a/b/c) is the owner's.
-- Werkstatt's fast path (merge → image → box the next night) keeps its
-  speed only under (a) or (b).
+- Werkstatt fixes, Homes, Dokumente and every other image of ours now
+  wait for the owner's tap: merge → image → the next night's card → tap.
+  The fast path is gone by choice (c); a fix that must land at once is a
+  proposal the owner taps at once.
+- Our own image is signed keyless in its build workflow (`cosign sign`,
+  the workflow's GitHub identity, `id-token: write`); the review and
+  `laib updates --notes` verify a new digest with the pinned cosign image
+  (`registry.Cosign`) against `registry.SignedBy` — a workflow of one of
+  the owner's repositories on main — and refuse an unsigned one. Images
+  built before the signing step, and those of other repositories
+  (Homes, Dokumente) until their workflows sign, are refused as new
+  digests: they stay on what runs until a signed build arrives.
+- `laib template lint` warns of a floating image; the templates' defaults
+  still float and are pinned on the box by the „Images festhalten“ card.
+- Laib's own binary still follows its releases nightly (`updates.laib`,
+  `scripts/self-update.sh`, `SHA256SUMS`); checking the release assets'
+  attestations is not done yet.
+- The kernel grew by the signature check, `--notes`, `--note`, the
+  grouped `sets` and the card's lines — within its cap (21,994 of 22,000);
+  laib-haushalt by the changelog read (1,318 of 1,320).

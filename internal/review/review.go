@@ -105,6 +105,15 @@ func (r *Result) data(svc, why string) {
 	}
 }
 
+// newImage: every new image is a person's tap (ADR 0034, the owner's
+// choice c); one with data (no AutoUpdate=registry) is snapshotted first.
+func (r *Result) newImage(svc, old, img string, auto bool) {
+	r.Human = append(r.Human, fmt.Sprintf("ein neues Image für %s (%s → %s): neue Software nur auf deinen Tipp (ADR 0034)", svc, old, img))
+	if !auto {
+		r.data(svc, fmt.Sprintf("ein neues Image für %s (%s → %s), dessen Daten es migrieren kann", svc, old, img))
+	}
+}
+
 // knownUnit says whether a file in a service folder is one Laib renders.
 func knownUnit(name string) bool {
 	switch filepath.Ext(name) {
@@ -700,8 +709,8 @@ func (r *Result) units(svc, key string, st *state.State, added, removed []entry,
 		case e.Key == "Image":
 			if existedUnit && imageRepo(e.Value) != imageRepo(oldImage) {
 				say("startet ein anderes Programm in %s (%s statt %s)", svc, e.Value, oldImage)
-			} else if existedUnit && !auto {
-				r.data(svc, fmt.Sprintf("ein neues Image für %s (%s → %s), dessen Daten es migrieren kann", svc, oldImage, e.Value))
+			} else if existedUnit {
+				r.newImage(svc, oldImage, e.Value, auto)
 			} else if !existedUnit && existedService {
 				say("startet ein neues Programm in %s (%s)", svc, e.Value)
 			}

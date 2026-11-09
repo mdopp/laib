@@ -219,8 +219,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			}
 		}
 	}
-	// a slot that needs the model asks first, before its script works (#859)
-	if (tr.Kind == "slot" || tr.Kind == "report") && sk.Modell != "nein" {
+	// a slot that needs the model asks first, before its script works (#859);
+	// modell: kurz never waits for it, a busy model answers its asks (ADR 0034)
+	if (tr.Kind == "slot" || tr.Kind == "report") && sk.Modell != "nein" && sk.Modell != "kurz" {
 		if why := o.LLM.Busy(ctx, true); why != "" {
 			s.Outcome, s.Why = "skipped", why
 			o.work.wait(why)
@@ -276,8 +277,8 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		if res.Trigger != nil { // vorfall's first aid, done (#792), with the lessons it used (#861)
 			tr, s.Trigger, s.Lessons = *res.Trigger, *res.Trigger, res.Lessons
 		}
-		if res.Outcome == "" && sk.Modell == "nein" {
-			return s, errors.New("modell: nein, aber das Skript übergibt an das Modell")
+		if res.Outcome == "" && slices.Contains([]string{"nein", "kurz"}, sk.Modell) {
+			return s, errors.New("modell: " + sk.Modell + ", aber das Skript übergibt an das Modell")
 		}
 		if res.Outcome != "" {
 			s.Outcome, s.Why, s.Note = res.Outcome, res.Why, cmp.Or(s.Note, res.Note)

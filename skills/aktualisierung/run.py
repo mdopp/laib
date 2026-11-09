@@ -1,13 +1,13 @@
 """aktualisierung: the week's updates (#287, #376, #528, #368).
 
 Moved out of the Operator's Go (operator/loop.go patches, #839). The script
-reads laib updates; it proposes itself, once while open, a service with
-data's new image by digest, a value a status finding offers (Home
+reads laib updates; it proposes itself, once while open, a value a status finding offers (Home
 Assistant's extensions and, as its own value, HA_FIRMWARE, the device
 firmware it can install) and a new host image; firmware HA cannot install,
 minor versions and registry errors go into the note for a human. The model sees the patch
 versions and weighs which are worth proposing; check() lets it propose only
-those, exactly as offered. Laib's own update is self-update.sh's (#547).
+those, exactly as offered. Laib's own update is self-update.sh's (#547); a
+new digest is the nightly versionen's (ADR 0034).
 """
 
 import re
@@ -37,11 +37,6 @@ def run(s):
         r = s.call("laib_propose", **args)
         h.append(f"{what} ließ sich nicht vorschlagen: {first_line(r.text)}." if r.error else f"{what} vorgeschlagen, für einen Menschen.")
 
-    for u in ups:
-        if field(u, "digest") and not field(u, "auto", False):
-            what = f"{field(u, 'service')}: neues Image {field(u, 'image')}:{field(u, 'current')}"
-            propose(what, reason=what + " (" + field(u, "digest") + ")", service=field(u, "service"), key=field(u, "key"),
-                    value=f"{field(u, 'image')}:{field(u, 'current')}@{field(u, 'digest')}")
     findings = s.call("laib_diag").json()
     for f in findings if isinstance(findings, list) else []:
         svc, detail, m = field(f, "service"), field(f, "detail"), OFFER_FIX.match(field(f, "fix"))

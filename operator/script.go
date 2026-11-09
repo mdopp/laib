@@ -205,8 +205,13 @@ func (o *Operator) script(ctx context.Context, g *gate, tr Trigger, now time.Tim
 // ask is a script's short question to the model, without tools (#861):
 // only a skill whose model judges asks, and the session counts its cost.
 func (o *Operator) ask(ctx context.Context, g *gate, q string) (string, bool) {
-	if g.sk.Modell != "urteil" {
-		return "nur eine Fähigkeit mit modell: urteil fragt das Modell", true
+	if g.sk.Modell != "urteil" && g.sk.Modell != "kurz" {
+		return "nur eine Fähigkeit mit modell: urteil oder kurz fragt das Modell", true
+	}
+	if g.sk.Modell == "kurz" { // kurz waits for no one (ADR 0034)
+		if why := o.LLM.Busy(ctx, true); why != "" {
+			return why, true
+		}
 	}
 	o.work.step("Skript fragt das Modell")
 	g.s.Script = append(g.s.Script, "frage "+clip(firstLine(q)))

@@ -6,12 +6,11 @@ import (
 	"testing"
 )
 
-// #528: the runner itself proposes, each once while it is open, a new image
-// of a service with data — pinned by the registry's digest, the review asks
-// a person and laib snapshots first — and the value a status file offers
-// (Home Assistant's extensions with their release notes, HA_INSTALL). An
-// image the nightly run takes (auto) is no proposal; device firmware HA can
-// install is its own value, HA_FIRMWARE; other firmware is only in the note.
+// #528: the runner itself proposes, each once while it is open, the value a
+// status file offers (Home Assistant's extensions with their release notes,
+// HA_INSTALL); device firmware HA can install is its own value, HA_FIRMWARE;
+// other firmware is only in the note. A new digest is no longer its own:
+// the nightly versionen proposes every one (ADR 0034).
 func TestAktualisierungProposesDataImagesAndExtensionsItself(t *testing.T) {
 	updates := `[{"service":"home-assistant","key":"HA_IMAGE","image":"ghcr.io/home-assistant/home-assistant","current":"stable","digest":"sha256:ha2"},` +
 		`{"service":"frage","key":"FRAGE_IMAGE","image":"ghcr.io/mdopp/laib-frage","current":"latest","digest":"sha256:fr2","auto":true},` +
@@ -36,17 +35,17 @@ func TestAktualisierungProposesDataImagesAndExtensionsItself(t *testing.T) {
 		}
 	}
 	all := strings.Join(proposed, "\n")
-	if len(proposed) != 3 || !strings.Contains(all, `"key":"HA_FIRMWARE"`) || !strings.Contains(all, `"value":"update.lampe=1.3"`) || !strings.Contains(all, `"value":"ghcr.io/home-assistant/home-assistant:stable@sha256:ha2"`) || !strings.Contains(all, `"key":"HA_INSTALL"`) ||
+	if len(proposed) != 2 || !strings.Contains(all, `"key":"HA_FIRMWARE"`) || !strings.Contains(all, `"value":"update.lampe=1.3"`) || !strings.Contains(all, `"key":"HA_INSTALL"`) ||
 		!strings.Contains(all, `"value":"update.senec=2026.10.0"`) || !strings.Contains(all, "https://x/senec/releases") {
-		t.Fatalf("want HA's image by digest and the extensions with their notes, nothing else: %q", proposed)
+		t.Fatalf("want the firmware and the extensions with their notes, nothing else: %q", proposed)
 	}
-	if strings.Contains(all, "laib-frage") || strings.Contains(all, "vaultwarden") || strings.Contains(all, `"value":"x"`) {
-		t.Fatalf("the night's image, an open proposal or another service's offer was proposed: %q", proposed)
+	if strings.Contains(all, "@sha256:") || strings.Contains(all, `"value":"x"`) {
+		t.Fatalf("a digest (versionen's, ADR 0034) or another service's offer was proposed: %q", proposed)
 	}
 	if strings.Contains(s.Note, "Firmware: Lampe") {
 		t.Errorf("firmware HA installs is a proposal, not a line for a human: %s", s.Note)
 	}
-	for _, want := range []string{"Firmware: Steckdose", "noch offen", "vorgeschlagen, für einen Menschen"} {
+	for _, want := range []string{"Firmware: Steckdose", "vorgeschlagen, für einen Menschen"} {
 		if !strings.Contains(s.Note, want) {
 			t.Errorf("the note lacks %q: %s", want, s.Note)
 		}

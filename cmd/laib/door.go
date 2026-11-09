@@ -141,6 +141,16 @@ func doorPost(ctx context.Context, env *cliEnv, call doorCall) (doorReply, error
 	return reply, nil
 }
 
+// changelog is registry.Changelog (ADR 0034): laib-haushalt reads what
+// changed on GitHub, "" when it does not answer.
+func changelog(ctx context.Context, env *cliEnv, repo, oldVersion, newVersion, oldRev, newRev string) string {
+	reply, err := doorPost(ctx, env, doorCall{Argv: []string{"changelog", repo, oldVersion, newVersion, oldRev, newRev}, Actor: env.Actor, Ceiling: "read"})
+	if err != nil || reply.Code != cli.ExitOK {
+		return ""
+	}
+	return reply.Out
+}
+
 // fileIssue is inbox.Issue (#797): the kernel's own ticket — an escalation,
 // a wish the admin approved — filed by laib-haushalt with its token, as the
 // caller. The caller journals it.

@@ -65,6 +65,8 @@ var mcpParams = map[string][]mcpParam{
 		{name: "evidence", typ: "string", desc: "was du gesehen hast: die Zeile aus diag oder dem Log"},
 		{name: "undo", typ: "string", desc: "wie man es rückgängig macht, ein Satz"},
 		{name: "sources", typ: "array", desc: "die Adressen aus dem Netz, auf die sich der Vorschlag stützt; dann gibt ihn nur ein Mensch frei"},
+		{name: "sets", typ: "array", desc: "statt service/key/value mehrere Werte in einem Vorschlag: dienst/SCHLÜSSEL=wert"},
+		{name: "notes", typ: "array", desc: "zu einem neuen Image, was sich geändert hat, für die Karte: dienst/SCHLÜSSEL=ein bis drei Sätze"},
 		{name: "hand", typ: "string", desc: "mit verb: die Hand in policy.yml, deren Verbliste ein Verb dazubekommt (#575); ein Mensch entscheidet"},
 		{name: "verb", typ: "string", desc: "mit hand: das Verb, z. B. scan"}},
 	"wish": {{name: "text", typ: "string", desc: "der Vorschlag, ein bis zwei Sätze; mit modul der Titel des Moduls; Pflicht, außer mit stand"},
@@ -73,9 +75,10 @@ var mcpParams = map[string][]mcpParam{
 		{name: "von", typ: "string", desc: "nur der Bote und Homes: der Login der Person, die sich das wünscht; ihr Wunsch geht als Box-Aufgabe an den Admin"},
 		{name: "modul", typ: "string", desc: "nur Homes: das Modul, das sich jemand wünscht, z. B. standort (#1038)"},
 		{name: "stand", typ: "string", desc: "statt eines Wunsches: wo die Wünsche dieser Module stehen, modul=backend mit Leerzeichen getrennt, z. B. standort=reitti werkstatt= (#1038)"}},
-	"apply":   {{name: "proposal", typ: "string", flag: "--proposal", desc: "die Nummer deines eigenen offenen Vorschlags; Laib sichert vorher, prüft danach und nimmt bei Rot zurück", required: true}},
-	"backup":  {{name: "action", typ: "string", enum: []string{"check", "run"}, desc: "check: restic prüft eine Stichprobe und stellt einen Pfad probeweise wieder her und vergleicht; run: eine Sicherung jetzt", required: true}},
-	"updates": {{name: "now", typ: "boolean", flag: "--now", desc: "den nächtlichen Lauf jetzt starten (Stufe apply): erst Laib selbst, dann die Images; das Ergebnis zeigt laib_updates danach"}},
+	"apply":  {{name: "proposal", typ: "string", flag: "--proposal", desc: "die Nummer deines eigenen offenen Vorschlags; Laib sichert vorher, prüft danach und nimmt bei Rot zurück", required: true}},
+	"backup": {{name: "action", typ: "string", enum: []string{"check", "run"}, desc: "check: restic prüft eine Stichprobe und stellt einen Pfad probeweise wieder her und vergleicht; run: eine Sicherung jetzt", required: true}},
+	"updates": {{name: "now", typ: "boolean", flag: "--now", desc: "den nächtlichen Lauf jetzt starten (Stufe apply): erst Laib selbst, dann die Images; das Ergebnis zeigt laib_updates danach"},
+		{name: "notes", typ: "boolean", flag: "--notes", desc: "zu jedem neuen Digest die Versionen, die Änderungen von GitHub (fremder Text) und bei eigenen Images die Signaturprüfung"}},
 	"net": {{name: "view", typ: "string", enum: []string{"geraete"}, desc: "leer: Namen, Ports und Wege aus der Konfiguration; geraete: die Geräte im Heimnetz, die die Box gerade sieht (Adresse, MAC, Name, Hersteller)"},
 		{name: "wecken", typ: "boolean", flag: "--wecken", desc: "geraete: vorher einmal bei jeder Adresse im /24 anklopfen (ein UDP-Paket, kein Portscan), dauert etwa 3 s"}},
 	"person_invite": {{name: "user", typ: "string", desc: "der Benutzername in LLDAP, klein, ohne Leerzeichen", required: true},
@@ -187,7 +190,7 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 		return argv, stdin, nil
 	}
 	val := map[string]string{}
-	var rest []string
+	lists := map[string][]string{} // an array parameter's items, by name
 	for k, v := range a {
 		if k == "patch" || k == "stdin" {
 			continue
@@ -202,7 +205,7 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 			for _, it := range items {
 				s, isStr := it.(string)
 				ok = ok && isStr
-				rest = append(rest, s)
+				lists[k] = append(lists[k], s)
 			}
 			if !ok || len(items) == 0 {
 				return nil, "", fmt.Errorf("%s muss eine Liste von Strings sein", k)
@@ -236,7 +239,7 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 		val[k] = s
 	}
 	for _, p := range params {
-		if p.required && val[p.name] == "" && (p.typ != "array" || len(rest) == 0) {
+		if p.required && val[p.name] == "" && (p.typ != "array" || len(lists[p.name]) == 0) {
 			return nil, "", fmt.Errorf("Parameter %s fehlt", p.name)
 		}
 	}
@@ -261,9 +264,11 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 				argv = append(argv, "--"+k, val[k])
 			}
 		}
-		for _, src := range rest {
-			argv = append(argv, "--source", src)
+		more, err := listsArgv(st, lists)
+		if err != nil {
+			return nil, "", err
 		}
+		argv = append(argv, more...)
 		if a["patch"] != nil {
 			argv = append([]string{"--patch"}, argv...)
 		}
@@ -280,8 +285,8 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 	var argv []string
 	for _, p := range params {
 		switch {
-		case p.flag == "--" && len(rest) > 0:
-			argv = append(argv, append([]string{"--"}, rest...)...)
+		case p.flag == "--" && len(lists[p.name]) > 0:
+			argv = append(argv, append([]string{"--"}, lists[p.name]...)...)
 		case val[p.name] == "":
 		case p.typ == "boolean":
 			argv = append(argv, p.flag)
@@ -292,6 +297,28 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 		}
 	}
 	return argv, stdin, nil
+}
+
+// listsArgv: propose's sources (#544), and its sets — several values in
+// one card, each dienst/SCHLÜSSEL=wert of an installed service — with
+// their notes (ADR 0034).
+func listsArgv(st *state.State, lists map[string][]string) ([]string, error) {
+	var argv []string
+	for _, src := range lists["sources"] {
+		argv = append(argv, "--source", src)
+	}
+	for _, s := range lists["sets"] {
+		svc, kv, _ := strings.Cut(s, "/")
+		k, v, ok := strings.Cut(kv, "=")
+		if !ok || st.Services[svc] == nil || !valueKeyRe.MatchString(k) || strings.ContainsAny(v, "\n\r") {
+			return nil, fmt.Errorf("sets: %q ist nicht dienst/SCHLÜSSEL=wert eines installierten Dienstes", s)
+		}
+		argv = append(argv, "--set", "services/"+svc+"/values.yml:"+k+"="+v)
+	}
+	for _, n := range lists["notes"] {
+		argv = append(argv, "--note", n)
+	}
+	return argv, nil
 }
 
 // wishArgv is laib_wish's argv: stand's pairs, or the text with what was

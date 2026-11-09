@@ -1,0 +1,17 @@
+# ADR 0034, the owner's choice (c), 2026-11-09: „Frage ruhig bei allen“ —
+# every newer image digest, an upstream's and our own, waits for a human tap;
+# nothing pulls by itself. Its script (run.py) reads laib updates --notes and
+# files one grouped card per night, each image with a short summary of its
+# changelog by the box's model („Ich will eine grobe Zusammenfassung bei der
+# Frage sehen, was sich geändert hat“), and once the pins of the floating
+# values to what runs. modell: kurz — the script's asks only, no tools; a
+# busy model is an answer, the card comes anyway.
+description: Jede Nacht — neue Stände aller Images als ein Vorschlag, mit kurzer Zusammenfassung, was sich geändert hat.
+trigger: {daily: "05:30"}
+tools: [updates, propose, note, inbox]
+run: run.py
+modell: kurz
+output: propose
+limits: {propose: 2}
+prompt: |
+  Das Skript schlägt die neuen Stände der Images vor; das Modell fasst nur die Änderungsnotizen zusammen, ohne Werkzeuge.

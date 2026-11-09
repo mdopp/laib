@@ -184,9 +184,9 @@ func TestReviewNamesWhatOnlyAHumanMayAllow(t *testing.T) {
 		}, "entfernt den Dienst whoami"},
 
 		{"nothing", func(t *testing.T, d string) {}, ""},
-		{"a newer image tag", func(t *testing.T, d string) {
+		{"a newer image tag: a human taps every new image (ADR 0034, the owner's choice c)", func(t *testing.T, d string) {
 			edit(t, d, "services/whoami/values.yml", "whoami:v1.10", "whoami:v1.11")
-		}, ""},
+		}, "ein neues Image für whoami (docker.io/traefik/whoami:v1.10 → docker.io/traefik/whoami:v1.11): neue Software nur auf deinen Tipp"},
 		{"an environment value", func(t *testing.T, d string) {
 			edit(t, d, "services/whoami/whoami.container", "WHOAMI_NAME=${SERVICE}", "WHOAMI_NAME=hello-${SERVICE}")
 		}, ""},

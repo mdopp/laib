@@ -31,7 +31,7 @@ type Skill struct {
 	Updates     string         `json:"updates"` // patch: the runner reads updates and offers only those (#376)
 	Lessons     string         `json:"lessons"` // vorfall: the runner proposes lessons, no model (#544)
 	Run         string         `json:"run"`     // run.py: the skill's script, its deterministic steps (#839)
-	Modell      string         `json:"modell"`  // frei (default) | urteil | nein: where the model decides (#839)
+	Modell      string         `json:"modell"`  // frei (default) | urteil | kurz | nein: where the model decides (#839, ADR 0034)
 	Status      string         `json:"status"`
 	Granted     []string       `json:"granted"`
 }

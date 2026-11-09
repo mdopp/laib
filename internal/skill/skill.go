@@ -193,8 +193,8 @@ func check(s *Skill) string {
 		s.Modell = "frei"
 	}
 	switch {
-	case s.Modell != "frei" && s.Modell != "urteil" && s.Modell != "nein":
-		return fmt.Sprintf("modell %q: frei, urteil oder nein", s.Modell)
+	case !slices.Contains([]string{"frei", "urteil", "kurz", "nein"}, s.Modell): // kurz: the script's asks only, a busy model is an answer (ADR 0034)
+		return fmt.Sprintf("modell %q: frei, urteil, kurz oder nein", s.Modell)
 	case s.Modell != "frei" && s.Run == "":
 		return "modell " + s.Modell + " braucht ein Skript (run: run.py), das vorbereitet, was das Modell beurteilt"
 	}
