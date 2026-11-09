@@ -182,9 +182,26 @@ the box exports nothing.
 `enable_passkey_login` is on (owner, 2026-11-02). A person adds a passkey
 once at `https://auth.<domain>/settings` → Zwei-Faktor → WebAuthn
 („Hinzufügen“; the browser offers to save it as a passkey). From then on
-the login page offers „Mit Passkey anmelden“. Authelia counts a passkey as
-one factor: on a `two_factor` route it then asks for the password as the
-second, so passkey and password replace password and code. A WebAuthn key
-registered earlier as a second factor only may not be a passkey (no
-resident key); adding it again makes it one. The experimental option that
-lets a passkey with user verification count as two factors stays off.
+the login page offers „Mit Passkey anmelden“. A WebAuthn key registered
+earlier as a second factor only may not be a passkey (no resident key);
+adding it again makes it one.
+
+**A passkey alone counts as two factors — experimental** (owner,
+2026-11-09, revising 2026-11-02: „solange es ein Fallback gibt, ist nur
+Passkey auch als Experiment OK“). `AUTH_PASSKEY_TWO_FACTORS: "on"` (the
+default; `"off"` turns it off) sets Authelia's
+`webauthn.experimental_enable_passkey_uv_two_factors`: a passkey whose
+authenticator verified the user (fingerprint, face, PIN) and says so
+satisfies a `two_factor` rule. So from outside the LAN, where Homes asks
+two factors (routes' `outside:`), the finger is enough. Checked against
+Authelia 4.39.x; Authelia calls the option experimental and unsupported
+and says a later version will replace it with custom policies and refuse
+to start with it set — an Authelia update that does is red at
+`validate-config` in CI (`TestAuthelia…OnTheRealBinary`) before it reaches
+the box. The fallbacks stay: password plus passkey, password plus a code
+from an app (TOTP is not disabled), and a passkey without user
+verification asks the password too.
+
+What it also means: the option is Authelia-wide, so a verified passkey
+alone also opens the other `two_factor` doors (the box page, the archive's
+door; the archive's vault keeps its own key).
