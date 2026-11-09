@@ -583,6 +583,23 @@ refuses without a session (401 or 403). Laib renders nothing from it;
 `laib net` carries it, and `laib-app check` measures the app's own login
 there instead of Authelia's (#774).
 
+### A stronger login from outside
+
+`outside: two_factor` on a public route with `auth: one_factor` (laib#1131,
+owner decision I) makes Authelia ask the second factor from outside the
+LAN and the one factor at home: two rules for the name, the first with
+`networks:` set to Caddy's `private_ranges` (the LAN, and WireGuard through
+the Fritz!Box, which hands out LAN addresses), the second for everyone
+else. Authelia reads the client's address from `X-Forwarded-For`, which
+Caddy sets itself and never takes from a client (no `trusted_proxies`). The
+auth template offers the passkey first (`default_2fa_method: webauthn`); a
+passkey alone stays one factor (the owner, 2026-11-02, against Authelia's
+experimental option), so from outside it is a passkey and the password, or
+the password and a code. `laib net` shows `one_factor, von außen
+two_factor`; taking it away or adding it is a human's in the review. A home
+device that reaches the box over a public IPv6 address counts as outside,
+as it does for Caddy's `@lan`.
+
 ### Names that only redirect
 
 `redirectFrom: ["@"]` on a route makes Caddy answer those names with a

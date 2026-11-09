@@ -1,6 +1,7 @@
 package render
 
 import (
+	"cmp"
 	htmltemplate "html/template"
 	"os"
 	"os/exec"
@@ -86,10 +87,13 @@ func TestAutheliaPolicyOnTheRealBinary(t *testing.T) {
 	}
 
 	verdict := regexp.MustCompile(`The policy '(\w+)'`)
-	check := func(host, path, group, want string) {
+	check := func(host, path, group, want string, ip ...string) {
 		t.Helper()
 		for i, order := range [][]string{files, reversed} {
 			args := append(configArgs(order), "access-control", "check-policy", "--url", "https://"+fqdn(st, host)+path)
+			if ip != nil {
+				args = append(args, "--ip", ip[0])
+			}
 			if group != "" {
 				args = append(args, "--username", "u", "--groups", group)
 			}
@@ -107,7 +111,7 @@ func TestAutheliaPolicyOnTheRealBinary(t *testing.T) {
 	check(st.Box.Laib.Host, "/", "admins", "two_factor") // the Inbox decides what the chat may not (#441)
 	check(st.Box.Laib.Host, "/", "family", "deny")
 	check("nowhere", "/", "admins", "deny") // a host no service routes
-	n := 0
+	n, outside := 0, 0
 	for _, name := range st.ServiceNames() {
 		for _, r := range st.Services[name].Contract.Routes {
 			n++
@@ -118,14 +122,24 @@ func TestAutheliaPolicyOnTheRealBinary(t *testing.T) {
 				check(r.Host, "/", "", "bypass")
 				continue
 			}
-			check(r.Host, "/", "admins", r.Auth)
+			check(r.Host, "/", "admins", r.Auth, "192.168.178.20")
+			check(r.Host, "/", "admins", r.Auth, "fd00::20")
+			check(r.Host, "/", "admins", cmp.Or(r.Outside, r.Auth), "203.0.113.7") // from outside the LAN (laib#1131)
+			check(r.Host, "/", "admins", cmp.Or(r.Outside, r.Auth), "2001:db8::7")
+			if r.Outside != "" {
+				outside++
+			}
+			check(r.Host, "/", "admins", cmp.Or(r.Outside, r.Auth)) // no address: not the LAN's
 			check(r.Host, "/", "lldap_strict_readonly", "deny")
 			if r.Group == "admins" {
 				check(r.Host, "/", "family", "deny")
 			} else {
-				check(r.Host, "/", "family", r.Auth)
+				check(r.Host, "/", "family", cmp.Or(r.Outside, r.Auth))
 			}
 		}
+	}
+	if outside == 0 {
+		t.Fatal("no built-in route asks more from outside: Homes's www should (laib#1131)")
 	}
 	if n < 10 {
 		t.Fatalf("only %d routes across the built-in templates: the glob found the wrong files", n)

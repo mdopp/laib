@@ -236,6 +236,23 @@ func TestReviewSeesARestrictionTakenAway(t *testing.T) {
 	}
 }
 
+// Dropping the second factor from outside (laib#1131) weakens the login
+// for everyone beyond the LAN; asking it changes how the family signs in:
+// both a human's call.
+func TestReviewSeesTheOutsideFactorTakenAway(t *testing.T) {
+	base, changed := copyTree(t, golden), copyTree(t, golden)
+	for _, d := range []string{base, changed} {
+		edit(t, d, "services/whoami/laib.yml", "exposure: internal", "exposure: public")
+	}
+	edit(t, base, "services/whoami/laib.yml", "auth: one_factor", "auth: one_factor\n    outside: two_factor")
+	if r := Dirs(base, changed); !strings.Contains(strings.Join(r.Human, " "), "ändert die Anmeldung von außerhalb des Heimnetzes für whoami (two_factor → one_factor)") {
+		t.Fatalf("taking outside: two_factor away went unnoticed: %q", r.Human)
+	}
+	if r := Dirs(changed, base); !strings.Contains(strings.Join(r.Human, " "), "ändert die Anmeldung von außerhalb des Heimnetzes für whoami (one_factor → two_factor)") {
+		t.Fatalf("asking more from outside changes the family's login, said in its words: %q", r.Human)
+	}
+}
+
 // A new service is the new-service class, not a patch; the hands its secrets
 // mint tokens for are named, so the caller can refuse a token stronger than
 // the hand that asked for it.

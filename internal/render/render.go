@@ -791,6 +791,7 @@ type accessRule struct {
 	Domain, Policy string
 	Subjects       []string // groups
 	Resource       string   // a bypass of one path prefix
+	Networks       []string // the rule holds only for these client networks (laib#1131)
 }
 
 func accessRules(st *state.State) []accessRule {
@@ -810,10 +811,26 @@ func accessRules(st *state.State) []accessRule {
 			if rule.Policy != "bypass" {
 				rule.Subjects = subjects(r)
 			}
-			rules = append(rules, rule)
+			rules = append(rules, outside(rule, r)...)
 		}
 	}
 	return rules
+}
+
+// lanNetworks are Caddy's private_ranges, the LAN its @lan matcher means;
+// Authelia sees the client's address in X-Forwarded-For, which Caddy sets
+// and never takes from a client (no trusted_proxies).
+var lanNetworks = []string{"192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8", "127.0.0.0/8", "fd00::/8", "::1/128"}
+
+// outside: a route asking more beyond the LAN (laib#1131, decision I) is two
+// rules, the first match wins: the LAN its own factor, everyone else Outside.
+func outside(rule accessRule, r state.Route) []accessRule {
+	if r.Outside == "" {
+		return []accessRule{rule}
+	}
+	home := rule
+	home.Networks, rule.Policy = lanNetworks, r.Outside
+	return []accessRule{home, rule}
 }
 
 // agentBypass is the route's bypass and, for a host the persons' instances
@@ -835,6 +852,9 @@ func autheliaAccess(st *state.State) string {
 		fmt.Fprintf(&b, "    - domain: %s\n      policy: %s\n", r.Domain, r.Policy)
 		if r.Resource != "" {
 			fmt.Fprintf(&b, "      resources: [\"^%s.*$\"]\n", r.Resource)
+		}
+		if len(r.Networks) > 0 {
+			fmt.Fprintf(&b, "      networks: [\"%s\"]\n", strings.Join(r.Networks, `", "`))
 		}
 		// family and admins, never just any LLDAP account (radicale's bind
 		// account is one); admins reach what the family reaches

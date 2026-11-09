@@ -8,6 +8,7 @@ package review
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
@@ -459,6 +460,15 @@ func (r *Result) foreignData(svc string, before, after []state.DataPath, st *sta
 	}
 }
 
+// outsideChange: a route's outside: (laib#1131) changed, either way the
+// family's login from outside the LAN: a human's.
+func outsideChange(old, rt state.Route) []string {
+	if rt.Outside == old.Outside {
+		return nil
+	}
+	return []string{fmt.Sprintf("ändert die Anmeldung von außerhalb des Heimnetzes für %s (%s → %s)", rt.Host, cmp.Or(old.Outside, old.Auth), cmp.Or(rt.Outside, rt.Auth))}
+}
+
 func authRank(a string) int {
 	switch a {
 	case "none":
@@ -516,6 +526,7 @@ func (r *Result) contract(svc string, b, a state.Contract, existed bool, mints m
 		if authRank(rt.Auth) < authRank(old.Auth) {
 			say("schwächt die Anmeldung für %s (%s → %s)", rt.Host, old.Auth, rt.Auth)
 		}
+		r.Human = append(r.Human, outsideChange(old, rt)...)
 		if old.Group != rt.Group {
 			say("ändert, wer sich bei %s anmelden darf (%q → %q)", rt.Host, old.Group, rt.Group)
 		}

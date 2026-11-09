@@ -27,7 +27,8 @@ routes:
   - host: www
     port: 8650
     exposure: public               # the phone reaches /napi/ from outside; the pages are behind Authelia
-    auth: one_factor
+    auth: one_factor               # at home (LAN, WireGuard) the password or a passkey
+    outside: two_factor            # from outside the second factor, a passkey first (owner decision I, laib#1131): a phished password is not enough
     bypass: [/napi/]
     proxySecret: HOMES_PROXY_SECRET # Caddy sends it as X-Homes-Proxy on the authenticated handler only (ADR 0012 §3)
   # The domain itself (owner 2026-11-08): a visitor without an account sees a short public page, what the box is,

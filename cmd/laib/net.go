@@ -37,7 +37,7 @@ func cmdNet(ctx context.Context, env *cliEnv, args []string) int {
 	fmt.Fprintf(w, "Name\tErreichbar\tVorab Authelia\tRegel\tZiel\tohne Login\n")
 	for _, r := range n.Names {
 		fa := map[bool]string{true: "ja", false: "nein"}[r.ForwardAuth]
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.Name, r.Reach, fa, strings.TrimSpace(r.Policy+" "+r.Subject), r.Upstream, strings.Join(r.Bypass, " "))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.Name, r.Reach, fa, strings.TrimSpace(r.Factor()+" "+r.Subject), r.Upstream, strings.Join(r.Bypass, " "))
 	}
 	w.Flush()
 	fmt.Fprintf(env.W(), "\nLAN: AdGuard schreibt *.%s und %s auf %s um, dann Caddy (80, 443); Internet: Fritz!Box 80/443 an Caddy.\n\nPort\tDienst\tErreichbar\n", st.Box.Domain, st.Box.Domain, st.Box.LanIP)
