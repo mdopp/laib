@@ -125,11 +125,12 @@ grep -q "changed-whoami" "$LAIB_QUADLET/whoami/whoami.container" || fail "change
 LAIB_ACTOR=human:e2e "$BIN" rollback >/dev/null || fail "rollback exit $?"
 grep -q "changed-whoami" "$LAIB_QUADLET/whoami/whoami.container" && fail "rollback did not revert"
 
-# --- 5. a values proposal by ops: class values is auto, laib approves itself (#2)
-LAIB_ACTOR=ops "$BIN" propose --set services/whoami/values.yml:IMAGE=docker.io/traefik/whoami:v1.11 "e2e: newer whoami" >/dev/null || fail "auto propose exit $?"
+# --- 5. a new image by ops (#2): a person taps it, laib approves nothing itself (ADR 0034, choice c)
+LAIB_ACTOR=ops "$BIN" propose --set services/whoami/values.yml:IMAGE=docker.io/traefik/whoami:v1.11 "e2e: newer whoami" >/dev/null || fail "propose exit $?"
+grep -q "whoami:v1.11" "$LAIB_QUADLET/whoami/whoami.container" && fail "a new image was applied without a tap"
+LAIB_ACTOR=human:e2e "$BIN" approve 2 >/dev/null || fail "approve #2 exit $?"
 grep -q "whoami:v1.11" "$LAIB_QUADLET/whoami/whoami.container" || fail "--set proposal not applied"
-j 'assert any(e["actor"]=="laib" and e["verb"]=="approve" for e in es), "laib did not approve"'
-if LAIB_ACTOR=human:e2e "$BIN" approve 2 >/dev/null 2>&1; then fail "an auto-approved proposal was approved twice"; fi
+if LAIB_ACTOR=human:e2e "$BIN" approve 2 >/dev/null 2>&1; then fail "a proposal was approved twice"; fi
 OUT="$(LAIB_ACTOR=ops "$BIN" propose --add whoami --name whoami2 IMAGE=docker.io/traefik/whoami:v1.11 "e2e: second whoami" 2>&1 || true)"
 grep -q "already published" <<<"$OUT" || fail "duplicate host not refused: $OUT"
 
