@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.17.0](https://github.com/mdopp/laib/compare/v2.16.0...v2.17.0) (2026-11-09)
+
+
+### Features
+
+* **template:** the Bote's Signal account shows the Homes picture and the assistant's name ([#1145](https://github.com/mdopp/laib/issues/1145)) ([a4b59c7](https://github.com/mdopp/laib/commit/a4b59c7f39587cf1a136f39ec89521b81a0536d6))
+
 ## [2.16.0](https://github.com/mdopp/laib/compare/v2.15.0...v2.16.0) (2026-11-09)
 
 
