@@ -90,7 +90,10 @@ func TestNewValuesDropsOnlyARetiredSecret(t *testing.T) {
 		{"OLD: GONE\n", "A: 3\n", map[string]string{}, "OLD: GONE\nA: 3\n"},                               // a plain value stays
 		{"OLD: !secret KEPT\n", "A: 3\n", map[string]string{"KEPT": "KEPT"}, "OLD: !secret KEPT\nA: 3\n"}, // still declared
 		{"OLD: !secret GONE\n", "OLD: !secret GONE\n", map[string]string{}, "OLD: !secret GONE\n"},        // the example has it: the loader says why
-		{"OLD: !secret GONE\n", "A: 3\n", nil, "OLD: !secret GONE\nA: 3\n"},                               // no contract read: nothing goes
+		{"OLD: !secret GONE\n", "A: 3\n", nil, "OLD: !secret GONE\nA: 3\n"},
+		{"K: !secret WAS # c\n", "K: !secret NEW\n", map[string]string{"NEW": "NEW", "WAS": "NEW"}, "K: !secret NEW # c\n"},     // laib#1021: renamed with its secret
+		{"OLD: !secret WAS\n", "K: !secret NEW\n", map[string]string{"NEW": "NEW", "WAS": "NEW"}, "K: !secret NEW\n"},           // a key the example dropped goes
+		{"K: !secret WAS\nWAS: !secret WAS\n", "K: x\n", map[string]string{"WAS": "WAS"}, "K: !secret WAS\nWAS: !secret WAS\n"}, // still declared: stays                               // no contract read: nothing goes
 	} {
 		path := filepath.Join(t.TempDir(), "values.yml")
 		os.WriteFile(path, []byte(c.have), 0o644)

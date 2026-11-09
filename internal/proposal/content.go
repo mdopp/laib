@@ -572,7 +572,8 @@ func merge3(cur, base, theirs []byte) ([]byte, bool) {
 // has whose !secret the new contract does not declare goes (#696: the
 // retired HAUS_DISCOGS_TOKEN): kept, the update would not load. Without
 // declared (nil) nothing goes; a plain value never does. A !secret naming a
-// secret's former name (was:) names the new one, or neither loads (laib#1021).
+// secret's former name (was:) names the new one, or neither loads (laib#1021);
+// under a key the example no longer has, it goes (archiv's HAUS_SECRET).
 func newValues(path string, example []byte, declared map[string]string) error {
 	have, _ := os.ReadFile(path)
 	var cur, ex yaml.Node
@@ -594,10 +595,10 @@ func newValues(path string, example []byte, declared map[string]string) error {
 		for i := 0; i+1 < len(cur.Content[0].Content); i += 2 {
 			k, v := cur.Content[0].Content[i], cur.Content[0].Content[i+1]
 			known[k.Value] = true
-			if to := declared[v.Value]; v.Tag == "!secret" && to != "" && to != v.Value {
+			if to := declared[v.Value]; v.Tag == "!secret" && to != "" && to != v.Value && inEx[k.Value] {
 				at := strings.Index(rows[v.Line-1], "!secret")
 				rows[v.Line-1], renamed = rows[v.Line-1][:at]+strings.Replace(rows[v.Line-1][at:], v.Value, to, 1), true
-			} else if !inEx[k.Value] && declared != nil && v.Tag == "!secret" && to == "" {
+			} else if !inEx[k.Value] && declared != nil && v.Tag == "!secret" && to != v.Value {
 				stale = append(stale, k.Line-1)
 			}
 		}
