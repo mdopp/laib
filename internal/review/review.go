@@ -136,6 +136,15 @@ func Dirs(base, changed string) Result {
 	return r
 }
 
+// boxlessSays: the folders whose one file changes nothing on the box, what
+// approving it does.
+var boxlessSays = map[string]string{
+	"repairs":   "eine Reparatur (%s): nach der Freigabe führt Laib den darin genannten Befehl aus",
+	"einblicke": "ein Einblick in private Daten (%s): nach der Freigabe darf der genannte Agent eine Stunde lang hineinsehen (ADR 0032)",
+	"wishes":    "ein Wunsch an die Werkstatt (%s): nach der Freigabe wird daraus ein Ticket",
+	"lessons":   "eine Lehre für den Operator (%s): steht danach im Kontext jeder seiner Sitzungen (#544)",
+}
+
 func dirs(base, changed string) Result {
 	var r Result
 	say := func(format string, a ...any) { r.Human = append(r.Human, fmt.Sprintf(format, a...)) }
@@ -202,14 +211,10 @@ func dirs(base, changed string) Result {
 			}
 		case parts[0] == "services" && len(parts) == 4 && parts[2] == state.BaseDir && !a.exec:
 			// the template as copied in (#511): only the next update's merge reads it
-		case parts[0] == "repairs" && len(parts) == 2:
-			say("eine Reparatur (%s): nach der Freigabe führt Laib den darin genannten Befehl aus", p)
+		case len(parts) == 2 && boxlessSays[parts[0]] != "":
+			say(boxlessSays[parts[0]], p)
 		case p == "host/image":
 			say("das Betriebssystem der Box (%s): nach der Freigabe wird das Image bereitgestellt, der Neustart kommt im Update-Fenster (#368)", p)
-		case parts[0] == "wishes" && len(parts) == 2:
-			say("ein Wunsch an die Werkstatt (%s): nach der Freigabe wird daraus ein Ticket", p)
-		case parts[0] == "lessons" && len(parts) == 2:
-			say("eine Lehre für den Operator (%s): steht danach im Kontext jeder seiner Sitzungen (#544)", p)
 		case parts[0] == "skills":
 			say("gibt dem Operator eine Fähigkeit oder ändert eine (%s): was er tun darf, entscheidet ein Mensch (ADR 0023)", p)
 		default:

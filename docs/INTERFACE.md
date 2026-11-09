@@ -648,7 +648,10 @@ reads this record (ADR 0023, amendment #544).
 A read-only command (cat, ls, grep, ps, df, stat, find, …) in one of the
 service's own containers: no budget, no snapshot, journaled. `laib exec`
 is for changing something and stays budgeted. Neither reaches another
-service's container. `policy.yml envelope.snapshot: optional` lets a
+service's container. A `private:` service (ADR 0032) refuses them: a
+`sealed` one always, for every hand; an `approval` one for every hand but a
+human until a human approves the Einblick card the refusal files, then for
+an hour; its journal lines carry the output's size, not its text. `policy.yml envelope.snapshot: optional` lets a
 class-2 action go ahead without a pre-repair snapshot; the default refuses.
 
 ### One lock, pauses, pending activation (#39)

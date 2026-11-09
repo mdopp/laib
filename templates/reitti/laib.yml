@@ -1,6 +1,7 @@
 name: reitti
 title: Zeitleiste
 beschreibung: Wo du warst, nur für dich
+private: approval     # ADR 0032: the family's data; an agent looks in for an hour after a human's Einblick, the journal keeps no output
 template: {registry: builtin, name: reitti, version: 1}
 provides: [timeline]
 upstream: [https://github.com/dedicatedcode/reitti, https://www.dedicatedcode.com/projects/reitti/]   # where the Operator's web search looks first (#544)

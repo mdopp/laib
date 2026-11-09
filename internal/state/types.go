@@ -274,6 +274,10 @@ type Contract struct {
 	// PerPerson: the template is installed once per person (#986, ADR 0029),
 	// `laib add <template> --person <p>`, as the service <template>-<p>.
 	PerPerson bool `yaml:"perPerson"`
+	// Private: the family's data (ADR 0032). sealed: no verb looks into its
+	// containers or files, for no hand; approval: an agent looks only for an
+	// hour after a human approved an Einblick, and the journal keeps no output.
+	Private Privacy `yaml:"private"`
 	// Person and PortOffset make such a service that person's instance;
 	// laib add --person writes them, a template never: its units are named
 	// after the service, its secrets end in _<PERSON>, its host ports are
@@ -284,6 +288,18 @@ type Contract struct {
 	// Instances: the persons' instances of a per-person template this
 	// service talks to, wired into one of its containers (laib#1016).
 	Instances []Reach `yaml:"instances"`
+}
+
+// Privacy is Contract.Private: "", sealed or approval (ADR 0032); a laib.yml
+// with another value does not load.
+type Privacy string
+
+func (p *Privacy) UnmarshalYAML(n *yaml.Node) error {
+	if n.Value != "sealed" && n.Value != "approval" {
+		return fmt.Errorf("private: %q is neither sealed nor approval (ADR 0032)", n.Value)
+	}
+	*p = Privacy(n.Value)
+	return nil
 }
 
 // Reach wires every person's instance of Template into Unit, a .container

@@ -201,13 +201,16 @@ func Inspect(ctx context.Context, env *cli.Env, args []string) int {
 	return cli.ExitOK
 }
 
-func Read(_ context.Context, env *cli.Env, args []string) int {
+func Read(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) < 2 {
 		return env.Fail(errors.New("usage: laib read <service> <path>"))
 	}
 	st, svc, err := LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
+	}
+	if code := gate(ctx, env, st, svc, "read", args[1]); code != cli.ExitOK {
+		return code
 	}
 	root, rel, err := jail(st, svc, args[1])
 	if err != nil {
@@ -241,6 +244,9 @@ func Write(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), "apply") {
 		return cli.Refused(env, env.Actor+" may not write")
+	}
+	if code := gate(ctx, env, st, svc, "write", args[1]); code != cli.ExitOK {
+		return code
 	}
 	root, rel, err := jail(st, svc, args[1])
 	if err != nil {
@@ -291,6 +297,9 @@ func Exec(ctx context.Context, env *cli.Env, args []string) int {
 	container, err = pickContainer(svc, container)
 	if err != nil {
 		return cli.Refused(env, err.Error())
+	}
+	if code := gate(ctx, env, st, svc, "exec", strings.Join(cmd, " ")); code != cli.ExitOK {
+		return code
 	}
 	if code := envelope(ctx, env, st, svc, "exec", strings.Join(cmd, " ")); code != cli.ExitOK {
 		return code
@@ -523,10 +532,14 @@ func runIn(ctx context.Context, env *cli.Env, svc *state.Service, verb, containe
 	out, err := sysd.Run(ctx, "podman", append([]string{"exec", container}, cmd...)...)
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	out = journal.Scrub(out, sec) // a cat of a file shows what laib read would (#1054)
-	entry := journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Reason: strings.Join(cmd, " "), Result: "info", Detail: cli.Tail(out, 1500), MS: time.Since(start).Milliseconds()}
+	shown := cli.Tail(out, 1500)
+	if svc.Contract.Private != "" { // the family's data stay out of the journal (ADR 0032)
+		shown = outputSize(out)
+	}
+	entry := journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Reason: strings.Join(cmd, " "), Result: "info", Detail: shown, MS: time.Since(start).Milliseconds()}
 	if err != nil {
 		entry.Result = "red"
-		entry.Detail = err.Error() + "\n" + cli.Tail(out, 1500)
+		entry.Detail = err.Error() + "\n" + shown
 	}
 	return out, entry, err
 }
@@ -541,7 +554,7 @@ func Look(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) < 1 {
 		return env.Fail(errors.New("usage: laib look <service> [--container <name>] -- <cat|ls|grep|ps|…>"))
 	}
-	_, svc, err := LoadSvc(env, args[0])
+	st, svc, err := LoadSvc(env, args[0])
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -560,6 +573,9 @@ func Look(ctx context.Context, env *cli.Env, args []string) int {
 	container, err = pickContainer(svc, container)
 	if err != nil {
 		return cli.Refused(env, err.Error())
+	}
+	if code := gate(ctx, env, st, svc, "look", strings.Join(cmd, " ")); code != cli.ExitOK {
+		return code
 	}
 	out, entry, err := runIn(ctx, env, svc, "look", container, cmd)
 	journal.Append(env.Paths.Journal, entry)

@@ -336,6 +336,7 @@ requires:                        # a set value needs these set too (#184)
   MAIL_HOST: [MAIL_PASSWORD]
 channels: {signal: SIGNAL_ACCOUNT}   # people platforms this service delivers on, each while its value is set
 perPerson: false                 # true: installed once per person (#986), below
+private: approval                # the family's data (ADR 0032): sealed = no look/read/exec/write for anyone; approval = an agent only for an hour after a human's Einblick; the journal keeps no output
 instances:                       # every person's instance of a per-person template, in one container (laib#1016), below
   - {template: archiv, unit: homes.container, url: HOMES_ARCHIV_INTERN, secret: ARCHIV_HOMES_SECRET, env: HOMES_ARCHIV_SECRET}
 ```

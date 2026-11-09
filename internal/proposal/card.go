@@ -532,6 +532,7 @@ func Undoing(p *Proposal) (oneTap bool, text string) {
 
 // actionWords: what stays after a repair's verb ran (#852).
 var actionWords = map[string]string{
+	"einblick":   "Laib führt dabei nichts aus; die Freigabe endet nach einer Stunde von selbst.",
 	"restart":    "Ein Neustart ändert nichts Bleibendes; es gibt nichts zurückzunehmen.",
 	"backup":     "Eine Sicherung ändert nichts an den Diensten; es gibt nichts zurückzunehmen.",
 	"flash":      "Die neue Firmware bleibt auf dem Gerät; „Zurücknehmen“ spielt die alte nicht zurück.",
