@@ -724,7 +724,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 				continue // the persons' instances share one site (#986)
 			}
 			done[r.Host] = true
-			fmt.Fprintf(&b, "%s {\n%s\timport down\n", fqdn(st, r.Host), stripRemote)
+			fmt.Fprintf(&b, "%s {\n%s\timport down\n%s", fqdn(st, r.Host), stripRemote, publicPaths(r))
 			indent := "\t"
 			if r.Exposure == "internal" {
 				b.WriteString("\t@lan remote_ip private_ranges\n\thandle @lan {\n")
@@ -831,6 +831,19 @@ func outside(rule accessRule, r state.Route) []accessRule {
 	home := rule
 	home.Networks, rule.Policy = lanNetworks, r.Outside
 	return []accessRule{home, rule}
+}
+
+// publicPaths: an internal route's paths for everyone, before the LAN's
+// handle and without Authelia (laib#1133); the rest stays at home.
+func publicPaths(r state.Route) string {
+	if len(r.PublicPaths) == 0 {
+		return ""
+	}
+	var ms []string
+	for _, p := range r.PublicPaths {
+		ms = append(ms, strings.TrimSuffix(p, "/")+"/*")
+	}
+	return fmt.Sprintf("\t@public path %s\n\thandle @public {\n\t\treverse_proxy 127.0.0.1:%d\n\t}\n", strings.Join(ms, " "), r.Port)
 }
 
 // agentBypass is the route's bypass and, for a host the persons' instances

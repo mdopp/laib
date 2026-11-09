@@ -104,6 +104,9 @@ func TestReviewNamesWhatOnlyAHumanMayAllow(t *testing.T) {
 		{"a public route", func(t *testing.T, d string) {
 			edit(t, d, "services/whoami/laib.yml", "exposure: internal", "exposure: public")
 		}, "aus dem Internet erreichbar"},
+		{"paths of a home-only name for everyone (laib#1133)", func(t *testing.T, d string) {
+			edit(t, d, "services/whoami/laib.yml", "auth: one_factor", "auth: one_factor\n    publicPaths: [/share/]")
+		}, "macht auf whoami Pfade aus dem Internet erreichbar, ohne Anmeldung: /share/"},
 		{"box.yml roles", func(t *testing.T, d string) {
 			edit(t, d, "box.yml", "  proxy: caddy\n", "  proxy: whoami\n")
 		}, "Rollen"},

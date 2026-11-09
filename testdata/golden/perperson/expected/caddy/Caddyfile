@@ -88,6 +88,21 @@ ldap.example.home {
 	import lanonly
 }
 
+leser.example.home {
+	request_header -Remote-*
+	import down
+	@public path /share/* /api/public/*
+	handle @public {
+		reverse_proxy 127.0.0.1:8490
+	}
+	@lan remote_ip private_ranges
+	handle @lan {
+		import authelia
+		reverse_proxy 127.0.0.1:8490
+	}
+	import lanonly
+}
+
 notizen.example.home {
 	request_header -Remote-*
 	import down

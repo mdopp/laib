@@ -336,6 +336,10 @@ type Route struct {
 	Group    string   `yaml:"group"`
 	Caddy    string   `yaml:"caddy"`
 	Bypass   []string `yaml:"bypass"` // path prefixes that skip Authelia on this host: a token-only API (/napi/) next to pages
+	// PublicPaths: on an internal route, path prefixes served to anyone,
+	// from the internet too, without a login: File Browser's share links on
+	// a name that is otherwise only at home (laib#1133, decision J)
+	PublicPaths []string `yaml:"publicPaths"`
 	// ProxySecret names a secret Caddy sends as the header `X-<Name>-Proxy`
 	// on the authenticated handler only, so the service trusts Remote-User
 	// solely behind the proxy (ADR 0012 §3; Laib's own page does the same).

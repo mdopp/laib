@@ -460,6 +460,15 @@ func (r *Result) foreignData(svc string, before, after []state.DataPath, st *sta
 	}
 }
 
+// publicChange: paths of a home-only name the internet reaches without a
+// login (laib#1133), new ones a human's like a public route.
+func publicChange(old, rt state.Route) []string {
+	if len(rt.PublicPaths) == 0 || slices.Equal(old.PublicPaths, rt.PublicPaths) {
+		return nil
+	}
+	return []string{fmt.Sprintf("macht auf %s Pfade aus dem Internet erreichbar, ohne Anmeldung: %s", rt.Host, strings.Join(rt.PublicPaths, ", "))}
+}
+
 // outsideChange: a route's outside: (laib#1131) changed, either way the
 // family's login from outside the LAN: a human's.
 func outsideChange(old, rt state.Route) []string {
@@ -493,6 +502,7 @@ func (r *Result) contract(svc string, b, a state.Contract, existed bool, mints m
 	for _, rt := range a.Routes {
 		seen[rt.Host] = true
 		old, had := broutes[rt.Host]
+		r.Human = append(r.Human, publicChange(old, rt)...)
 		if !had {
 			if existed {
 				say("veröffentlicht eine neue Adresse für %s: %s", svc, rt.Host)

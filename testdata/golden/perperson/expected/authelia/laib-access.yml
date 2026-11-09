@@ -11,6 +11,9 @@ access_control:
     - domain: ldap.example.home
       policy: two_factor
       subject: "group:admins"
+    - domain: leser.example.home
+      policy: one_factor
+      subject: ["group:family", "group:admins"]
     - domain: notizen.example.home
       policy: bypass
       resources: ["^/p/martin/.*$"]
