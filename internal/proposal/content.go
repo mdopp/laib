@@ -1,6 +1,7 @@
 package proposal
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -449,14 +450,15 @@ func updateService(wt string, u *UpdateService) ([]string, error) {
 	}
 	if ex, err := fs.ReadFile(u.Template, "values.example.yml"); err == nil {
 		var c state.Contract
-		var declared map[string]bool // the new contract's secrets; unknown: nil, nothing goes
+		var declared map[string]string // the new contract's secrets, a former name (was:) to its new one; unknown: nil, nothing goes
 		if b, err := fs.ReadFile(u.Template, "laib.yml"); err == nil && yaml.Unmarshal(b, &c) == nil {
-			declared = map[string]bool{}
+			declared = map[string]string{}
 			for _, s := range c.Secrets {
-				declared[s.Name] = true
+				declared[s.Name], declared[s.Was] = s.Name, cmp.Or(declared[s.Was], s.Name)
 			}
+			delete(declared, "")
 			if c.OIDC != nil {
-				declared[state.OIDCSecretName(c.OIDC.ClientID)] = true
+				declared[state.OIDCSecretName(c.OIDC.ClientID)] = state.OIDCSecretName(c.OIDC.ClientID)
 			}
 		}
 		if err := newValues(filepath.Join(dst, "values.yml"), ex, declared); err != nil {
@@ -569,8 +571,10 @@ func merge3(cur, base, theirs []byte) ([]byte, bool) {
 // operator set stays as it is, byte for byte. A key the example no longer
 // has whose !secret the new contract does not declare goes (#696: the
 // retired HAUS_DISCOGS_TOKEN): kept, the update would not load. Without
-// declared (nil) nothing goes; a plain value never does.
-func newValues(path string, example []byte, declared map[string]bool) error {
+// declared (nil) nothing goes; a plain value never does. A !secret naming a
+// secret's former name (was:) names the new one, or neither loads (laib#1021);
+// under a key the example no longer has, it goes (archiv's HAUS_SECRET).
+func newValues(path string, example []byte, declared map[string]string) error {
 	have, _ := os.ReadFile(path)
 	var cur, ex yaml.Node
 	if err := yaml.Unmarshal(have, &cur); err != nil {
@@ -586,23 +590,23 @@ func newValues(path string, example []byte, declared map[string]bool) error {
 	for i := 0; i < len(m.Content); i += 2 {
 		inEx[m.Content[i].Value] = true
 	}
-	var stale []int
+	stale, renamed, rows := []int(nil), false, strings.Split(string(have), "\n")
 	if len(cur.Content) > 0 {
 		for i := 0; i+1 < len(cur.Content[0].Content); i += 2 {
 			k, v := cur.Content[0].Content[i], cur.Content[0].Content[i+1]
 			known[k.Value] = true
-			if !inEx[k.Value] && declared != nil && v.Tag == "!secret" && !declared[v.Value] {
+			if to := declared[v.Value]; v.Tag == "!secret" && to != "" && to != v.Value && inEx[k.Value] {
+				at := strings.Index(rows[v.Line-1], "!secret")
+				rows[v.Line-1], renamed = rows[v.Line-1][:at]+strings.Replace(rows[v.Line-1][at:], v.Value, to, 1), true
+			} else if !inEx[k.Value] && declared != nil && v.Tag == "!secret" && to != v.Value {
 				stale = append(stale, k.Line-1)
 			}
 		}
 	}
-	if len(stale) > 0 {
-		lines := strings.Split(string(have), "\n")
-		for _, i := range slices.Backward(stale) {
-			lines = slices.Delete(lines, i, i+1)
-		}
-		have = []byte(strings.Join(lines, "\n"))
+	for _, i := range slices.Backward(stale) {
+		rows = slices.Delete(rows, i, i+1)
 	}
+	have = []byte(strings.Join(rows, "\n"))
 	lines := strings.Split(string(example), "\n")
 	var add []byte
 	for i := 0; i+1 < len(m.Content); i += 2 {
@@ -613,7 +617,7 @@ func newValues(path string, example []byte, declared map[string]bool) error {
 			add = append(add, lines[k.Line-1]+"\n"...)
 		}
 	}
-	if len(add) == 0 && len(stale) == 0 {
+	if len(add) == 0 && len(stale) == 0 && !renamed {
 		return nil
 	}
 	if len(have) > 0 && have[len(have)-1] != '\n' && len(add) > 0 {
