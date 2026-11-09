@@ -10,7 +10,7 @@ on its servers. An empty value leaves that part of the profile as it is.
 
 A failure is one line and exit 0: the profile never makes the deploy red; the next apply tries
 again, since nothing was noted. The error's text is not passed on: it names the number."""
-import base64, hashlib, json, os, sys, urllib.request
+import base64, hashlib, json, os, sys, time, urllib.request
 from pathlib import Path
 
 
@@ -45,14 +45,21 @@ def main(env, here):
         params["avatar"] = "data:image/png;base64," + base64.b64encode(avatar).decode()
     url = env.get("SIGNAL_RPC_URL", "http://127.0.0.1:8085").rstrip("/") + "/api/v1/rpc"
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "updateProfile", "params": params}).encode()
-    try:
-        with urllib.request.urlopen(urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}), timeout=30) as r:
-            out = json.loads(r.read() or b"{}")
-        if out.get("error") is not None:
-            raise ValueError("signal-cli: Fehler %s" % (out["error"] or {}).get("code"))
-    except Exception as e:  # never red: the profile is a nicety (owner, 2026-11-09)
-        print("signal-profil: nicht gesetzt (%s), das nächste apply versucht es wieder" % type(e).__name__)
-        return
+    for versuch in range(int(env.get("SIGNAL_PROFILE_TRIES", "8"))):  # right after apply the daemon is still starting (2026-11-09: ConnectionResetError)
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}), timeout=30) as r:
+                out = json.loads(r.read() or b"{}")
+            if out.get("error") is not None:
+                raise ValueError("signal-cli: Fehler %s" % (out["error"] or {}).get("code"))
+            break
+        except ValueError as e:  # the daemon answered no: waiting does not help
+            print("signal-profil: nicht gesetzt (%s), das nächste apply versucht es wieder" % type(e).__name__)
+            return
+        except Exception as e:  # never red: the profile is a nicety (owner, 2026-11-09)
+            if versuch + 1 >= int(env.get("SIGNAL_PROFILE_TRIES", "8")):
+                print("signal-profil: nicht gesetzt (%s), das nächste apply versucht es wieder" % type(e).__name__)
+                return
+            time.sleep(float(env.get("SIGNAL_PROFILE_WAIT", "15")))
     note.parent.mkdir(parents=True, exist_ok=True)
     note.write_text(json.dumps({"fingerprint": want, "name": name, "bild": avatar_name}) + "\n")
     print("signal-profil: gesetzt (%s)" % ", ".join(filter(None, ["Name „%s“" % name if name else "", "Bild %s" % avatar_name if avatar else ""])))
