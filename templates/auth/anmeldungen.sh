@@ -53,7 +53,7 @@ zaehlen() {
 	netze=$(ip -o addr show 2>/dev/null | awk '{print $4}' | paste -sd, -)
 	exec ${PODMAN:-/usr/bin/podman} run --rm -i --name auth-anmeldungen --network none --read-only \
 		--cap-drop all --security-opt no-new-privileges \
-		-e TZ -e AUTH_MAX_RETRIES -e AUTH_FIND_TIME -e AUTH_BAN_TIME -e NOTIFY_PERSON -e SMTP_HOST -e LAN_NETZE="$netze" \
+		-e TZ -e AUTH_MAX_RETRIES -e AUTH_FIND_TIME -e AUTH_BAN_TIME -e NOTIFY_PERSON -e SMTP_HOST -e ANMELDUNGEN_SALT -e LAN_NETZE="$netze" \
 		-e STATE_DIR=/state -e AUTH_DB=/authelia/db.sqlite3 -e LLDAP_DB=/lldap/users.db \
 		-v "$D/authelia-data:/authelia:ro,z" -v "$D/lldap:/lldap:ro,z" -v "$S:/state:z" \
 		"${ANMELDUNGEN_IMAGE:?the image}" python3 - <"${ANMELDUNGEN_SKRIPT:?anmeldungen.py}"
@@ -67,7 +67,7 @@ sende() { # the payload in $1; prints bote-notify's HTTP code, 000 when unreacha
 }
 
 abgeben() { # the line in $1, its time in $2: to laib-notify for the mail; 1 when it stays here
-	[ -n "$SMTP_HOST" ] || return 1
+	[ -n "$SMTP_HOST" ] && [ -z "$nur" ] || return 1
 	n=$((n + 1))
 	f=$EINGANG/anmeldungen-$2-$$-$n.json
 	mkdir -p "$EINGANG" && printf '%s\n' "$1" >"$f.neu" && mv "$f.neu" "$f" || {
@@ -99,6 +99,11 @@ meldungen() {
 		fi
 		bote=$NOTIFY_TOKEN
 		case "$z" in *'"an": ""'*) bote="" ;; esac # nobody the Bote could reach (box.yml notify.person)
+		nur=""
+		case "$z" in *'"nur_bote": true'*) nur=1 ;; esac # a person's own copy of a new login: never a mail, the admin's copy has one
+		if [ -z "$bote" ] && [ -n "$nur" ]; then
+			continue
+		fi
 		if [ -z "$bote" ]; then # no Bote: the mail at once
 			abgeben "$z" "$at" || printf '%s\n' "$z" >>"$W.rest"
 			continue

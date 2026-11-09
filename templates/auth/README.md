@@ -71,6 +71,26 @@ Die Nachricht nennt Benutzername und Adresse, nie ein Passwort; Authelia
 speichert keines. Jeder gemeldete Vorfall steht als Notiz (`incident`) im
 Journal, so zeigen ihn der Morgenbericht und die Box-Seite.
 
+**Neue Anmeldung:** Meldet sich jemand mit einem Konto erfolgreich aus einem
+Netz an, aus dem sich dieses Konto noch nie angemeldet hat, kommt eine
+Nachricht an diese Person und an die Person für Mitteilungen, einmal:
+
+> 🔑 Neue Anmeldung bei Anna: mit Passwort, von außen (Netz 192.0.2.x),
+> 09.11. um 14:05. Warst du das?
+> Wenn nicht: ändere dein Passwort und sag es dem Admin.
+
+Das Netz ist grob: „zu Hause“ für das Heimnetz, sonst die ersten drei Teile
+einer IPv4-Adresse oder die ersten 48 Bit einer IPv6-Adresse. Authelia
+speichert keinen Browser und kein Gerät, nur ob mit Passwort oder Passkey
+angemeldet wurde; das steht in der Nachricht. Wer mit dem Handy unterwegs
+ist, bekommt die Nachricht beim ersten Mal aus einem neuen Mobilfunknetz
+auch. Die Box merkt sich nur einen gesalzenen Hash aus Name und Netz
+(`ANMELDUNGEN_SALT`, ein Geheimnis der Box), nie die Adresse, und vergisst
+ihn nach 400 Tagen ohne Anmeldung. Beim ersten Lauf nach dem Update gelten
+alle bisherigen Anmeldungen als bekannt, es kommt keine Nachricht. Die
+eigene Kopie geht nur über den Boten; die des Admins nimmt wie jede andere
+den Weg per Mail, wenn der Bote nicht erreichbar ist.
+
 **How it works:** `auth-anmeldungen.timer` starts `auth-anmeldungen.service`
 every five minutes, which runs `anmeldungen.sh` twice:
 
