@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.18.0](https://github.com/mdopp/laib/compare/v2.17.0...v2.18.0) (2026-11-09)
+
+
+### Features
+
+* **bote:** Signal profile waits for its daemon, a description and a welcome with Homes and the app ([#1147](https://github.com/mdopp/laib/issues/1147)) ([5b685c5](https://github.com/mdopp/laib/commit/5b685c54b5b8acde188017406e3aaa681281594e))
+
 ## [2.17.0](https://github.com/mdopp/laib/compare/v2.16.0...v2.17.0) (2026-11-09)
 
 
