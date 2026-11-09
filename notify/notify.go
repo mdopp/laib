@@ -40,7 +40,7 @@ type Config struct {
 	MCPURL, ReadyURL, Token                                            string
 	Home                                                               string // NOTIFY_HOME, its own folder (ADR 0027): mail.json and watchdog.last, which laib's /ready reads; eingang/ (#703)
 	WatchdogURL                                                        string
-	MailTo, Domain                                                     string
+	MailTo, Domain, Assistant                                          string // Assistant: box.yml assistant, the mail's sender name when SMTP_FROM has none
 	SMTPHost, SMTPPort, SMTPSecurity, SMTPUser, SMTPFrom, SMTPPassword string
 	BoteURL, BoteToken, Person, InboxURL                               string // the chat first (#441)
 }
@@ -493,7 +493,7 @@ func send(c Config, subject, body string) error {
 	if err != nil {
 		return fmt.Errorf("MAIL_TO: %w", err)
 	}
-	from.Name = cmp.Or(from.Name, "Laib")
+	from.Name = cmp.Or(from.Name, c.Assistant, "Laib") // the name the family knows (owner, 2026-11-09)
 	host := c.SMTPHost
 	addr := net.JoinHostPort(host, cmp.Or(c.SMTPPort, "587"))
 	var conn net.Conn

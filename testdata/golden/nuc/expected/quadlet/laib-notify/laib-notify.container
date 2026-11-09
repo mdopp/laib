@@ -15,6 +15,7 @@ Environment="LAIB_MCP_URL=http://127.0.0.1:5900/mcp"
 Environment="LAIB_READY_URL=http://127.0.0.1:5900/ready"
 Environment="NOTIFY_HOME=/notify"
 Environment="LAIB_DOMAIN=nuc.home"
+Environment="LAIB_ASSISTANT=Homes"
 Environment="WATCHDOG_URL=https://hc.example/ping/nuc"
 Environment="LAIB_INBOX_URL=https://laib.nuc.home/inbox"
 Secret=laib.laib-notify.laib-notify.LAIB_TOKEN,type=env,target=LAIB_TOKEN
