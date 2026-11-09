@@ -232,11 +232,15 @@ func (svc *Service) applyWhen() error {
 	return errors.Join(errs...)
 }
 
-// outsideMakesSense: outside: two_factor on a public one_factor route (laib#1131).
+// outsideMakesSense: outside: two_factor on a public one_factor route
+// (laib#1131), publicPaths on an internal one (laib#1133).
 func outsideMakesSense(svc *Service) (errs []error) {
 	for i, r := range svc.Contract.Routes {
 		if r.Outside != "" && (r.Outside != "two_factor" || r.Auth != "one_factor" || r.Exposure != "public") {
 			errs = append(errs, fmt.Errorf("services/%s/laib.yml: routes[%d].outside is two_factor, on a public route with auth one_factor", svc.Name, i))
+		}
+		if len(r.PublicPaths) > 0 && (r.Exposure != "internal" || slices.ContainsFunc(r.PublicPaths, func(p string) bool { return !strings.HasPrefix(p, "/") || p == "/" })) {
+			errs = append(errs, fmt.Errorf("services/%s/laib.yml: routes[%d].publicPaths are path prefixes below / on an internal route (a public one uses bypass)", svc.Name, i))
 		}
 	}
 	return errs

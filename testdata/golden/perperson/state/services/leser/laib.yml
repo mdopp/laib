@@ -10,5 +10,11 @@ instances:
     url: LESER_NOTIZBUECHER
     secret: NOTIZBUCH_KEY
     env: LESER_KEY
+routes:
+  - host: leser
+    port: 8490
+    exposure: internal
+    auth: one_factor
+    publicPaths: [/share/, /api/public/]   # like File Browser's share links: these from anywhere, without a login (laib#1133)
 health:
   http: http://127.0.0.1:8490/health

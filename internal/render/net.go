@@ -18,7 +18,7 @@ import (
 
 type NetName struct {
 	Name        string   `json:"name"`
-	Reach       string   `json:"reach"`             // nur LAN | LAN+Internet
+	Reach       string   `json:"reach"`             // nur LAN | LAN+Internet | nur LAN; aus dem Internet: <publicPaths>
 	ForwardAuth bool     `json:"forwardAuth"`       // Caddy asks Authelia first
 	Policy      string   `json:"policy"`            // Authelia's: bypass | one_factor | two_factor
 	Outside     string   `json:"outside,omitempty"` // Authelia's from outside the LAN, where it asks more (laib#1131)
@@ -110,7 +110,7 @@ func Net(st *state.State) NetMap {
 				up = c.Template.Name + " je Person: " + strings.Join(each, ", ")
 			}
 			r.Bypass = agentBypass(st, r)
-			nn := NetName{Name: a.Domain, Reach: cmp.Or(reach[r.Exposure], "LAN+Internet"), ForwardAuth: forwardAuth(st, name, r), Policy: a.Policy, Outside: r.Outside, Subject: strings.Join(a.Subjects, ", "), Upstream: up, Bypass: r.Bypass, LoginProbe: r.LoginProbe}
+			nn := NetName{Name: a.Domain, Reach: strings.TrimSuffix(cmp.Or(reach[r.Exposure], "LAN+Internet")+"; aus dem Internet: "+strings.Join(r.PublicPaths, " "), "; aus dem Internet: "), ForwardAuth: forwardAuth(st, name, r), Policy: a.Policy, Outside: r.Outside, Subject: strings.Join(a.Subjects, ", "), Upstream: up, Bypass: r.Bypass, LoginProbe: r.LoginProbe}
 			n.Names = append(n.Names, nn)
 			for _, h := range r.RedirectFrom {
 				n.Names = append(n.Names, NetName{Name: fqdn(st, h), Reach: "LAN+Internet", Policy: "bypass", Upstream: "→ " + fqdn(st, r.Host)})
@@ -171,7 +171,7 @@ func (n NetMap) Mermaid(st *state.State) string {
 	for _, r := range n.Names {
 		to, _, _ := strings.Cut(r.Upstream, " ")
 		label := strings.TrimSuffix(r.Name, "."+st.Box.Domain)
-		if r.Reach == "nur LAN" {
+		if strings.HasPrefix(r.Reach, "nur LAN") {
 			label += ", nur LAN"
 		}
 		switch {

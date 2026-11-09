@@ -583,6 +583,19 @@ refuses without a session (401 or 403). Laib renders nothing from it;
 `laib net` carries it, and `laib-app check` measures the app's own login
 there instead of Authelia's (#774).
 
+### Paths of a home-only name for everyone
+
+`publicPaths: [/share/, …]` on an `internal` route (laib#1133, owner
+decision J) serves those path prefixes to anyone, from the internet too,
+without Authelia: Caddy handles them before the site's `@lan` handle, and
+everything else stays at home („Nur zu Hause“ from outside). File Browser's
+share links live this way on `files.<domain>`, the address File Browser
+builds them from, so a link keeps working without a name of its own. Caddy
+matches the cleaned path, so a `..` out of a prefix does not get through
+(`internal/render/public1133_test.go` runs it in Caddy). A public route
+uses `bypass` instead; adding public paths is a human's in the review, and
+`laib net` shows `nur LAN; aus dem Internet: <paths>`.
+
 ### A stronger login from outside
 
 `outside: two_factor` on a public route with `auth: one_factor` (laib#1131,

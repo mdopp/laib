@@ -5,10 +5,11 @@ import (
 	"testing"
 )
 
-// owner 2026-11-07: only www, auth, files, kontakt and fotos face the
-// internet; the family's apps are LAN-only, reached at home or through the
-// Fritz!Box's WireGuard, whose clients have private addresses. fotos is
-// Immich Public Proxy alone: Caddy lets only its paths through.
+// owner 2026-11-07: only www, auth, kontakt and fotos face the internet;
+// the family's apps are LAN-only, reached at home or through the Fritz!Box's
+// WireGuard, whose clients have private addresses. fotos is Immich Public
+// Proxy alone: Caddy lets only its paths through. files is at home too
+// since 2026-11-09 (decision J, laib#1133), its share links excepted.
 func TestTheFamilysAppsAreLANOnlyAndFotosIsTheSharesAlone(t *testing.T) {
 	st := shippedBox(t)
 	out, err := Render(st, map[string]string{})
@@ -24,12 +25,15 @@ func TestTheFamilysAppsAreLANOnlyAndFotosIsTheSharesAlone(t *testing.T) {
 		}
 		return caddy[i : i+strings.Index(caddy[i:], "\n}\n")]
 	}
-	for _, h := range []string{"pi", "llama", "home", "caldav", "media", "hoerbuecher", "photos", "vault"} {
+	for _, h := range []string{"pi", "llama", "home", "caldav", "media", "hoerbuecher", "photos", "vault", "files"} {
 		if s := site(h); !strings.Contains(s, "@lan remote_ip private_ranges") || !strings.Contains(s, "import lanonly") {
 			t.Errorf("%s is not LAN-only:\n%s", h, s)
 		}
 	}
-	for _, h := range []string{"auth", "files", "fotos"} {
+	if s := site("files"); !strings.Contains(s, "\t@public path /share/* /api/public/* /static/*\n\thandle @public {\n\t\treverse_proxy 127.0.0.1:8088\n") {
+		t.Errorf("files' share links are not for everyone:\n%s", s)
+	}
+	for _, h := range []string{"auth", "fotos"} {
 		if s := site(h); strings.Contains(s, "@lan") {
 			t.Errorf("%s should face the internet:\n%s", h, s)
 		}
