@@ -13,9 +13,6 @@ access_control:
       subject: "group:admins"
     - domain: notizen.example.home
       policy: bypass
-      resources: ["^/p/anna/.*$"]
-    - domain: notizen.example.home
-      policy: bypass
       resources: ["^/p/martin/.*$"]
     - domain: notizen.example.home
       policy: one_factor

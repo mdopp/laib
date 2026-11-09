@@ -429,16 +429,17 @@ The loader makes such an instance its own, so that two never meet:
 
 The instances' routes share their host (the box has no wildcard
 certificate, so one name is one Strato record). Caddy renders one site for
-it, `internal` behind the LAN check like any route. `/p/<person>/` goes
-past Authelia (a bypass rule each) to that person's instance with the
-prefix stripped and without its key: the instance checks the key an agent
-sends. Everything else is behind Authelia, and a signed-in person reaches
+it, `internal` behind the LAN check like any route. Where an instance's
+`values.yml` sets `AGENT_PATH` (off by default, laib#1121),
+`/p/<person>/` goes past Authelia (a bypass rule each) to that person's
+instance with the prefix stripped and without its key: the instance checks
+the key an agent sends. Without it the name has no way past the login. Everything else is behind Authelia, and a signed-in person reaches
 their own instance by `Remote-User`, which only Authelia sets (the site
 strips the client's `Remote-*` first), with the route's `proxySecret` as
 `proxyHeader` (default `X-<Template>-Proxy`): the person never sees the
 key. A signed-in person without an instance gets the denied page. Such a
 route has a login (no `auth: none`) and no `bypass`; an instance has no
-`oidc`. `laib net` shows the name once, with each person's path. Removing
+`oidc`. `laib net` shows the name once, with each switched-on person's path. Removing
 an instance is a removal like any other: a human decides in the Inbox.
 
 ### A service that reaches every person's instance (laib#1016)

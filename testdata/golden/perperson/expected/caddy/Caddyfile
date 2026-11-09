@@ -93,10 +93,6 @@ notizen.example.home {
 	import down
 	@lan remote_ip private_ranges
 	handle @lan {
-		handle /p/anna/* {
-			uri strip_prefix /p/anna
-			reverse_proxy 127.0.0.1:8481
-		}
 		handle /p/martin/* {
 			uri strip_prefix /p/martin
 			reverse_proxy 127.0.0.1:8480
