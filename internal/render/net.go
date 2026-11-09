@@ -18,9 +18,10 @@ import (
 
 type NetName struct {
 	Name        string   `json:"name"`
-	Reach       string   `json:"reach"`       // nur LAN | LAN+Internet
-	ForwardAuth bool     `json:"forwardAuth"` // Caddy asks Authelia first
-	Policy      string   `json:"policy"`      // Authelia's: bypass | one_factor | two_factor
+	Reach       string   `json:"reach"`             // nur LAN | LAN+Internet
+	ForwardAuth bool     `json:"forwardAuth"`       // Caddy asks Authelia first
+	Policy      string   `json:"policy"`            // Authelia's: bypass | one_factor | two_factor
+	Outside     string   `json:"outside,omitempty"` // Authelia's from outside the LAN, where it asks more (laib#1131)
 	Subject     string   `json:"subject,omitempty"`
 	Upstream    string   `json:"upstream"` // "<service> 127.0.0.1:<port>", or "→ <name>" for a redirect
 	Bypass      []string `json:"bypass,omitempty"`
@@ -109,7 +110,7 @@ func Net(st *state.State) NetMap {
 				up = c.Template.Name + " je Person: " + strings.Join(each, ", ")
 			}
 			r.Bypass = agentBypass(st, r)
-			nn := NetName{Name: a.Domain, Reach: cmp.Or(reach[r.Exposure], "LAN+Internet"), ForwardAuth: forwardAuth(st, name, r), Policy: a.Policy, Subject: strings.Join(a.Subjects, ", "), Upstream: up, Bypass: r.Bypass, LoginProbe: r.LoginProbe}
+			nn := NetName{Name: a.Domain, Reach: cmp.Or(reach[r.Exposure], "LAN+Internet"), ForwardAuth: forwardAuth(st, name, r), Policy: a.Policy, Outside: r.Outside, Subject: strings.Join(a.Subjects, ", "), Upstream: up, Bypass: r.Bypass, LoginProbe: r.LoginProbe}
 			n.Names = append(n.Names, nn)
 			for _, h := range r.RedirectFrom {
 				n.Names = append(n.Names, NetName{Name: fqdn(st, h), Reach: "LAN+Internet", Policy: "bypass", Upstream: "→ " + fqdn(st, r.Host)})
@@ -152,6 +153,11 @@ func hostRoutePorts(c state.Contract) []state.Port {
 	return out
 }
 
+// Factor: Authelia's policy, and from outside the LAN the stronger one.
+func (n NetName) Factor() string {
+	return strings.TrimSuffix(n.Policy+", von außen "+n.Outside, ", von außen ")
+}
+
 // Mermaid is the map as a flowchart: Internet and LAN to Caddy, Caddy to
 // Authelia or straight on, the pods' links dotted.
 func (n NetMap) Mermaid(st *state.State) string {
@@ -172,7 +178,7 @@ func (n NetMap) Mermaid(st *state.State) string {
 		case to == "→":
 			fmt.Fprintf(&b, "  caddy -->|%s| %s[\"%s\"]\n", label, id("redir "+r.Name), r.Upstream)
 		case r.ForwardAuth:
-			fmt.Fprintf(&b, "  caddy -->|%s| authelia -->|%s| %s\n", label, r.Policy, id(to))
+			fmt.Fprintf(&b, "  caddy -->|%s| authelia -->|%s| %s\n", label, r.Factor(), id(to))
 		default:
 			fmt.Fprintf(&b, "  caddy -->|%s| %s\n", label, id(to))
 		}

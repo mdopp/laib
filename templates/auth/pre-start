@@ -138,6 +138,13 @@ session:
 # two (two_factor), it then asks for the password too, so a passkey and the
 # password replace password and code. Not the experimental option that lets
 # a passkey alone count as two.
+#
+# From outside the LAN a route may ask two factors where home asks one
+# (routes' outside:, laib#1131): the passkey is the second factor offered
+# first (default_2fa_method), a code from an app stays possible. A passkey
+# alone still counts as one: only the experimental option would change
+# that, and the owner chose against it (2026-11-02).
+default_2fa_method: 'webauthn'
 webauthn:
   enable_passkey_login: true
   display_name: 'Box {DOMAIN}'

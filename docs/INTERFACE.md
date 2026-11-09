@@ -523,6 +523,8 @@ A route may list path prefixes that skip Authelia on its host, for a
 token-only API next to pages: Homes serves `/napi/` to the phone's device
 token and `/box` behind Authelia on `www.<domain>`. Caddy proxies the
 bypass paths straight through; Authelia gets a bypass rule per prefix.
+Homes's route also asks the second factor from outside the LAN
+(`outside: two_factor`, docs/STATE.md), the bypass paths excepted.
 
 ### `laib remove <service>`
 

@@ -332,6 +332,7 @@ type Route struct {
 	Port     int      `yaml:"port"`
 	Exposure string   `yaml:"exposure"` // internal | public
 	Auth     string   `yaml:"auth"`     // none | one_factor | two_factor
+	Outside  string   `yaml:"outside"`  // two_factor: what Authelia asks from outside the LAN, where auth is one_factor at home (laib#1131)
 	Group    string   `yaml:"group"`
 	Caddy    string   `yaml:"caddy"`
 	Bypass   []string `yaml:"bypass"` // path prefixes that skip Authelia on this host: a token-only API (/napi/) next to pages

@@ -37,9 +37,11 @@ func TestTheNetworkMapIsWhatAutheliaAndNftablesGet(t *testing.T) {
 		}
 		n := Net(st)
 
-		// Authelia: domain → policy and subject of its rule without resources
+		// Authelia: domain → policy and subject of its first rule without
+		// resources (the first match wins), and the policy of a second one,
+		// from outside the LAN (laib#1131)
 		type rule struct{ policy, subject string }
-		rules := map[string]rule{}
+		rules, outside := map[string]rule{}, map[string]string{}
 		bypass := map[string][]string{}
 		var doc struct {
 			AccessControl struct {
@@ -71,6 +73,10 @@ func TestTheNetworkMapIsWhatAutheliaAndNftablesGet(t *testing.T) {
 			for i := range groups {
 				groups[i] = strings.TrimPrefix(groups[i], "group:")
 			}
+			if _, seen := rules[r.Domain]; seen {
+				outside[r.Domain] = r.Policy
+				continue
+			}
 			rules[r.Domain] = rule{r.Policy, strings.Join(groups, ", ")}
 		}
 		admin := false
@@ -83,8 +89,8 @@ func TestTheNetworkMapIsWhatAutheliaAndNftablesGet(t *testing.T) {
 				t.Errorf("%s: on the map but Authelia has no rule for it", nn.Name)
 				continue
 			}
-			if nn.Policy != r.policy || nn.Subject != r.subject {
-				t.Errorf("%s: map says %s %q, Authelia gets %s %q", nn.Name, nn.Policy, nn.Subject, r.policy, r.subject)
+			if nn.Policy != r.policy || nn.Subject != r.subject || nn.Outside != outside[nn.Name] {
+				t.Errorf("%s: map says %s %q, Authelia gets %s %q (from outside %q)", nn.Name, nn.Factor(), nn.Subject, r.policy, r.subject, outside[nn.Name])
 			}
 			var want []string
 			for _, p := range nn.Bypass {

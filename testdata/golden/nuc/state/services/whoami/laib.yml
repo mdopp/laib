@@ -4,7 +4,8 @@ template: {registry: builtin, name: whoami, version: 1}
 routes:
   - host: whoami
     port: 8080
-    exposure: internal
+    exposure: public       # like Homes on www: the phone reaches /napi/ from outside
+    outside: two_factor    # and from outside the LAN the second factor (laib#1131)
     auth: one_factor
     bypass: [/napi/]       # token-only API next to the page (Homes)
     proxySecret: WHOAMI_TOKEN   # the page trusts Remote-User only behind this header

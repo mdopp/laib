@@ -103,21 +103,17 @@ ldap.nuc.home {
 whoami.nuc.home {
 	request_header -Remote-*
 	import down
-	@lan remote_ip private_ranges
-	handle @lan {
-		@bypass path /napi/*
-		handle @bypass {
-			reverse_proxy 127.0.0.1:8080
-		}
-		import authelia
-		request_body {
-		  max_size 10MB
-		}
-		reverse_proxy 127.0.0.1:8080 {
-			header_up X-Whoami-Proxy "${secret:WHOAMI_TOKEN}"
-		}
+	@bypass path /napi/*
+	handle @bypass {
+		reverse_proxy 127.0.0.1:8080
 	}
-	import lanonly
+	import authelia
+	request_body {
+	  max_size 10MB
+	}
+	reverse_proxy 127.0.0.1:8080 {
+		header_up X-Whoami-Proxy "${secret:WHOAMI_TOKEN}"
+	}
 }
 
 nuc.home, www.nuc.home {
