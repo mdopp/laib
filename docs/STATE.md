@@ -585,8 +585,8 @@ there instead of Authelia's (#774).
 
 `redirectFrom: ["@"]` on a route makes Caddy answer those names with a
 redirect to the route's host, `{uri}` kept; `@` is the domain itself. No
-service and no Authelia behind them: `dopp.cloud` leads to Homes on `www.`
-(#360, ADR 0031 amendment 2026-11-07).
+service and no Authelia behind them (#360). A route may also live on the
+domain itself, `host: "@"` (homes' teaser, owner 2026-11-08).
 
 Caddy strips every client-sent `Remote-*` header on every site, ordered
 before forward-auth (`order request_header first`), so the only
