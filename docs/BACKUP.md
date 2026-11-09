@@ -155,6 +155,52 @@ recovery sheet opens both. `laib backup check` restore-tests both repos.
   (type the password, Ctrl-D), the `offsite` block in `box.yml`
   (docs/STATE.md), `laib apply`, `laib backup`, `laib backup check`.
 
+## The copy nobody on the box can delete (ADR 0033)
+
+A copy the box can delete is lost with the box: a burglar with root holds
+`RESTIC_PASSWORD` and the NAS's login and can delete or encrypt both. The
+owner chose (decision K, 2026-11-09) a cloud bucket with **Object Lock**:
+
+```yaml
+backup:
+  offsite:
+    repo: s3:https://<endpoint>/<bucket>         # restic's own S3 backend, no rclone
+    objectLock: true                             # the box only adds: no forget, no prune there
+    env: {AWS_DEFAULT_REGION: <region>}          # only where the provider wants one
+    secrets: [AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY]   # in secrets.age, entered by the owner
+```
+
+- **What the box does:** after every green backup `restic copy` adds the
+  new snapshots, as with the NAS. With `objectLock: true` it never runs
+  `forget` or `prune` there: the bucket's lock is the retention, and it is
+  out of the box's reach. The bucket grows with what changes; restic
+  deduplicates, so a household's churn is small. Pruning old data is the
+  owner's, from another computer, with a key the box never had.
+- **What the provider must offer:** S3 with versioning and Object Lock in
+  *compliance* mode (a default retention, 30 days is enough to notice a
+  break-in), and keys whose rights can leave out deleting object
+  *versions*. A delete without a version then only hides an object, which
+  restic needs for its lock files; the data stays and comes back by
+  restoring the versions before the date. Backblaze B2 and Hetzner Object
+  Storage offer Object Lock; whether a provider's key can be limited that
+  way is checked when it is set up (below), not assumed.
+- **What it does not protect:** a key with the right to delete versions
+  makes old data (written before the lock period) deletable again; the
+  lock alone guards the last 30 days. The content stays restic ciphertext
+  either way; the provider sees nothing.
+- **Setting it up (the owner, no agent creates an account):**
+  1. An account with the provider, a bucket with versioning and Object
+     Lock on (compliance, 30 days default retention).
+  2. An application key for that bucket only: list, read, write; no
+     deleting of file versions, no bypassing the lock.
+  3. On the box: `laib secret set AWS_ACCESS_KEY_ID` and `laib secret set
+     AWS_SECRET_ACCESS_KEY` (stdin), the `offsite` block above in `box.yml`
+     (a proposal), then `laib backup` and `laib backup check`.
+  4. The key and the bucket's address onto the recovery sheet and into
+     Bitwarden: `secrets.age` is inside the backup it opens.
+  5. Once: with the box's key, try to delete one object version in the
+     provider's console or with `rclone` — it must be refused.
+
 ## Restic runs in podman's user namespace
 
 The services' files belong to the containers' users, which rootless podman

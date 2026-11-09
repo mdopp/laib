@@ -158,6 +158,10 @@ type Backup struct {
 	Env     map[string]string `yaml:"env,omitempty"`     // the backend's settings (RCLONE_CONFIG_NAS_HOST …)
 	Secrets []string          `yaml:"secrets,omitempty"` // secrets.age names handed to restic as environment
 	Plain   bool              `yaml:"-"`                 // restic as core, not in podman unshare: a repo-to-repo copy reads no service files
+	// ObjectLock: the repo is an S3 bucket with Object Lock (decision K,
+	// ADR 0033): the box only adds to it, never forgets or prunes there; the
+	// bucket's lock period is the retention, out of a burglar's reach.
+	ObjectLock bool `yaml:"objectLock,omitempty"`
 	// Keep: data folders backed up with no service declaring them, a removed
 	// service's (its data stay until a human deletes them, and so does their
 	// backup): ${DATA_DIR}/<folder>, one per line

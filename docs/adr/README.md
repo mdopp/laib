@@ -1,7 +1,7 @@
 # Laib ADRs
 
 Status · Context · Decision · Consequences. One file per decision, next free
-number: **0033**. Each file's first paragraph after the title says *in which
+number: **0034**. Each file's first paragraph after the title says *in which
 situation* it applies, so an agent can self-select.
 
 | # | Decision |
@@ -38,3 +38,4 @@ situation* it applies, so an agent can self-select.
 | [0030](0030-one-assistant-name-no-personas.md) | One assistant name, box.yml `assistant` („Homes“), set once and handed to the Bote, Homes, the app and the Assist pipeline; no personas, no games; the wake word is the pretrained „Hey Mycroft“, nothing is trained or flashed; the look and the voice are fixed; supersedes 0020; amended by 0031: the program's name is fixed Homes |
 | [0031](0031-haus-is-renamed-homes.md) | Haus is renamed Homes: program, app and assistant share one name; the box moves in one proposal (`was:`), the old app kept `haus.<domain>`'s `/napi/` until every phone switched; the program's logins are renamed `homes` too (owner, option b); amended 2026-11-07: Homes lives on `www.<domain>`, `homes.` and `haus.` are gone without a redirect |
 | [0032](0032-agents-stay-out-of-the-familys-data.md) | Agents stay out of the family's data: a template marks it `private:`; nobody looks into a `sealed` one (the archive), an agent into an `approval` one only for an hour after a human's Einblick in the Inbox, and the journal keeps no output of it |
+| [0033](0033-the-copy-off-the-box-is-append-only.md) | The copy off the box is append-only: an S3 bucket with Object Lock (`backup.offsite.objectLock`), its keys box secrets the owner enters; the box never forgets or prunes there, the lock is the retention |

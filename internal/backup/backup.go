@@ -341,7 +341,7 @@ func copyOffsite(ctx context.Context, env *cli.Env, st *state.State, pw string) 
 	if err == nil {
 		out, err = ResticRun(ctx, off, pw, "copy", "--from-repo", st.Box.Backup.Repo, "--tag", "laib")
 	}
-	if err == nil {
+	if err == nil && !off.Box.Backup.ObjectLock { // a locked bucket keeps what it got: the lock is its retention (decision K)
 		_, err = ResticRun(ctx, off, pw, append([]string{"forget", "--tag", "laib"}, keep...)...)
 	}
 	entry := journal.Entry{Actor: env.Actor, Verb: "backup", Reason: "offsite", Result: "green", Detail: cli.Tail(out, 300), MS: time.Since(start).Milliseconds()}
