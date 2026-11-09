@@ -146,23 +146,41 @@ Without a number at all, Discord or Matrix work.
 on Signal (the Bote's answers, bote-notify's Freigaben, Zugangsanfragen,
 Quittungen, Anmelde-Meldungen) comes from this one account, so its profile
 is what the family sees above them: `PROFILE_NAME` (default `${ASSISTANT}`,
-box.yml `assistant`, the name the Bote calls itself in the SOUL) and
+box.yml `assistant`, the name the Bote calls itself in the SOUL),
+`PROFILE_ABOUT` (the description under the name; default „Eure Box zu Hause ·
+${DOMAIN} · App: <the Homes app's latest APK>“; Signal's apps cut it at 140
+graphemes, so a longer one loses whole ` · ` parts from its end) and
 `PROFILE_AVATAR` (default `homes-avatar.png` in this folder: the Homes app
 icon, rendered from haus-android's `art/icon.svg` at 512 px with the motif
 centred for Signal's circle). post-deploy hands both to signal-cli's daemon
 (`updateProfile` over `/api/v1/rpc` on the pod's loopback port 8085, the
 picture as a `data:image/png;base64,…` URI: the daemon reads no file of
 ours; `signal_profile.py`). The daemon is no REST API, so the REST image's
-`PUT /v1/profiles` is not there (#469). It notes the account, the name and
-the picture's hash in `${DATA_DIR}/bote/signal/laib-profil.json` and asks
-again only when one of them differs: a new name, a new picture, a new
+`PUT /v1/profiles` is not there (#469). It notes the account, the name, the
+description and the picture's hash in `${DATA_DIR}/bote/signal/laib-profil.json` and asks
+again only when one of them differs: a new name, a new description, a new picture, a new
 number. An empty value leaves that part of the profile as it is;
-`PROFILE_AVATAR: ""` and `PROFILE_NAME: ""` together turn it off. A daemon
+all three empty turn it off. A daemon
 that does not answer or refuses is one line, `signal-profil: nicht gesetzt
 (…)`, and the deploy stays green; nothing is noted, so the next apply tries
 again. With a linked Bote (the second way above) this is the profile of the
 phone that owns the number. Only the box shows that Signal took the picture:
 look at the Bote's chat on a phone.
+
+**The welcome** (owner, 2026-11-09). The first answer a person of
+box.yml `people` gets from the Bote (on Signal or Telegram, where the
+sender is a person's id) starts with one line: „Hallo <Name>, ich bin
+<assistant>, eure Box zu Hause. Alles im Überblick: https://www.<domain> ·
+Die App für dein Handy: <APP_LINK>“. Once per person, over all their
+channels: `${DATA_DIR}/bote/hermes/laib-willkommen-gesendet.json` names who
+had it, so a person who wrote before gets it once with their next answer.
+post-deploy writes the line (`laib-willkommen.json`); laib-directory puts it
+in front of the answer, since `transform_llm_output` takes the first
+plugin's text and laib-directory is first. A sender nobody in `people` is
+gets no answer from Hermes and no welcome; a turn laib-nutzung marks as
+unanswered waits for the next. `APP_LINK` (default the Homes app's latest
+release APK, the link Homes's own setup card gives) empty: the line names
+no app.
 
 ## Once, by hand
 

@@ -7,7 +7,7 @@ pre_llm_call asks the directory and puts its routing into the user turn;
 transform_llm_output answers a screen turn with the engine's screen,
 verbatim, whatever the model wrote. Hermes calls the hooks with keyword
 arguments; here they are called the same way against a fake engine."""
-import importlib.util, json, os, sys, threading, unittest
+import importlib.util, json, os, shutil, sys, tempfile, threading, unittest
 from unittest import mock
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -292,6 +292,54 @@ class HomeAssistantFirst(Base):
     def test_a_scheduled_job_never_switches_through_ha(self):
         self.turn("Bambi aus", "…", platform="cron")
         self.assertEqual(ASKED, [])
+
+
+class Welcome(Base):
+    """The owner, 2026-11-09: a person of the household gets one welcome line in front of the Bote's
+    first answer, once per person (over all their channels), noted in the Bote's data dir; a
+    sender box.yml people does not name never gets it."""
+    LINE = "Hallo {name}, ich bin Homes, eure Box zu Hause. Alles im Überblick: https://www.example.org · Die App für dein Handy: https://app.example/a.apk"
+
+    def setUp(self):
+        super().setUp()
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.home)
+        os.environ["HERMES_HOME"] = self.home
+        self.addCleanup(os.environ.pop, "HERMES_HOME", None)
+        Path(self.home, "personen.json").write_text(json.dumps({"signal:+4917012345": "anna", "telegram:4711": "anna", "signal:+4917099999": "ben"}))
+        Path(self.home, "laib-willkommen.json").write_text(json.dumps({"text": self.LINE}, ensure_ascii=False))
+
+    def test_once_per_person_and_noted_in_the_data_dir(self):
+        hello = self.LINE.replace("{name}", "Anna")
+        _, out = self.turn("Mach Bambi aus", "Bambi ist aus.")
+        self.assertEqual(out, hello + "\n\nBambi ist aus.")
+        _, out = self.turn("Mach Bambi aus", "Bambi ist aus.", turn="t2")
+        self.assertIsNone(out, "welcomed twice")
+        _, out = self.turn("Mach Bambi aus", "Bambi ist aus.", turn="t3", sender="4711", platform="telegram")
+        self.assertIsNone(out, "the same person on another channel welcomed again")
+        self.assertEqual(json.loads(Path(self.home, "laib-willkommen-gesendet.json").read_text()), {"begruesst": ["anna"]})
+        self.p = load()   # a restarted Bote reads the note, not its memory
+        _, out = self.turn("Mach Bambi aus", "Bambi ist aus.", turn="t4")
+        self.assertIsNone(out)
+        _, out = self.turn("Mach Bambi aus", "Bambi ist aus.", turn="t5", sender="+4917099999")
+        self.assertTrue(out.startswith("Hallo Ben, ich bin Homes"), out)
+
+    def test_never_for_a_sender_nobody_in_box_yml_people_is(self):
+        for sender, platform in (("+4915200000", "signal"), ("", "signal"), ("+4917012345", "cron"), ("haus:anna", "api_server")):
+            _, out = self.turn("Hallo", "Hallo!", sender=sender, platform=platform)
+            self.assertIsNone(out, (sender, platform))
+        self.assertFalse(Path(self.home, "laib-willkommen-gesendet.json").exists())
+
+    def test_in_front_of_a_screen_too_and_not_on_a_marked_turn(self):
+        _, out = self.turn("Ist das Licht in der Küche an?", "[unbeantwortet] Das weiß ich nicht.")
+        self.assertIsNone(out, "laib-nutzung must strip its mark; the welcome waits for the next answer")
+        _, out = self.turn("Menü", "OK", turn="t2")
+        self.assertEqual(out, self.LINE.replace("{name}", "Anna") + "\n\n```\n" + MENU + "\n```")
+
+    def test_without_the_line_post_deploy_writes_no_welcome(self):
+        os.remove(Path(self.home, "laib-willkommen.json"))
+        _, out = self.turn("Mach Bambi aus", "Bambi ist aus.")
+        self.assertIsNone(out)
 
 
 if __name__ == "__main__":

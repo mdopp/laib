@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 TPL = Path(__file__).resolve().parent.parent
+ABOUT = "Eure Box zu Hause · example.org · App: https://github.com/mdopp/homes-android/releases/latest/download/app-release.apk"
 CALLS, FAIL, ONCE = [], [], []   # FAIL: every answer; ONCE: the next answers, each once
 
 
@@ -43,7 +44,7 @@ class SignalProfile(unittest.TestCase):
     def deploy(self, **values):
         env = dict(os.environ, LAIB_DATA_DIR=str(self.data), LAIB_RENDER_DIR=str(self.data) + "/none", MODEL_URL="http://127.0.0.1:1/v1",
                    SIGNAL_ACCOUNT="+490000", MODEL_NAME="m", THINKING_MODEL="t", LAIB_SECRET_BOTE_LAIB_TOKEN="x",
-                   SIGNAL_RPC_URL=f"http://127.0.0.1:{self.srv.server_port}", SIGNAL_PROFILE_TRIES="2", SIGNAL_PROFILE_WAIT="0", PROFILE_NAME="Homes", PROFILE_AVATAR="homes-avatar.png",
+                   SIGNAL_RPC_URL=f"http://127.0.0.1:{self.srv.server_port}", SIGNAL_PROFILE_TRIES="2", SIGNAL_PROFILE_WAIT="0", PROFILE_NAME="Homes", PROFILE_AVATAR="homes-avatar.png", PROFILE_ABOUT=ABOUT,
                    HAUSHALT_MCP_URL="", FRAGE_URL="", PAPERLESS_URL="")
         env.update(values)
         p = subprocess.run(["bash", str(self.tpl / "post-deploy")], env=env, capture_output=True, text=True, timeout=60)
@@ -74,6 +75,33 @@ class SignalProfile(unittest.TestCase):
         self.assertEqual(len(CALLS), 3, "the name changed, the profile did not")
         self.assertEqual(CALLS[-1][1]["params"]["givenName"], "Joshua")
 
+    def test_the_description_set_once_and_again_when_it_changed(self):
+        # owner, 2026-11-09: „eine Beschreibung, die auf dopp.cloud verweist“
+        out = self.deploy()
+        self.assertEqual(CALLS[0][1]["params"]["about"], ABOUT)
+        self.assertIn("Beschreibung", out)
+        self.deploy()
+        self.assertEqual(len(CALLS), 1, "unchanged, yet set again")
+        self.deploy(PROFILE_ABOUT="Eure Box zu Hause · example.org")
+        self.assertEqual(len(CALLS), 2, "the description changed, the profile did not")
+        self.assertEqual(CALLS[-1][1]["params"]["about"], "Eure Box zu Hause · example.org")
+        self.deploy(PROFILE_NAME="", PROFILE_AVATAR="", PROFILE_ABOUT="Nur das")   # the description alone is enough
+        self.assertEqual(CALLS[-1][1]["params"], {"account": "+490000", "about": "Nur das"})
+
+    def test_a_long_description_keeps_signals_140_by_whole_parts(self):
+        long = "Eure Box zu Hause · " + "d" * 60 + ".example.org · App: https://github.com/mdopp/homes-android/releases/latest/download/app-release.apk"
+        self.deploy(PROFILE_ABOUT=long)
+        self.assertEqual(CALLS[0][1]["params"]["about"], "Eure Box zu Hause · " + "d" * 60 + ".example.org")
+        self.deploy(PROFILE_ABOUT="x" * 200)
+        self.assertEqual(CALLS[-1][1]["params"]["about"], "x" * 140)
+
+    def test_the_shipped_description_fits_signal_for_a_usual_domain(self):
+        line = next(l for l in (TPL / "values.example.yml").read_text().splitlines() if l.startswith("PROFILE_ABOUT:"))
+        about = line.split('"')[1].replace("${DOMAIN}", "dopp.cloud")
+        self.assertLessEqual(len(about), 140)
+        self.assertIn("dopp.cloud", about)
+        self.assertIn("homes-android/releases/latest", about)
+
     def test_a_failing_daemon_is_one_line_never_red_and_tried_again(self):
         for status in (500, 200):   # an HTTP error, and signal-cli's JSON-RPC error
             FAIL[:] = [status]
@@ -95,7 +123,7 @@ class SignalProfile(unittest.TestCase):
         self.assertEqual(len(CALLS), 2)
 
     def test_off_without_signal_or_without_both_values(self):
-        self.deploy(PROFILE_NAME="", PROFILE_AVATAR="")
+        self.deploy(PROFILE_NAME="", PROFILE_AVATAR="", PROFILE_ABOUT="")
         self.deploy(SIGNAL_ACCOUNT="", DISCORD_ALLOWED_USERS="1", LAIB_SECRET_BOTE_DISCORD_TOKEN="t")
         self.assertEqual(CALLS, [])
 

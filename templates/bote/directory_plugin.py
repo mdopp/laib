@@ -28,6 +28,11 @@ rewritten or dropped. Here the directory sees each message before the model:
   ("not understood") or HA not answering, is the model's turn as before. A
   switch HA executed is noted with laib-journal's note (#591): no tool ran,
   so its post_tool_call never sees it.
+- the welcome (owner, 2026-11-09): the first answer a person of the household
+  (personen.json, box.yml people) gets, once per person ever, starts with
+  post-deploy's line: who the Bote is, Homes's address, the app's download.
+  It lives here because transform_llm_output takes the first plugin's text,
+  and this plugin is first: a second plugin would lose to every screen.
 - Hermes' steer frame ([OUT-OF-BAND USER MESSAGE …]) never reaches a person:
   the model copied it from Hermes' system prompt (#520), and the plugin
   takes it out of every answer.
@@ -132,7 +137,68 @@ def _block(screen):
     return "```\n" + screen.strip("\n") + "\n```"
 
 
-def on_pre(session_id=None, turn_id=None, user_message=None, sender_id=None, platform="", **_):
+# The welcome (owner, 2026-11-09): the Bote's first answer to a person of the household starts with
+# one line (who it is, Homes's address, the app), once per person ever. post-deploy writes the line
+# (laib-willkommen.json, {name} for the person); laib-willkommen-gesendet.json notes who had it, in
+# HERMES_HOME, the Bote's data dir. Only a sender personen.json names (box.yml people) gets it.
+_welcome = {}  # turn id -> (person, line)
+
+
+def _file(name):
+    return os.path.join(os.environ.get("HERMES_HOME", "/opt/data"), name)
+
+
+def _welcomed():
+    try:
+        with open(_file("laib-willkommen-gesendet.json")) as f:
+            return set(json.load(f).get("begruesst") or [])
+    except (OSError, ValueError, AttributeError, TypeError):
+        return set()
+
+
+def _greeting(platform, sender_id):
+    """(person, line) when the sender is a person of the household who has not had the welcome"""
+    if not sender_id or platform == "cron":
+        return None
+    try:
+        with open(_file("personen.json")) as f:
+            person = json.load(f).get("%s:%s" % (platform, sender_id))
+        with open(_file("laib-willkommen.json")) as f:
+            line = json.load(f)["text"]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+    if not person or not isinstance(line, str) or person in _welcomed():
+        return None
+    return person, line.replace("{name}", person[:1].upper() + person[1:])
+
+
+def _welcomed_now(person):
+    """notes the person; False when another turn welcomed them first"""
+    with _lock:
+        had = _welcomed()
+        if person in had:
+            return False
+        tmp = _file("laib-willkommen-gesendet.json.tmp")
+        try:
+            with open(tmp, "w") as f:
+                json.dump({"begruesst": sorted(had | {person})}, f)
+            os.replace(tmp, _file("laib-willkommen-gesendet.json"))
+        except OSError:
+            return False   # not noted, not sent: once is the promise
+        return True
+
+
+def on_pre(session_id=None, turn_id=None, user_message=None, sender_id=None, platform="", **kw):
+    hello = _greeting(platform, sender_id)
+    if hello:
+        with _lock:
+            if len(_welcome) > 1000:
+                _welcome.clear()
+            _welcome[turn_id or session_id] = hello
+    return _route(session_id=session_id, turn_id=turn_id, user_message=user_message, sender_id=sender_id, platform=platform, **kw)
+
+
+def _route(session_id=None, turn_id=None, user_message=None, sender_id=None, platform="", **_):
     if platform == "cron":
         return None
     line = _message(user_message)
@@ -199,7 +265,19 @@ def _unframed(text):
     return _FRAME.sub("", text).strip()
 
 
-def on_output(response_text=None, session_id=None, turn_id=None, **_):
+def on_output(response_text=None, session_id=None, turn_id=None, **kw):
+    with _lock:
+        hello = _welcome.pop(turn_id or session_id, None)
+    out = _answer(response_text=response_text, session_id=session_id, turn_id=turn_id, **kw)
+    text = out if isinstance(out, str) else response_text
+    # laib-nutzung's mark: its plugin strips it only when this one returns nothing; the welcome waits a turn
+    if hello is None or not isinstance(text, str) or not text.strip() or "[unbeantwortet]" in text:
+        return out
+    person, line = hello
+    return line + "\n\n" + text if _welcomed_now(person) else out
+
+
+def _answer(response_text=None, session_id=None, turn_id=None, **_):
     with _lock:
         turn = _turns.pop(turn_id or session_id, None)
         if len(_turns) > 1000:

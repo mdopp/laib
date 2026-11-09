@@ -3,7 +3,7 @@ python3 for it. A spawned process's argv shows in `ps` on the host, to every
 local user, so the bearer must not be on it. The hook runs here with a
 python3 on PATH that records its argv, against a fake Haushalt that records
 the bearer: the bearer still arrives, and no argv carries it."""
-import os, subprocess, sys, tempfile, threading, unittest
+import json, os, subprocess, sys, tempfile, threading, unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -316,6 +316,22 @@ class PostDeploy(unittest.TestCase):
         """#471, ADR 0019: a stock update must not change how Hermes treats tool output unseen."""
         vals = (HOOK.parent / "values.example.yml").read_text()
         self.assertIn("HERMES_IMAGE: docker.io/nousresearch/hermes-agent:v0.22.2", vals)
+
+    def test_the_welcome_line_names_homes_and_the_app(self):
+        """Owner, 2026-11-09: a new chat starts with Homes's address and the app's download; laib-directory
+        sends the line post-deploy writes, {name} filled in. Without APP_LINK it names no app."""
+        def line(**values):
+            with tempfile.TemporaryDirectory() as d:
+                env = dict(os.environ, LAIB_DATA_DIR=d, LAIB_RENDER_DIR=d + "/none", MODEL_URL="http://127.0.0.1:1/v1", SIGNAL_ACCOUNT="",
+                           TELEGRAM_ALLOWED_USERS="1", LAIB_SECRET_BOTE_TELEGRAM_TOKEN="t", MODEL_NAME="m", THINKING_MODEL="t",
+                           LAIB_SECRET_BOTE_LAIB_TOKEN="laib-tok", LAIB_DOMAIN="example.org", LAIB_ASSISTANT="Homes", **values)
+                p = subprocess.run(["bash", str(HOOK)], env=env, capture_output=True, text=True, timeout=60)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                return json.loads(Path(d, "bote/hermes/laib-willkommen.json").read_text())["text"]
+        app = "https://github.com/mdopp/homes-android/releases/latest/download/app-release.apk"
+        self.assertEqual(line(APP_LINK=app), "Hallo {name}, ich bin Homes, eure Box zu Hause. Alles im Überblick: https://www.example.org · Die App für dein Handy: " + app)
+        self.assertEqual(line(APP_LINK=""), "Hallo {name}, ich bin Homes, eure Box zu Hause. Alles im Überblick: https://www.example.org")
+        self.assertIn("APP_LINK: " + app, (HOOK.parent / "values.example.yml").read_text())
 
 
 if __name__ == "__main__":

@@ -85,7 +85,10 @@ threading.Thread(target=lsrv.serve_forever, daemon=True).start()
 os.environ.update(LAIB_MCP_URL="http://127.0.0.1:%d/mcp" % lsrv.server_port, HA_URL="http://127.0.0.1:%d" % lsrv.server_port,
                   LAIB_TOKEN="bote-proof", HA_TOKEN="ha-proof")
 with open(os.path.join(os.environ["HERMES_HOME"], "personen.json"), "w") as f:
-    f.write('{"signal:+4917000": "anna"}')
+    f.write('{"signal:+4917000": "anna", "signal:+4917001": "ben"}')
+# the welcome (owner, 2026-11-09): anna has had it, so the turns below stay as they were; ben gets it at the end
+with open(os.path.join(os.environ["HERMES_HOME"], "laib-willkommen-gesendet.json"), "w") as f:
+    f.write('{"begruesst": ["anna"]}')
 sys.path.insert(0, sys.argv[1])
 
 from hermes_cli import plugins  # noqa: E402
@@ -238,4 +241,12 @@ conf = hermes_yaml.safe_load(open(os.path.join(os.environ["HERMES_HOME"], "confi
 both = types.SimpleNamespace(initialize_result=types.SimpleNamespace(capabilities=types.SimpleNamespace(prompts=object(), resources=object())), session=None)
 assert _select_utility_schemas("ha", both, conf["mcp_servers"]["ha"]) == [], conf["mcp_servers"]["ha"]
 assert _select_utility_schemas("laib", both, conf["mcp_servers"]["laib"]), "the check would pass with utilities off everywhere"
+# the welcome (owner, 2026-11-09): post-deploy's line in front of ben's first answer, once; Hermes must
+# hand pre_llm_call the sender and transform_llm_output the same turn, or nobody is welcomed
+assert os.path.exists(os.path.join(os.environ["HERMES_HOME"], "laib-willkommen.json")), "post-deploy wrote no welcome line"
+pre("t11", "Hallo", user="+4917001")
+h = turn("t11", "Hallo", "Hallo! Was kann ich tun?")
+assert h.startswith("Hallo Ben, ich bin ") and h.endswith("\n\nHallo! Was kann ich tun?"), repr(h)
+pre("t12", "Hallo", user="+4917001")
+assert turn("t12", "Hallo", "Hallo! Was kann ich tun?") == "Hallo! Was kann ich tun?", "ben was welcomed twice"
 print("hermes plugin proof ok")
