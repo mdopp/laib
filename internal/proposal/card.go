@@ -64,6 +64,7 @@ type Change struct {
 	// the proposal is made (#959); "" when it has none
 	OldVersion string `json:"oldVersion,omitempty"`
 	NewVersion string `json:"newVersion,omitempty"`
+	Pin        bool   `json:"pin,omitempty"` // a floating image pinned to the digest the box runs: nothing new (ADR 0034)
 }
 
 // VerbTier is each verb's tier, from the verb table (cmd/laib sets it): it
@@ -286,6 +287,8 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		default:
 			d.Summary += "wird " + valueWord(v.Old) + " → " + valueWord(v.New)
 		}
+	case images(values) != "":
+		d.Summary = fmt.Sprintf(images(values), who)
 	case len(values) > 1 && len(svcs) == 1:
 		d.Summary = fmt.Sprintf("%s: %d Einstellungen ändern sich", who, len(values))
 	case p.Kind == "values" && who != "":
@@ -323,8 +326,7 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		} else if v.Op == "-" {
 			d.Changes = append(d.Changes, Line{"−", Named(v.Service) + ": " + v.Key + " (bisher " + valueWord(strings.Split(v.Old, "@")[0]) + ")"})
 		} else if strings.HasSuffix(v.Key, "IMAGE") { // in words; the exact image under Details (#959)
-			_, what := imageWords(v)
-			d.Changes = append(d.Changes, Line{"→", Named(v.Service) + ": " + what})
+			d.Changes = append(d.Changes, imageLines(p, v)...)
 			technical = append(technical, v.Key+": "+valueWord(v.Old)+" → "+valueWord(v.New))
 		} else {
 			d.Changes = append(d.Changes, Line{"→", Named(v.Service) + ": " + v.Key + ": " + valueWord(v.Old) + " → " + valueWord(v.New)})
@@ -532,6 +534,7 @@ func Undoing(p *Proposal) (oneTap bool, text string) {
 
 // actionWords: what stays after a repair's verb ran (#852).
 var actionWords = map[string]string{
+	"einblick":   "Laib führt dabei nichts aus; die Freigabe endet nach einer Stunde von selbst.",
 	"restart":    "Ein Neustart ändert nichts Bleibendes; es gibt nichts zurückzunehmen.",
 	"backup":     "Eine Sicherung ändert nichts an den Diensten; es gibt nichts zurückzunehmen.",
 	"flash":      "Die neue Firmware bleibt auf dem Gerät; „Zurücknehmen“ spielt die alte nicht zurück.",
@@ -552,6 +555,7 @@ var plainWords = [][2]string{
 	{"Sonderrechte|im Netz der Box|nimmt eine Einschränkung weg", "%s mehr Rechte auf der Box bekommt als üblich"},
 	{"Laib nicht einschätzen kann|die Laib nicht kennt|ohne dass Laib den Grund erkennt", "Laib einige Zeilen nicht selbst prüfen kann"},
 	{"entfernt den Dienst", "ein Dienst von der Box geht"},
+	{"nur auf deinen Tipp", "neue Software nur auf deinen Tipp auf die Box kommt"},
 }
 
 // removed is a removal's headline: „Gesundheit wird von der Box entfernt“.
@@ -589,6 +593,9 @@ func tag(image string) string {
 // registry's labels name for the old and the new digest, never a digest.
 func imageWords(v Change) (head, line string) {
 	from, to := tag(v.Old), tag(v.New)
+	if v.Pin {
+		return "seinen laufenden Stand fest vermerkt", "läuft weiter wie jetzt, fest vermerkt; Neues nur auf deinen Tipp"
+	}
 	if hashTag(from) || hashTag(to) { // a commit pin (a Werkstatt app's :<sha>) says no more than a digest (Freigabe #317)
 		switch {
 		case v.OldVersion != "" && v.NewVersion != "" && v.OldVersion != v.NewVersion:
@@ -611,6 +618,29 @@ func imageWords(v Change) (head, line string) {
 		return "ein Update auf " + v.NewVersion, "Update auf " + v.NewVersion + " („" + to + "“)"
 	}
 	return "ein Update (neuer Stand von „" + to + "“)", "neuer Stand von „" + to + "“"
+}
+
+// images is the nightly cards' headline (ADR 0034), for fmt with the
+// services: new versions, or the pins of what runs; "" for one value or others.
+func images(values []Change) string {
+	if len(values) < 2 || slices.ContainsFunc(values, func(v Change) bool { return !strings.HasSuffix(v.Key, "IMAGE") || v.Op == "-" }) {
+		return ""
+	}
+	if slices.ContainsFunc(values, func(v Change) bool { return !v.Pin }) {
+		return "Neue Versionen für %s"
+	}
+	return "%s laufen weiter wie jetzt, fest vermerkt"
+}
+
+// imageLines: an image change in words, then the model's summary of its
+// changelog, marked as such (ADR 0034).
+func imageLines(p *Proposal, v Change) []Line {
+	_, what := imageWords(v)
+	l := []Line{{"→", Named(v.Service) + ": " + what}}
+	if n := p.Notes[v.Service+"/"+v.Key]; n != "" {
+		l = append(l, Line{"", "Zusammenfassung (automatisch): " + n})
+	}
+	return l
 }
 
 // hashTag: a tag that is a commit or a digest (12 to 64 hex digits, also

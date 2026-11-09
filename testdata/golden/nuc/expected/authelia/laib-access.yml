@@ -19,4 +19,8 @@ access_control:
       resources: ["^/napi/.*$"]
     - domain: whoami.nuc.home
       policy: one_factor
+      networks: ["192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8", "127.0.0.0/8", "fd00::/8", "::1/128"]
+      subject: ["group:family", "group:admins"]
+    - domain: whoami.nuc.home
+      policy: two_factor
       subject: ["group:family", "group:admins"]

@@ -16,7 +16,9 @@ import (
 // while home-assistant:stable, vaultwarden:latest and the digest pins
 // (Authelia, Paperless …) went unchecked. A floating tag is compared by the
 // registry's digest against the local image's RepoDigests, a pin against its
-// digest; Auto says which the nightly run takes. Against a fake registry
+// digest. Nothing is the nightly run's any more (ADR 0034): a floating tag
+// the box runs as the registry serves it carries that digest as Pin, for
+// the proposal that pins it. Against a fake registry
 // that answers the manifest HEAD-less GET with Docker-Content-Digest.
 func TestUpdatesCompareTheRegistryDigestOfTagsAndPins(t *testing.T) {
 	digests := map[string]string{"/v2/home-assistant/home-assistant/manifests/stable": "sha256:ha2", "/v2/mdopp/laib-frage/manifests/latest": "sha256:fr1",
@@ -60,16 +62,16 @@ func TestUpdatesCompareTheRegistryDigestOfTagsAndPins(t *testing.T) {
 	for _, u := range ImageUpdates(context.Background(), st) {
 		got[u.Service] = u
 	}
-	if u := got["home-assistant"]; u.Digest != "sha256:ha2" || u.Auto || u.Current != "stable" || u.Image != "ghcr.io/home-assistant/home-assistant" {
+	if u := got["home-assistant"]; u.Digest != "sha256:ha2" || u.Pin != "" || u.Current != "stable" || u.Image != "ghcr.io/home-assistant/home-assistant" {
 		t.Fatalf("a data service's floating tag moved: a proposal by digest: %+v", u)
 	}
-	if u := got["frage"]; u.Digest != "" || !u.Auto {
-		t.Fatalf("frage runs the tag's digest (among its RepoDigests): current, and the night's: %+v", u)
+	if u := got["frage"]; u.Digest != "" || u.Pin != "sha256:fr1" {
+		t.Fatalf("frage runs the tag's digest (among its RepoDigests): current, and pinned to it: %+v", u)
 	}
-	if u := got["llama"]; u.Digest != "sha256:ll2" || u.Auto {
+	if u := got["llama"]; u.Digest != "sha256:ll2" || u.Pin != "" {
 		t.Fatalf("a pin whose tag moved: %+v", u)
 	}
-	if u, ok := got["paperless"]; !ok || u.Digest != "" || u.Error != "" {
+	if u, ok := got["paperless"]; !ok || u.Digest != "" || u.Pin != "" || u.Error != "" {
 		t.Fatalf("a pin that is the tag's digest is current: %+v", u)
 	}
 

@@ -231,12 +231,14 @@ the box into it. Guardrails carried over from ServiceBay ADR 0012: never
 regenerate a secret, diff-first and journaled, a budget of three runs per
 hour after which it stops and tells a human through the journal and the
 webhook. A service that needs more is flapping, and flapping is a finding,
-not a chore. Images change in two ways (ADR 0002 amendment, #528): those
-of services without data nightly by `laib-images.timer` after the backup,
-verified, the previous image back on red; those with data by a proposal a
-person approves, snapshotted first. podman auto-update stays masked. A green
-night then removes the images nothing needs; what the night before kept
-stays one more night, for a rollback (#1071).
+not a chore. Images change by proposal only (ADR 0034, the owner's
+choice c): every newer digest, an upstream's and our own, is one grouped
+card per night from the Operator's `versionen`, with a short summary of
+its changelog, and a person taps it; apply verifies and goes back on red
+(#609), a service with data snapshotted first. Our own images only with
+their CI signature. podman auto-update stays masked; `laib-images.timer`
+pulls nothing and removes the images nothing needs; what the night before
+kept stays one more night, for a rollback (#1071).
 
 **Understanding, by the dial.** When converge cannot help (a unit that fails
 on every start, a red health, an upstream that changed its config format),
@@ -285,7 +287,12 @@ snapshot refuses the action — `policy.yml envelope.snapshot: optional` is
 the only way around it. `write` and `read` go through an `os.Root` opened
 on the service's data path, so no symlink and no `..` leaves it; `exec`
 runs only in the service's own containers; `look` runs a read-only command
-there without budget or snapshot, because looking is unbounded.
+there without budget or snapshot, because looking is unbounded — except
+in the family's data (ADR 0032): a template's `private: sealed` (the
+archive) lets no verb inside, `private: approval` (Paperless, Immich,
+Radicale, Reitti, the file share, Vaultwarden) lets an agent look, read and
+exec only for an hour after a human approved an Einblick in the Inbox, and
+the journal keeps only the size of what came out.
 
 **Watching.** The ops hand watches the journal, `/ready` and `laib logs`
 on its tick (`operator.tick`, ten minutes); red lines also reach it through

@@ -158,6 +158,10 @@ type Backup struct {
 	Env     map[string]string `yaml:"env,omitempty"`     // the backend's settings (RCLONE_CONFIG_NAS_HOST …)
 	Secrets []string          `yaml:"secrets,omitempty"` // secrets.age names handed to restic as environment
 	Plain   bool              `yaml:"-"`                 // restic as core, not in podman unshare: a repo-to-repo copy reads no service files
+	// ObjectLock: the repo is an S3 bucket with Object Lock (decision K,
+	// ADR 0033): the box only adds to it, never forgets or prunes there; the
+	// bucket's lock period is the retention, out of a burglar's reach.
+	ObjectLock bool `yaml:"objectLock,omitempty"`
 	// Keep: data folders backed up with no service declaring them, a removed
 	// service's (its data stay until a human deletes them, and so does their
 	// backup): ${DATA_DIR}/<folder>, one per line
@@ -274,6 +278,10 @@ type Contract struct {
 	// PerPerson: the template is installed once per person (#986, ADR 0029),
 	// `laib add <template> --person <p>`, as the service <template>-<p>.
 	PerPerson bool `yaml:"perPerson"`
+	// Private: the family's data (ADR 0032). sealed: no verb looks into its
+	// containers or files, for no hand; approval: an agent looks only for an
+	// hour after a human approved an Einblick, and the journal keeps no output.
+	Private Privacy `yaml:"private"`
 	// Person and PortOffset make such a service that person's instance;
 	// laib add --person writes them, a template never: its units are named
 	// after the service, its secrets end in _<PERSON>, its host ports are
@@ -284,6 +292,18 @@ type Contract struct {
 	// Instances: the persons' instances of a per-person template this
 	// service talks to, wired into one of its containers (laib#1016).
 	Instances []Reach `yaml:"instances"`
+}
+
+// Privacy is Contract.Private: "", sealed or approval (ADR 0032); a laib.yml
+// with another value does not load.
+type Privacy string
+
+func (p *Privacy) UnmarshalYAML(n *yaml.Node) error {
+	if n.Value != "sealed" && n.Value != "approval" {
+		return fmt.Errorf("private: %q is neither sealed nor approval (ADR 0032)", n.Value)
+	}
+	*p = Privacy(n.Value)
+	return nil
 }
 
 // Reach wires every person's instance of Template into Unit, a .container
@@ -312,9 +332,14 @@ type Route struct {
 	Port     int      `yaml:"port"`
 	Exposure string   `yaml:"exposure"` // internal | public
 	Auth     string   `yaml:"auth"`     // none | one_factor | two_factor
+	Outside  string   `yaml:"outside"`  // two_factor: what Authelia asks from outside the LAN, where auth is one_factor at home (laib#1131)
 	Group    string   `yaml:"group"`
 	Caddy    string   `yaml:"caddy"`
 	Bypass   []string `yaml:"bypass"` // path prefixes that skip Authelia on this host: a token-only API (/napi/) next to pages
+	// PublicPaths: on an internal route, path prefixes served to anyone,
+	// from the internet too, without a login: File Browser's share links on
+	// a name that is otherwise only at home (laib#1133, decision J)
+	PublicPaths []string `yaml:"publicPaths"`
 	// ProxySecret names a secret Caddy sends as the header `X-<Name>-Proxy`
 	// on the authenticated handler only, so the service trusts Remote-User
 	// solely behind the proxy (ADR 0012 §3; Laib's own page does the same).

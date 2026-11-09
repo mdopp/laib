@@ -1,6 +1,7 @@
 name: file-share
 title: Netzlaufwerk
 beschreibung: Gemeinsame Ordner im Heimnetz
+private: approval     # ADR 0032: the family's data; an agent looks in for an hour after a human's Einblick, the journal keeps no output
 template: {registry: builtin, name: file-share, version: 1}
 provides: [files]
 upstream: [https://github.com/syncthing/syncthing, https://docs.syncthing.net/, https://github.com/ServerContainers/samba]   # where the Operator's web search looks first (#544)
@@ -23,11 +24,16 @@ routes:
     exposure: internal
     auth: one_factor
     group: admins
+  # File Browser only at home (owner decision J, laib#1133): the app had several holes in 2025, and from
+  # outside the family needs only its share links. Those stay for everyone under the same name, the link
+  # File Browser builds from the page's address: the share page (/share/), its data and downloads
+  # (/api/public/) and its scripts and styles (/static/) — what its frontend's Share view fetches. File
+  # Browser checks a share's own password and expiry; everything else answers „Nur zu Hause“ outside.
   - host: files
     port: 8088
-    exposure: public
+    exposure: internal
     auth: one_factor               # the family's one login (#231): File Browser takes the user from Authelia's Remote-User
-    bypass: [/share/, /api/public/, /static/]   # share links and their page stay open; File Browser checks a share's own password
+    publicPaths: [/share/, /api/public/, /static/]   # from anywhere, without a login
 secrets:
   - name: SAMBA_PASSWORD                # the shared account's, the fallback
     devices: true                       # the laptops and phones that mount the share hold it (#665)

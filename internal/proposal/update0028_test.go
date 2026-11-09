@@ -31,7 +31,7 @@ NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN
 	}
 	p := filepath.Join(t.TempDir(), "values.yml")
 	os.WriteFile(p, []byte(old), 0o644)
-	declared := map[string]bool{"BOTE_NOTIFY_TOKEN": true, "PAPERLESS_TOKEN": true, "DOKUMENTE_WEBHOOK_TOKEN": true, "HOMES_HAUSHALT_TOKEN": true}
+	declared := map[string]string{"BOTE_NOTIFY_TOKEN": "BOTE_NOTIFY_TOKEN", "PAPERLESS_TOKEN": "PAPERLESS_TOKEN", "DOKUMENTE_WEBHOOK_TOKEN": "DOKUMENTE_WEBHOOK_TOKEN", "HOMES_HAUSHALT_TOKEN": "HOMES_HAUSHALT_TOKEN"}
 	if err := newValues(p, ex, declared); err != nil {
 		t.Fatal(err)
 	}

@@ -724,7 +724,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 				continue // the persons' instances share one site (#986)
 			}
 			done[r.Host] = true
-			fmt.Fprintf(&b, "%s {\n%s\timport down\n", fqdn(st, r.Host), stripRemote)
+			fmt.Fprintf(&b, "%s {\n%s\timport down\n%s", fqdn(st, r.Host), stripRemote, publicPaths(r))
 			indent := "\t"
 			if r.Exposure == "internal" {
 				b.WriteString("\t@lan remote_ip private_ranges\n\thandle @lan {\n")
@@ -740,9 +740,10 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 			}
 			// an agent reaches a person's instance at /p/<person>/, past
 			// Authelia (its bypass rule) and without the instance's key: the
-			// instance checks the key it is sent (#986)
+			// instance checks the key it is sent (#986); only where its
+			// person switched it on (AGENT_PATH, plan 12)
 			instances := st.Instances(r.Host)
-			for _, i := range instances {
+			for _, i := range state.AgentPaths(instances) {
 				p := i.Service.Contract.Person
 				fmt.Fprintf(&b, "%shandle /p/%s/* {\n%s\turi strip_prefix /p/%s\n%s\treverse_proxy 127.0.0.1:%d\n%s}\n", indent, p, indent, p, indent, i.Route.Port, indent)
 			}
@@ -790,6 +791,7 @@ type accessRule struct {
 	Domain, Policy string
 	Subjects       []string // groups
 	Resource       string   // a bypass of one path prefix
+	Networks       []string // the rule holds only for these client networks (laib#1131)
 }
 
 func accessRules(st *state.State) []accessRule {
@@ -802,20 +804,56 @@ func accessRules(st *state.State) []accessRule {
 				continue
 			}
 			done[r.Host] = true
-			for _, i := range st.Instances(r.Host) { // every person's path before the name's rule (#986)
-				r.Bypass = append(r.Bypass, "/p/"+i.Service.Contract.Person+"/")
-			}
-			for _, p := range r.Bypass {
+			for _, p := range agentBypass(st, r) {
 				rules = append(rules, accessRule{Domain: fqdn(st, r.Host), Policy: "bypass", Resource: strings.TrimSuffix(p, "/") + "/"})
 			}
 			rule := accessRule{Domain: fqdn(st, r.Host), Policy: policyOf(r)}
 			if rule.Policy != "bypass" {
 				rule.Subjects = subjects(r)
 			}
-			rules = append(rules, rule)
+			rules = append(rules, outside(rule, r)...)
 		}
 	}
 	return rules
+}
+
+// lanNetworks are Caddy's private_ranges, the LAN its @lan matcher means;
+// Authelia sees the client's address in X-Forwarded-For, which Caddy sets
+// and never takes from a client (no trusted_proxies).
+var lanNetworks = []string{"192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8", "127.0.0.0/8", "fd00::/8", "::1/128"}
+
+// outside: a route asking more beyond the LAN (laib#1131, decision I) is two
+// rules, the first match wins: the LAN its own factor, everyone else Outside.
+func outside(rule accessRule, r state.Route) []accessRule {
+	if r.Outside == "" {
+		return []accessRule{rule}
+	}
+	home := rule
+	home.Networks, rule.Policy = lanNetworks, r.Outside
+	return []accessRule{home, rule}
+}
+
+// publicPaths: an internal route's paths for everyone, before the LAN's
+// handle and without Authelia (laib#1133); the rest stays at home.
+func publicPaths(r state.Route) string {
+	if len(r.PublicPaths) == 0 {
+		return ""
+	}
+	var ms []string
+	for _, p := range r.PublicPaths {
+		ms = append(ms, strings.TrimSuffix(p, "/")+"/*")
+	}
+	return fmt.Sprintf("\t@public path %s\n\thandle @public {\n\t\treverse_proxy 127.0.0.1:%d\n\t}\n", strings.Join(ms, " "), r.Port)
+}
+
+// agentBypass is the route's bypass and, for a host the persons' instances
+// share, the path of each one whose person switched it on (#986, plan 12).
+func agentBypass(st *state.State, r state.Route) []string {
+	out := slices.Clone(r.Bypass)
+	for _, i := range state.AgentPaths(st.Instances(r.Host)) {
+		out = append(out, "/p/"+i.Service.Contract.Person+"/")
+	}
+	return out
 }
 
 func autheliaAccess(st *state.State) string {
@@ -827,6 +865,9 @@ func autheliaAccess(st *state.State) string {
 		fmt.Fprintf(&b, "    - domain: %s\n      policy: %s\n", r.Domain, r.Policy)
 		if r.Resource != "" {
 			fmt.Fprintf(&b, "      resources: [\"^%s.*$\"]\n", r.Resource)
+		}
+		if len(r.Networks) > 0 {
+			fmt.Fprintf(&b, "      networks: [\"%s\"]\n", strings.Join(r.Networks, `", "`))
 		}
 		// family and admins, never just any LLDAP account (radicale's bind
 		// account is one); admins reach what the family reaches

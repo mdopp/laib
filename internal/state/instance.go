@@ -93,7 +93,8 @@ func (svc *Service) instance() {
 // Instance: the person's instance of a per-person template whose route
 // is at host, with that route (#986); the services in name order. A host
 // shared this way is one Caddy site that hands a signed-in person to their
-// instance (Remote-User) and /p/<person>/ to theirs past Authelia.
+// instance (Remote-User) and, where its person switched it on, /p/<person>/
+// to an agent past Authelia (AgentPaths).
 type Instance struct {
 	Service *Service
 	Route   Route
@@ -111,6 +112,13 @@ func (st *State) Instances(host string) []Instance {
 		}
 	}
 	return out
+}
+
+// AgentPaths: the instances whose values.yml sets AGENT_PATH, the only ones
+// with /p/<person>/, an agent's way past Authelia with the instance's key.
+// Off by default: the archive has one door, the person's login (plan 12).
+func AgentPaths(is []Instance) []Instance {
+	return slices.DeleteFunc(slices.Clone(is), func(i Instance) bool { return !i.Service.Set("AGENT_PATH") })
 }
 
 // Account is a service account the identity service keeps for a service

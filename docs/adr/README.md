@@ -1,7 +1,7 @@
 # Laib ADRs
 
 Status · Context · Decision · Consequences. One file per decision, next free
-number: **0032**. Each file's first paragraph after the title says *in which
+number: **0035**. Each file's first paragraph after the title says *in which
 situation* it applies, so an agent can self-select.
 
 | # | Decision |
@@ -34,6 +34,9 @@ situation* it applies, so an agent can self-select.
 | [0026](0026-household-verbs-live-outside-the-kernel.md) | Household verbs (scan, zuhause, person_*, calendar, net geraete) live outside the kernel: the kernel offers proposals scoped to box.yml/values paths and a verb door to programs that can only read and propose |
 | [0027](0027-only-what-touches-the-host-runs-on-the-host.md) | Only what touches the host runs on the host (laib, laib-disk, self-update, backup); Operator, notify, haushalt and lease run as containers with their own token and folders, never the age key or the state repo |
 | [0028](0028-documents-are-their-own-program.md) | Documents are their own program, Dokumente (scan, split, contracts and invoices, reminders, retry, one status), in its own repo; laib only runs it (the scan template) and keeps the box's part |
-| [0029](0029-one-message-archive-per-person.md) | One message archive per person: msgvault installed once per person, one LAN name `archiv.<domain>` routed by the signed-in person, each archive in a vault only its person opens, phone backups through Homes into `archiv-eingang/<person>/`; amended: a Briefkasten imports while the vault is closed, the latest backup stays for restoring a phone |
+| [0029](0029-one-message-archive-per-person.md) | One message archive per person: msgvault installed once per person, one LAN name `archiv.<domain>` routed by the signed-in person, each archive in a vault only its person opens, phone backups through Homes into `archiv-eingang/<person>/`; amended: a Briefkasten imports while the vault is closed, the latest backup stays for restoring a phone; no agent path past the login unless the person switches it on (2026-11-09) |
 | [0030](0030-one-assistant-name-no-personas.md) | One assistant name, box.yml `assistant` („Homes“), set once and handed to the Bote, Homes, the app and the Assist pipeline; no personas, no games; the wake word is the pretrained „Hey Mycroft“, nothing is trained or flashed; the look and the voice are fixed; supersedes 0020; amended by 0031: the program's name is fixed Homes |
 | [0031](0031-haus-is-renamed-homes.md) | Haus is renamed Homes: program, app and assistant share one name; the box moves in one proposal (`was:`), the old app kept `haus.<domain>`'s `/napi/` until every phone switched; the program's logins are renamed `homes` too (owner, option b); amended 2026-11-07: Homes lives on `www.<domain>`, `homes.` and `haus.` are gone without a redirect |
+| [0032](0032-agents-stay-out-of-the-familys-data.md) | Agents stay out of the family's data: a template marks it `private:`; nobody looks into a `sealed` one (the archive), an agent into an `approval` one only for an hour after a human's Einblick in the Inbox, and the journal keeps no output of it |
+| [0033](0033-the-copy-off-the-box-is-append-only.md) | The copy off the box is append-only: an S3 bucket with Object Lock (`backup.offsite.objectLock`), its keys box secrets the owner enters; the box never forgets or prunes there, the lock is the retention |
+| [0034](0034-images-are-pinned-by-digest-and-change-by-proposal.md) | Accepted (owner's choice c): every image pinned by digest, every newer digest — upstreams' and our own — one grouped card per night a person taps, each with the box's model's summary of its changelog; our own images verified by their CI signature (#1130) |

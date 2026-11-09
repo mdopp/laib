@@ -378,7 +378,7 @@ section() {
   echo
   echo "${#skills[@]} / $skillcap skills in [\`skills/\`](skills/), each a folder with its \`skill.yml\` and, where it helps, one \`run.py\` for the steps that must always happen; the Operator runs them, [\`internal/skill\`](internal/skill/) checks them. Description, trigger, tools and \`modell\` are each \`skill.yml\`'s; the script's lines stand against $runcap. What they share: [\`skills/lib/\`](skills/lib/) ($(cat skills/lib/*.py 2>/dev/null | wc -l | tr -d ' ') lines) and the scripts' door [\`laibskill.py\`](skills/laibskill.py) ($(wc -l <skills/laibskill.py | tr -d ' ')); how they play together, what each produces and who reads it: [\`docs/SKILLS.md\`](docs/SKILLS.md)."
   echo
-  echo "\`modell\`: **frei**, the model works in a loop with the granted tools; **urteil**, the script prepares and the model judges once; **nein**, the script alone, no model."
+  echo "\`modell\`: **frei**, the model works in a loop with the granted tools; **urteil**, the script prepares and the model judges once; **kurz**, the script alone, with short asks of the model that never wait for it (ADR 0034); **nein**, the script alone, no model."
   echo
   echo "| Skill | Description | Runs | Modell | Tools | run.py |"
   echo "|---|---|---|---|---|---:|"

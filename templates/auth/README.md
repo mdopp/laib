@@ -71,6 +71,26 @@ Die Nachricht nennt Benutzername und Adresse, nie ein Passwort; Authelia
 speichert keines. Jeder gemeldete Vorfall steht als Notiz (`incident`) im
 Journal, so zeigen ihn der Morgenbericht und die Box-Seite.
 
+**Neue Anmeldung:** Meldet sich jemand mit einem Konto erfolgreich aus einem
+Netz an, aus dem sich dieses Konto noch nie angemeldet hat, kommt eine
+Nachricht an diese Person und an die Person für Mitteilungen, einmal:
+
+> 🔑 Neue Anmeldung bei Anna: mit Passwort, von außen (Netz 192.0.2.x),
+> 09.11. um 14:05. Warst du das?
+> Wenn nicht: ändere dein Passwort und sag es dem Admin.
+
+Das Netz ist grob: „zu Hause“ für das Heimnetz, sonst die ersten drei Teile
+einer IPv4-Adresse oder die ersten 48 Bit einer IPv6-Adresse. Authelia
+speichert keinen Browser und kein Gerät, nur ob mit Passwort oder Passkey
+angemeldet wurde; das steht in der Nachricht. Wer mit dem Handy unterwegs
+ist, bekommt die Nachricht beim ersten Mal aus einem neuen Mobilfunknetz
+auch. Die Box merkt sich nur einen gesalzenen Hash aus Name und Netz
+(`ANMELDUNGEN_SALT`, ein Geheimnis der Box), nie die Adresse, und vergisst
+ihn nach 400 Tagen ohne Anmeldung. Beim ersten Lauf nach dem Update gelten
+alle bisherigen Anmeldungen als bekannt, es kommt keine Nachricht. Die
+eigene Kopie geht nur über den Boten; die des Admins nimmt wie jede andere
+den Weg per Mail, wenn der Bote nicht erreichbar ist.
+
 **How it works:** `auth-anmeldungen.timer` starts `auth-anmeldungen.service`
 every five minutes, which runs `anmeldungen.sh` twice:
 
@@ -162,9 +182,26 @@ the box exports nothing.
 `enable_passkey_login` is on (owner, 2026-11-02). A person adds a passkey
 once at `https://auth.<domain>/settings` → Zwei-Faktor → WebAuthn
 („Hinzufügen“; the browser offers to save it as a passkey). From then on
-the login page offers „Mit Passkey anmelden“. Authelia counts a passkey as
-one factor: on a `two_factor` route it then asks for the password as the
-second, so passkey and password replace password and code. A WebAuthn key
-registered earlier as a second factor only may not be a passkey (no
-resident key); adding it again makes it one. The experimental option that
-lets a passkey with user verification count as two factors stays off.
+the login page offers „Mit Passkey anmelden“. A WebAuthn key registered
+earlier as a second factor only may not be a passkey (no resident key);
+adding it again makes it one.
+
+**A passkey alone counts as two factors — experimental** (owner,
+2026-11-09, revising 2026-11-02: „solange es ein Fallback gibt, ist nur
+Passkey auch als Experiment OK“). `AUTH_PASSKEY_TWO_FACTORS: "on"` (the
+default; `"off"` turns it off) sets Authelia's
+`webauthn.experimental_enable_passkey_uv_two_factors`: a passkey whose
+authenticator verified the user (fingerprint, face, PIN) and says so
+satisfies a `two_factor` rule. So from outside the LAN, where Homes asks
+two factors (routes' `outside:`), the finger is enough. Checked against
+Authelia 4.39.x; Authelia calls the option experimental and unsupported
+and says a later version will replace it with custom policies and refuse
+to start with it set — an Authelia update that does is red at
+`validate-config` in CI (`TestAuthelia…OnTheRealBinary`) before it reaches
+the box. The fallbacks stay: password plus passkey, password plus a code
+from an app (TOTP is not disabled), and a passkey without user
+verification asks the password too.
+
+What it also means: the option is Authelia-wide, so a verified passkey
+alone also opens the other `two_factor` doors (the box page, the archive's
+door; the archive's vault keeps its own key).

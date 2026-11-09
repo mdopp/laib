@@ -78,6 +78,9 @@ type Anchor struct {
 	Does     string   `json:"does,omitempty"` // a repair's: what it does, the card's headline (#746)
 	Wish     string   `json:"wish,omitempty"` // a wish's text in full, the card's body (#896): the file is on the proposal's branch only
 	Sources  []string `json:"sources,omitempty"`
+	// an image's changelog as the box's model summarized it, by
+	// "<service>/<KEY>" (ADR 0034): untrusted text, one line, capped
+	Notes map[string]string `json:"notes,omitempty"`
 }
 
 // Anchored records what p answers (#544). A proposal that rests on an
@@ -143,9 +146,11 @@ func (p *Proposal) wish() bool {
 	return p.Boxless() && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") })
 }
 
-// Boxless: wishes and repairs only change nothing on the box; no run carries them.
+// Boxless: wishes, repairs and Einblicke change nothing on the box; no run carries them.
 func (p *Proposal) Boxless() bool {
-	return len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool { return !strings.HasPrefix(f, "wishes/") && !strings.HasPrefix(f, "repairs/") })
+	return len(p.Files) > 0 && !slices.ContainsFunc(p.Files, func(f string) bool {
+		return !strings.HasPrefix(f, "wishes/") && !strings.HasPrefix(f, "repairs/") && !strings.HasPrefix(f, "einblicke/")
+	})
 }
 
 // LockRepo serialises what moves main (#609): an approve's merge, a

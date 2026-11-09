@@ -24,7 +24,7 @@ func TestTheInboxTellsTheTruthAboutASecondSubmit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out, code := mcp.Call(ctx, env, st, "bote", "laib_propose", map[string]any{"args": `--set services/whoami/values.yml:IMAGE=docker.io/traefik/whoami:v1.11 "neueres whoami"`}); code != cli.ExitOK {
+	if out, code := mcp.Call(ctx, env, st, "bote", "laib_propose", map[string]any{"args": `--set services/whoami/values.yml:GREETING=servus "freundlicher"`}); code != cli.ExitOK {
 		t.Fatalf("propose: exit %d: %s", code, out)
 	}
 	all, _ := proposal.List(cli.InboxDir(env), false)

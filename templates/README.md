@@ -13,6 +13,15 @@ change, newest first (#687): a template update's decision card shows the
 lines the box does not have yet. A change to a template without a new line
 there fails CI (`scripts/drift.sh`).
 
+## The family's data (ADR 0032)
+
+A template that keeps the family's own data says so: `private: sealed` for
+the message archive (no `laib look`, `read`, `exec` or `write` for anyone),
+`private: approval` for Paperless, Immich, Radicale, Reitti, the file share
+and Vaultwarden (an agent only for an hour after a human's Einblick in the
+Inbox; the journal keeps no output). A new template with people's
+documents, photos, places, contacts or passwords takes `approval`.
+
 ## Route policy
 
 Two kinds of route, written into every `laib.yml` (#55):

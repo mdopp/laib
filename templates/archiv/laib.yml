@@ -4,12 +4,15 @@ beschreibung: Deine Nachrichten, im Tresor nur für dich
 # The message archive (ADR 0029, laib#985/#986): mdopp/archiv runs here,
 # its own repo and image; this template is the box's part. Installed once
 # per person (laib add archiv --person <p>), all instances behind one name,
-# archiv.<domain>: Caddy hands a signed-in person to their own instance and
-# /p/<person>/ to agents with that instance's msgvault key. Inside: the
+# archiv.<domain>: Caddy hands a signed-in person to their own instance. No
+# agent gets in: /p/<person>/, past Authelia with the instance's msgvault key,
+# exists only when that person's values.yml sets AGENT_PATH (laib#1121, off
+# by default, so the archive has one door, the person's login). Inside: the
 # person's vault (gocryptfs, opened only with their Archiv-Passwort), the
 # Briefkasten (packets imported while the vault is closed) and msgvault.
 perPerson: true
 uses: [radicale]   # the contacts and calendars, read only, while the vault is open (archiv#21)
+private: sealed       # ADR 0032: no laib look, read, exec or write reaches the person's archive, for no hand
 template: {registry: builtin, name: archiv, version: 1}
 provides: [archiv]
 routes:

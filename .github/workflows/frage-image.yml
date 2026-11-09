@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write # cosign signs keyless with this workflow's identity (ADR 0034)
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,9 +18,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: frage/Containerfile
           push: true
           tags: ghcr.io/mdopp/laib-frage:latest,ghcr.io/mdopp/laib-frage:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/mdopp/laib
+            org.opencontainers.image.revision=${{ github.sha }}
+      - uses: sigstore/cosign-installer@v3
+        if: github.event_name != 'pull_request'
+      - name: sign the image; Laib proposes a digest of ours only with this signature (ADR 0034)
+        if: github.event_name != 'pull_request'
+        run: cosign sign --yes ghcr.io/mdopp/laib-frage@${{ steps.build.outputs.digest }}

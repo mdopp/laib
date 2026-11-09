@@ -40,10 +40,10 @@
 33 internal/render/render.go: render.Render
 67 internal/render/render.go: render.caddyfile
 77 internal/review/review.go: review.(*Result).contract
-47 internal/review/review.go: review.(*Result).units
-69 internal/review/review.go: review.dirs
+46 internal/review/review.go: review.(*Result).units
+67 internal/review/review.go: review.dirs
 36 internal/review/review.go: review.policyChanges
-38 internal/skill/skill.go: skill.check
+37 internal/skill/skill.go: skill.check
 44 internal/state/edit.go: state.WithPath
 38 internal/state/load.go: state.(*Service).applyWhen
 187 internal/state/load.go: state.(*State).validate

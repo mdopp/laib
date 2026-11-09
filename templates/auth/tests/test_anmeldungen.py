@@ -50,10 +50,10 @@ class Anmeldungen(unittest.TestCase):
                         STATE_DIR=str(self.state), AUTH_MAX_RETRIES="5", AUTH_FIND_TIME="10m", AUTH_BAN_TIME="30m",
                         LAN_NETZE="127.0.0.1/8,::1/128,10.0.0.2/24", NOTIFY_PERSON="mama", TZ="UTC", ANMELDUNGEN_JETZT=str(NOW))
 
-    def log(self, user, ip, ago, ok=False, banned=False):
+    def log(self, user, ip, ago, ok=False, banned=False, art="1FA"):
         with sqlite3.connect(self.auth / "db.sqlite3") as db:
             db.execute("INSERT INTO authentication_logs (time, successful, banned, username, auth_type, remote_ip, request_uri, request_method)"
-                       " VALUES (?,?,?,?,?,?,?,?)", (go_time(NOW - ago), ok, banned, user, "1FA", ip, "https://auth.example.home/", "POST"))
+                       " VALUES (?,?,?,?,?,?,?,?)", (go_time(NOW - ago), ok, banned, user, art, ip, "https://auth.example.home/", "POST"))
 
     def run_it(self, now=NOW):
         self.env["ANMELDUNGEN_JETZT"] = str(now)
@@ -347,6 +347,117 @@ class Anmeldungen(unittest.TestCase):
         self.assertIn("per Mail", self.notes("incident")[0])
 
 
+class NeueGeraete(unittest.TestCase):
+    """a login from a network a name was never seen from: one message to the
+    person and one to the notify person, once; what is kept is a salted hash"""
+    log, run_it, messages, notes = Anmeldungen.log, Anmeldungen.run_it, Anmeldungen.messages, Anmeldungen.notes
+
+    def setUp(self):
+        Anmeldungen.setUp(self)
+        self.env["ANMELDUNGEN_SALT"] = "salz-fuer-tests"
+
+    def seed(self):
+        self.log("anna", "10.0.0.5", 7 * 86400, ok=True)   # long ago, at home
+        self.log("anna", "192.0.2.10", 5 * 86400, ok=True)   # long ago, from outside
+        return self.run_it(NOW - 3000)
+
+    def test_the_first_run_takes_every_login_as_known_and_sends_nothing(self):
+        self.assertIn("2 bekannte Geräte übernommen, ohne Mitteilung", self.seed().stdout)
+        self.assertEqual(self.messages(), [])
+
+    def test_a_first_run_after_logins_in_the_last_hour_is_silent_too(self):
+        self.log("anna", "198.51.100.7", 600, ok=True)
+        self.run_it()
+        self.assertEqual(self.messages(), [], "no storm after install or update")
+
+    def test_a_known_network_is_silent(self):
+        self.seed()
+        self.log("anna", "192.0.2.99", 600, ok=True)   # another address in the same /24
+        self.log("anna", "10.0.0.77", 500, ok=True)    # another device at home
+        self.run_it()
+        self.assertEqual(self.messages(), [])
+
+    def test_a_new_network_tells_the_person_and_the_notify_person_once(self):
+        self.seed()
+        self.log("anna", "198.51.100.7", 600, ok=True)
+        self.log("anna", "198.51.100.7", 300, ok=True, art="TOTP")   # its second factor: the same login
+        self.log("anna", "198.51.100.8", 200, ok=True)                # the same network again
+        self.run_it()
+        m = self.messages()
+        self.assertEqual(sorted(x["an"] for x in m), ["anna", "mama"], m)
+        when = datetime.datetime.fromtimestamp(NOW - 600, datetime.timezone.utc).strftime("%d.%m. um %H:%M")
+        for x in m:
+            self.assertTrue(x["text"].startswith(f"🔑 Neue Anmeldung bei Anna: mit Passwort, von außen (Netz 198.51.100.x), {when}. Warst du das?"), x["text"])
+            self.assertIn("Wenn nicht: ändere dein Passwort", x["text"])
+            self.assertNotIn("198.51.100.7", x["text"], "the coarse network, never the address")
+        self.assertEqual([x.get("nur_bote") for x in m if x["an"] == "anna"], [True], "the person's copy is never mailed")
+        self.assertNotIn("nur_bote", [x for x in m if x["an"] == "mama"][0])
+        self.assertEqual(len(self.notes("watch")), 1)
+        self.run_it(NOW + 300)   # the next run: nothing again
+        self.assertEqual(len(self.messages()), 2)
+
+    def test_a_passkey_and_ipv6_say_so_coarsely(self):
+        self.seed()
+        self.log("anna", "2001:db8:1234:5678::9", 100, ok=True, art="Passkey")
+        self.run_it()
+        t = self.messages()[0]["text"]
+        self.assertIn("mit Passkey, von außen (Netz 2001:db8:1234::/48)", t)
+        self.assertNotIn("5678", t)
+
+    def test_a_new_person_at_home_says_zu_hause(self):
+        self.seed()
+        self.log("bob", "10.0.0.9", 100, ok=True)
+        self.run_it()
+        m = self.messages()
+        self.assertEqual(sorted(x["an"] for x in m), ["bob", "mama"])
+        self.assertIn("Neue Anmeldung bei Bob: mit Passwort, zu Hause,", m[0]["text"])
+
+    def test_the_notify_person_herself_gets_one_message(self):
+        self.seed()
+        self.env["NOTIFY_PERSON"] = "anna"
+        self.log("anna", "198.51.100.7", 100, ok=True)
+        self.run_it()
+        self.assertEqual([(x["an"], x.get("nur_bote")) for x in self.messages()], [("anna", None)])
+
+    def test_a_failed_login_from_a_new_network_is_no_new_device(self):
+        self.seed()
+        self.log("anna", "198.51.100.7", 100)
+        self.run_it()
+        self.assertEqual(self.messages(), [])
+
+    def test_only_hashes_are_on_disk(self):
+        self.seed()
+        self.log("anna", "198.51.100.7", 100, ok=True)
+        self.run_it()
+        st = json.loads((self.state / "stand.json").read_text())
+        self.assertEqual(len(st["geraete"]), 3)
+        for k in st["geraete"]:
+            self.assertRegex(k, r"^[0-9a-f]{64}$")
+        dump = json.dumps({"geraete": st["geraete"], "salz": st["salz"]})
+        for raw in ("198.51.100", "192.0.2", "10.0.0", "anna", "salz-fuer-tests"):
+            self.assertNotIn(raw, dump)
+
+    def test_another_salt_starts_over_silently(self):
+        self.seed()
+        self.env["ANMELDUNGEN_SALT"] = "ein-neues-salz"
+        self.log("anna", "198.51.100.7", 100, ok=True)
+        self.run_it()
+        self.assertEqual(self.messages(), [], "a rotated salt is no reason to tell everyone")
+
+    def test_a_device_unseen_for_400_days_is_new_again(self):
+        self.seed()
+        later = NOW + 401 * 86400
+        self.log("anna", "192.0.2.10", -401 * 86400 + 100, ok=True)
+        self.run_it(later)
+        self.assertEqual(len(self.messages()), 2)
+
+    def test_without_a_salt_no_device_is_kept(self):
+        del self.env["ANMELDUNGEN_SALT"]
+        self.log("anna", "198.51.100.7", 100, ok=True)
+        self.assertIn("ANMELDUNGEN_SALT fehlt", self.run_it().stdout)
+        self.assertNotIn("geraete", json.loads((self.state / "stand.json").read_text()))
+
+
 class FakeBote(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
@@ -482,6 +593,43 @@ class Sender(unittest.TestCase):
         import time
         self.env.update(NOTIFY_URL="http://127.0.0.1:9/mitteilung", SMTP_HOST="", NOTIFY_EINGANG=str(Path(self.tmp.name) / "eingang"))
         self.write_b("alt", int(time.time()) - 16 * 60)
+        self.melden()
+        self.assertEqual(self.eingang(), [])
+        self.assertEqual(len((self.state / "meldungen.jsonl").read_text().splitlines()), 1)
+
+    def own_copy(self, at):
+        with open(self.state / "meldungen.jsonl", "a") as f:
+            f.write(json.dumps({"an": "anna", "text": "🔑 Neue Anmeldung bei Anna", "betreff": "Neue Anmeldung bei Anna (18:10)", "nur_bote": True, "at": at}) + "\n")
+
+    def test_a_persons_own_copy_goes_to_the_bote(self):
+        import time
+        self.own_copy(int(time.time()))
+        self.melden()
+        self.assertEqual([g["an"] for g in self.srv.got], ["anna"])
+
+    def test_a_persons_own_copy_is_never_mailed(self):
+        import time
+        self.srv.code = 404   # a person the Bote does not know
+        self.env.update(SMTP_HOST="smtp.example.home", NOTIFY_EINGANG=str(Path(self.tmp.name) / "eingang"))
+        self.own_copy(int(time.time()) - 16 * 60)
+        self.melden()
+        self.assertEqual(self.eingang(), [], "the admin's copy is the one with a mail")
+        self.assertFalse((self.state / "meldungen.jsonl").exists())
+
+    def test_without_the_bote_a_persons_own_copy_is_dropped(self):
+        import time
+        self.env.update(NOTIFY_TOKEN="", SMTP_HOST="smtp.example.home", NOTIFY_EINGANG=str(Path(self.tmp.name) / "eingang"))
+        self.own_copy(int(time.time()))
+        self.write_b("eins", int(time.time()))
+        self.melden()
+        self.assertEqual([m["text"] for m in self.eingang()], ["eins"])
+        self.assertFalse((self.state / "meldungen.jsonl").exists())
+
+    def test_an_unreachable_bote_keeps_a_persons_own_copy_past_15_minutes(self):
+        import time
+        self.env.update(NOTIFY_URL="http://127.0.0.1:9/mitteilung", SMTP_HOST="smtp.example.home",
+                        NOTIFY_EINGANG=str(Path(self.tmp.name) / "eingang"))
+        self.own_copy(int(time.time()) - 16 * 60)
         self.melden()
         self.assertEqual(self.eingang(), [])
         self.assertEqual(len((self.state / "meldungen.jsonl").read_text().splitlines()), 1)

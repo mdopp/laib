@@ -1,6 +1,8 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Das Netzlaufwerk im Browser (files) öffnet sich nur noch zu Hause oder über WireGuard; Links, die du daraus teilst, funktionieren weiter überall
+Agenten wie Claude oder der Operator sehen nur noch mit deiner Freigabe im Eingang in das Netzlaufwerk hinein, jedes Mal eine Stunde lang, und das Protokoll der Box hält dabei keine Inhalte mehr fest.
 Dein Passwort fürs Netzlaufwerk setzt du jetzt in Homes, so heißt Haus jetzt
 Löscht jemand auf dem Handy oder Laptop eine Datei, die mit der Box abgeglichen wird, hebt die Box sie noch 30 Tage auf
 Auf der Box-Seite steht bei der Dateifreigabe, wie viel Platz noch frei ist, welche Geräte Syncthing gerade erreicht und wer fürs Netzlaufwerk ein Passwort hat

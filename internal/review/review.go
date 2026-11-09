@@ -8,6 +8,7 @@ package review
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
@@ -104,6 +105,15 @@ func (r *Result) data(svc, why string) {
 	}
 }
 
+// newImage: every new image is a person's tap (ADR 0034, the owner's
+// choice c); one with data (no AutoUpdate=registry) is snapshotted first.
+func (r *Result) newImage(svc, old, img string, auto bool) {
+	r.Human = append(r.Human, fmt.Sprintf("ein neues Image für %s (%s → %s): neue Software nur auf deinen Tipp (ADR 0034)", svc, old, img))
+	if !auto {
+		r.data(svc, fmt.Sprintf("ein neues Image für %s (%s → %s), dessen Daten es migrieren kann", svc, old, img))
+	}
+}
+
 // knownUnit says whether a file in a service folder is one Laib renders.
 func knownUnit(name string) bool {
 	switch filepath.Ext(name) {
@@ -134,6 +144,15 @@ func Dirs(base, changed string) Result {
 	r.group()
 	slices.SortStableFunc(r.Human, func(a, b string) int { return weight(a) - weight(b) })
 	return r
+}
+
+// boxlessSays: the folders whose one file changes nothing on the box, what
+// approving it does.
+var boxlessSays = map[string]string{
+	"repairs":   "eine Reparatur (%s): nach der Freigabe führt Laib den darin genannten Befehl aus",
+	"einblicke": "ein Einblick in private Daten (%s): nach der Freigabe darf der genannte Agent eine Stunde lang hineinsehen (ADR 0032)",
+	"wishes":    "ein Wunsch an die Werkstatt (%s): nach der Freigabe wird daraus ein Ticket",
+	"lessons":   "eine Lehre für den Operator (%s): steht danach im Kontext jeder seiner Sitzungen (#544)",
 }
 
 func dirs(base, changed string) Result {
@@ -202,14 +221,10 @@ func dirs(base, changed string) Result {
 			}
 		case parts[0] == "services" && len(parts) == 4 && parts[2] == state.BaseDir && !a.exec:
 			// the template as copied in (#511): only the next update's merge reads it
-		case parts[0] == "repairs" && len(parts) == 2:
-			say("eine Reparatur (%s): nach der Freigabe führt Laib den darin genannten Befehl aus", p)
+		case len(parts) == 2 && boxlessSays[parts[0]] != "":
+			say(boxlessSays[parts[0]], p)
 		case p == "host/image":
 			say("das Betriebssystem der Box (%s): nach der Freigabe wird das Image bereitgestellt, der Neustart kommt im Update-Fenster (#368)", p)
-		case parts[0] == "wishes" && len(parts) == 2:
-			say("ein Wunsch an die Werkstatt (%s): nach der Freigabe wird daraus ein Ticket", p)
-		case parts[0] == "lessons" && len(parts) == 2:
-			say("eine Lehre für den Operator (%s): steht danach im Kontext jeder seiner Sitzungen (#544)", p)
 		case parts[0] == "skills":
 			say("gibt dem Operator eine Fähigkeit oder ändert eine (%s): was er tun darf, entscheidet ein Mensch (ADR 0023)", p)
 		default:
@@ -454,6 +469,24 @@ func (r *Result) foreignData(svc string, before, after []state.DataPath, st *sta
 	}
 }
 
+// publicChange: paths of a home-only name the internet reaches without a
+// login (laib#1133), new ones a human's like a public route.
+func publicChange(old, rt state.Route) []string {
+	if len(rt.PublicPaths) == 0 || slices.Equal(old.PublicPaths, rt.PublicPaths) {
+		return nil
+	}
+	return []string{fmt.Sprintf("macht auf %s Pfade aus dem Internet erreichbar, ohne Anmeldung: %s", rt.Host, strings.Join(rt.PublicPaths, ", "))}
+}
+
+// outsideChange: a route's outside: (laib#1131) changed, either way the
+// family's login from outside the LAN: a human's.
+func outsideChange(old, rt state.Route) []string {
+	if rt.Outside == old.Outside {
+		return nil
+	}
+	return []string{fmt.Sprintf("ändert die Anmeldung von außerhalb des Heimnetzes für %s (%s → %s)", rt.Host, cmp.Or(old.Outside, old.Auth), cmp.Or(rt.Outside, rt.Auth))}
+}
+
 func authRank(a string) int {
 	switch a {
 	case "none":
@@ -478,6 +511,7 @@ func (r *Result) contract(svc string, b, a state.Contract, existed bool, mints m
 	for _, rt := range a.Routes {
 		seen[rt.Host] = true
 		old, had := broutes[rt.Host]
+		r.Human = append(r.Human, publicChange(old, rt)...)
 		if !had {
 			if existed {
 				say("veröffentlicht eine neue Adresse für %s: %s", svc, rt.Host)
@@ -511,6 +545,7 @@ func (r *Result) contract(svc string, b, a state.Contract, existed bool, mints m
 		if authRank(rt.Auth) < authRank(old.Auth) {
 			say("schwächt die Anmeldung für %s (%s → %s)", rt.Host, old.Auth, rt.Auth)
 		}
+		r.Human = append(r.Human, outsideChange(old, rt)...)
 		if old.Group != rt.Group {
 			say("ändert, wer sich bei %s anmelden darf (%q → %q)", rt.Host, old.Group, rt.Group)
 		}
@@ -674,8 +709,8 @@ func (r *Result) units(svc, key string, st *state.State, added, removed []entry,
 		case e.Key == "Image":
 			if existedUnit && imageRepo(e.Value) != imageRepo(oldImage) {
 				say("startet ein anderes Programm in %s (%s statt %s)", svc, e.Value, oldImage)
-			} else if existedUnit && !auto {
-				r.data(svc, fmt.Sprintf("ein neues Image für %s (%s → %s), dessen Daten es migrieren kann", svc, oldImage, e.Value))
+			} else if existedUnit {
+				r.newImage(svc, oldImage, e.Value, auto)
 			} else if !existedUnit && existedService {
 				say("startet ein neues Programm in %s (%s)", svc, e.Value)
 			}

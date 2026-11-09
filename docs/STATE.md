@@ -63,6 +63,7 @@ backup:
     env: {RCLONE_CONFIG_NAS_TYPE: ftp, RCLONE_CONFIG_NAS_HOST: 192.168.178.1, RCLONE_CONFIG_NAS_USER: laib,
           RCLONE_CONFIG_NAS_EXPLICIT_TLS: "true", RCLONE_CONFIG_NAS_NO_CHECK_CERTIFICATE: "true", RCLONE_CONFIG_NAS_CONCURRENCY: "2"}
     secrets: [RCLONE_CONFIG_NAS_PASS]   # rclone obscure's output, in secrets.age
+    # objectLock: true            # an S3 bucket with Object Lock (repo: s3:https://…): only added to, never forget/prune (ADR 0033)
   keep: ["${DATA_DIR}/gesundheit"] # data folders no service declares any more, still backed up: a removed service's (its data stay until a human deletes them)
 dns:                              # DNS-01: one wildcard certificate *.<domain> (#378); absent = HTTP-01 per name
   provider: desec                 # a module in ghcr.io/mdopp/laib-caddy (caddy/Containerfile)
@@ -336,6 +337,7 @@ requires:                        # a set value needs these set too (#184)
   MAIL_HOST: [MAIL_PASSWORD]
 channels: {signal: SIGNAL_ACCOUNT}   # people platforms this service delivers on, each while its value is set
 perPerson: false                 # true: installed once per person (#986), below
+private: approval                # the family's data (ADR 0032): sealed = no look/read/exec/write for anyone; approval = an agent only for an hour after a human's Einblick; the journal keeps no output
 instances:                       # every person's instance of a per-person template, in one container (laib#1016), below
   - {template: archiv, unit: homes.container, url: HOMES_ARCHIV_INTERN, secret: ARCHIV_HOMES_SECRET, env: HOMES_ARCHIV_SECRET}
 ```
@@ -428,16 +430,17 @@ The loader makes such an instance its own, so that two never meet:
 
 The instances' routes share their host (the box has no wildcard
 certificate, so one name is one Strato record). Caddy renders one site for
-it, `internal` behind the LAN check like any route. `/p/<person>/` goes
-past Authelia (a bypass rule each) to that person's instance with the
-prefix stripped and without its key: the instance checks the key an agent
-sends. Everything else is behind Authelia, and a signed-in person reaches
+it, `internal` behind the LAN check like any route. Where an instance's
+`values.yml` sets `AGENT_PATH` (off by default, laib#1121),
+`/p/<person>/` goes past Authelia (a bypass rule each) to that person's
+instance with the prefix stripped and without its key: the instance checks
+the key an agent sends. Without it the name has no way past the login. Everything else is behind Authelia, and a signed-in person reaches
 their own instance by `Remote-User`, which only Authelia sets (the site
 strips the client's `Remote-*` first), with the route's `proxySecret` as
 `proxyHeader` (default `X-<Template>-Proxy`): the person never sees the
 key. A signed-in person without an instance gets the denied page. Such a
 route has a login (no `auth: none`) and no `bypass`; an instance has no
-`oidc`. `laib net` shows the name once, with each person's path. Removing
+`oidc`. `laib net` shows the name once, with each switched-on person's path. Removing
 an instance is a removal like any other: a human decides in the Inbox.
 
 ### A service that reaches every person's instance (laib#1016)
@@ -579,6 +582,36 @@ route naming one the service does not declare.
 refuses without a session (401 or 403). Laib renders nothing from it;
 `laib net` carries it, and `laib-app check` measures the app's own login
 there instead of Authelia's (#774).
+
+### Paths of a home-only name for everyone
+
+`publicPaths: [/share/, …]` on an `internal` route (laib#1133, owner
+decision J) serves those path prefixes to anyone, from the internet too,
+without Authelia: Caddy handles them before the site's `@lan` handle, and
+everything else stays at home („Nur zu Hause“ from outside). File Browser's
+share links live this way on `files.<domain>`, the address File Browser
+builds them from, so a link keeps working without a name of its own. Caddy
+matches the cleaned path, so a `..` out of a prefix does not get through
+(`internal/render/public1133_test.go` runs it in Caddy). A public route
+uses `bypass` instead; adding public paths is a human's in the review, and
+`laib net` shows `nur LAN; aus dem Internet: <paths>`.
+
+### A stronger login from outside
+
+`outside: two_factor` on a public route with `auth: one_factor` (laib#1131,
+owner decision I) makes Authelia ask the second factor from outside the
+LAN and the one factor at home: two rules for the name, the first with
+`networks:` set to Caddy's `private_ranges` (the LAN, and WireGuard through
+the Fritz!Box, which hands out LAN addresses), the second for everyone
+else. Authelia reads the client's address from `X-Forwarded-For`, which
+Caddy sets itself and never takes from a client (no `trusted_proxies`). The
+auth template offers the passkey first (`default_2fa_method: webauthn`); a
+passkey alone stays one factor (the owner, 2026-11-02, against Authelia's
+experimental option), so from outside it is a passkey and the password, or
+the password and a code. `laib net` shows `one_factor, von außen
+two_factor`; taking it away or adding it is a human's in the review. A home
+device that reaches the box over a public IPv6 address counts as outside,
+as it does for Caddy's `@lan`.
 
 ### Names that only redirect
 

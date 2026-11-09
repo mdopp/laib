@@ -24,5 +24,9 @@ SMTP_PASSWORD: !secret AUTHELIA_SMTP_PASSWORD
 AUTH_MAX_RETRIES: "5"
 AUTH_FIND_TIME: 10m
 AUTH_BAN_TIME: 30m
+# a passkey that verified its user (fingerprint, PIN) counts as two factors: from outside the finger is enough;
+# Authelia calls it experimental (checked against 4.39.x); password plus passkey or code stays. on | off
+AUTH_PASSKEY_TWO_FACTORS: "on"
 ANMELDUNGEN_IMAGE: docker.io/library/python:3.13-alpine   # the failed-login counter (anmeldungen.py), the standard library only
 NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN   # bote-notify's bearer for the failed-login messages; empty without the Bote
+ANMELDUNGEN_SALT: !secret ANMELDUNGEN_SALT   # the salt of the hashes the counter keeps of each seen device (a new-login message), generated once

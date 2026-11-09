@@ -82,15 +82,18 @@ func TestACardSaysAValueTheTemplateTookAway(t *testing.T) {
 func TestNewValuesDropsOnlyARetiredSecret(t *testing.T) {
 	for _, c := range []struct {
 		have, example string
-		declared      map[string]bool
+		declared      map[string]string
 		want          string
 	}{
-		{"A: 1\nOLD: !secret GONE # x\nB: 2\n", "A: 3\n", map[string]bool{}, "A: 1\nB: 2\n"},
-		{"A: 1\nOLD: !secret GONE\n", "A: 3\nN: !secret NEW\n", map[string]bool{"NEW": true}, "A: 1\nN: !secret NEW\n"},
-		{"OLD: GONE\n", "A: 3\n", map[string]bool{}, "OLD: GONE\nA: 3\n"},                             // a plain value stays
-		{"OLD: !secret KEPT\n", "A: 3\n", map[string]bool{"KEPT": true}, "OLD: !secret KEPT\nA: 3\n"}, // still declared
-		{"OLD: !secret GONE\n", "OLD: !secret GONE\n", map[string]bool{}, "OLD: !secret GONE\n"},      // the example has it: the loader says why
-		{"OLD: !secret GONE\n", "A: 3\n", nil, "OLD: !secret GONE\nA: 3\n"},                           // no contract read: nothing goes
+		{"A: 1\nOLD: !secret GONE # x\nB: 2\n", "A: 3\n", map[string]string{}, "A: 1\nB: 2\n"},
+		{"A: 1\nOLD: !secret GONE\n", "A: 3\nN: !secret NEW\n", map[string]string{"NEW": "NEW"}, "A: 1\nN: !secret NEW\n"},
+		{"OLD: GONE\n", "A: 3\n", map[string]string{}, "OLD: GONE\nA: 3\n"},                               // a plain value stays
+		{"OLD: !secret KEPT\n", "A: 3\n", map[string]string{"KEPT": "KEPT"}, "OLD: !secret KEPT\nA: 3\n"}, // still declared
+		{"OLD: !secret GONE\n", "OLD: !secret GONE\n", map[string]string{}, "OLD: !secret GONE\n"},        // the example has it: the loader says why
+		{"OLD: !secret GONE\n", "A: 3\n", nil, "OLD: !secret GONE\nA: 3\n"},
+		{"K: !secret WAS # c\n", "K: !secret NEW\n", map[string]string{"NEW": "NEW", "WAS": "NEW"}, "K: !secret NEW # c\n"},     // laib#1021: renamed with its secret
+		{"OLD: !secret WAS\n", "K: !secret NEW\n", map[string]string{"NEW": "NEW", "WAS": "NEW"}, "K: !secret NEW\n"},           // a key the example dropped goes
+		{"K: !secret WAS\nWAS: !secret WAS\n", "K: x\n", map[string]string{"WAS": "WAS"}, "K: !secret WAS\nWAS: !secret WAS\n"}, // still declared: stays                               // no contract read: nothing goes
 	} {
 		path := filepath.Join(t.TempDir(), "values.yml")
 		os.WriteFile(path, []byte(c.have), 0o644)

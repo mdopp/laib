@@ -34,8 +34,23 @@ mail fallback's subject is betreff), and STATE_DIR/notizen.tsv, "<kind>\\t<text>
 note (incident for each message, watch for the rest). anmeldungen.sh sends
 both from the host. LAN_NETZE: the box's own networks, comma-separated
 CIDRs (anmeldungen.sh reads them with ip addr). ANMELDUNGEN_JETZT: a fixed
-clock for the tests."""
-import datetime, ipaddress, json, os, re, shutil, sqlite3, sys, tempfile, time
+clock for the tests.
+
+A new device (plan "Erkennen", owner 2026-11-09): a successful first factor
+(auth_type 1FA, the password, or Passkey) for a name from a network it was
+never seen from is one message to that person and one to NOTIFY_PERSON:
+„Neue Anmeldung bei <name>: mit Passwort, von außen (Netz 192.0.2.x), 09.11.
+um 14:05. Warst du das?“ The network is the coarse one: the LAN is „zu
+Hause“, outside the /24 of IPv4 or the /48 of IPv6. Authelia logs no user
+agent, so the device is what it logs: password or passkey. What was seen is
+kept only as sha256(ANMELDUNGEN_SALT, name, network) in stand.json
+("geraete": hash → last seen), forgotten after 400 days unseen; the salt is a
+generated secret of the template, so the file does not say where anyone signs
+in from. The first run (no "geraete" yet, or another salt) takes every successful login in
+authentication_logs as seen and sends nothing. The person's own copy carries
+"nur_bote": true: anmeldungen.sh never mails it; NOTIFY_PERSON's copy takes
+the mail fallback as every message does."""
+import datetime, hashlib, ipaddress, json, os, re, shutil, sqlite3, sys, tempfile, time
 
 E = os.environ
 STATE = E.get("STATE_DIR", "/state")
@@ -55,6 +70,10 @@ MAX = int(E.get("AUTH_MAX_RETRIES") or 5)
 FIND = seconds(E.get("AUTH_FIND_TIME") or "10m", "AUTH_FIND_TIME")
 BAN = seconds(E.get("AUTH_BAN_TIME") or "30m", "AUTH_BAN_TIME")
 KEEP = max(HOUR, FIND) + 300   # how far back the windows look
+SALT = E.get("ANMELDUNGEN_SALT") or ""
+FORGET = 400 * 86400   # a device unseen this long is new again
+FIRST = ("1FA", "Passkey")   # Authelia's first factors: one row per login
+SALZ = hashlib.sha256(("salz\0" + SALT).encode()).hexdigest()[:12]   # which salt the hashes are made with: a new one starts over, silently
 
 
 def nets():
@@ -121,21 +140,24 @@ def load_state():
 
 
 def users(tmp):
-    """LLDAP's names and mail addresses, lower case; None when unreadable"""
+    """LLDAP's names and mail addresses, lower case, None when unreadable; and
+    the display names by name"""
     try:
         db = copy_db(E.get("LLDAP_DB", "/lldap/users.db"), tmp)
         if db is None:
-            return None
+            return None, {}
         cur = db.execute("SELECT * FROM users")
         cols = [c[0] for c in cur.description]
-        out = set()
+        out, display = set(), {}
         for row in cur:
             for c in ("user_id", "email", "lowercase_email"):
                 if c in cols and row[cols.index(c)]:
                     out.add(str(row[cols.index(c)]).lower())
-        return out
+            if "user_id" in cols and "display_name" in cols and row[cols.index("display_name")]:
+                display[str(row[cols.index("user_id")]).lower()] = str(row[cols.index("display_name")])
+        return out, display
     except sqlite3.Error:
-        return None
+        return None, {}
 
 
 # the other doors (#703): (title in a message, its journal's regexes → (user, ip, banned), advice, counts in the LAN)
@@ -209,17 +231,70 @@ def read_rows(tmp, st):
         if not r or str(r[0]) != cur["time"]:
             print("authentication_logs: not the database of the last run, reading it from the start")
             cur, st["recent"], st["offen"] = {}, [], {}
-    rows = db.execute("SELECT id, time, successful, banned, username, remote_ip FROM authentication_logs WHERE id > ? ORDER BY id",
+    rows = db.execute("SELECT id, time, successful, banned, username, remote_ip, auth_type FROM authentication_logs WHERE id > ? ORDER BY id",
                       (cur.get("id", 0),)).fetchall()
     first = not cur
+    if SALT and ("geraete" not in st or st.get("salz") != SALZ):   # the first run: every login so far is known, no message (new_devices)
+        st["geraete"] = {fingerprint(u, ip): epoch(t) or NOW for t, u, ip in db.execute(
+            "SELECT time, username, remote_ip FROM authentication_logs WHERE successful AND auth_type IN (?, ?)", FIRST)}
+        st["salz"] = SALZ
+        print(f"anmeldungen: {len(st['geraete'])} bekannte Geräte übernommen, ohne Mitteilung")
     out = []
-    for i, t, ok, banned, user, ip in rows:
+    for i, t, ok, banned, user, ip, art in rows:
         cur = {"id": i, "time": str(t)}
         e = epoch(t)
         if e is None or (first and e < NOW - KEEP):
             continue   # the first run starts with the last hour, not with every old failure
-        out.append({"id": i, "t": e, "ok": bool(ok), "banned": bool(banned), "user": str(user or ""), "ip": str(ip or "")})
+        out.append({"id": i, "t": e, "ok": bool(ok), "banned": bool(banned), "user": str(user or ""), "ip": str(ip or ""), "art": str(art or "")})
     return out, cur
+
+
+def netz(ip):
+    """the coarse network of an address: the /24 of IPv4, the /48 of IPv6; "" without one"""
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return ""
+    if a.version == 6 and a.ipv4_mapped:
+        a = a.ipv4_mapped
+    return str(ipaddress.ip_network(f"{a}/{24 if a.version == 4 else 48}", strict=False))
+
+
+def fingerprint(user, ip):
+    """what is kept of a device: a salted hash of the name and its network, never the address"""
+    where = "lan" if in_lan(ip) else netz(ip)
+    return hashlib.sha256(f"{SALT}\0{str(user or '').lower()}\0{where}".encode()).hexdigest()
+
+
+def ort(ip):
+    if in_lan(ip):
+        return "zu Hause"
+    n = netz(ip)
+    if not n:
+        return "von außen"
+    return f"von außen (Netz {n})" if ":" in n else f"von außen (Netz {n.rsplit('.', 1)[0]}.x)"
+
+
+def new_devices(st, new, display):
+    """the new devices among new's successful logins: (person, text, betreff), each once"""
+    if not SALT:
+        print("anmeldungen: ANMELDUNGEN_SALT fehlt, keine Meldung neuer Geräte")
+        return []
+    geraete = {k: v for k, v in st.get("geraete", {}).items() if v >= NOW - FORGET}
+    out = []
+    for r in new:
+        if not r["ok"] or r.get("art") not in FIRST or r.get("tuer"):
+            continue
+        fp = fingerprint(r["user"], r["ip"])
+        if fp not in geraete:
+            name = clean(display.get(r["user"].lower()) or r["user"])
+            how = "mit Passkey" if r["art"] == "Passkey" else "mit Passwort"
+            when = time.strftime("%d.%m. um %H:%M", time.localtime(r["t"]))
+            out.append((r["user"].lower(), f"🔑 Neue Anmeldung bei {name}: {how}, {ort(r['ip'])}, {when}. Warst du das?\n"
+                        "Wenn nicht: ändere dein Passwort und sag es dem Admin.", f"Neue Anmeldung bei {name} ({hhmm(r['t'])})"))
+        geraete[fp] = max(geraete.get(fp, 0), r["t"])
+    st["geraete"] = geraete
+    return out
 
 
 def bans(recent):
@@ -286,7 +361,7 @@ def main():
     os.makedirs(STATE, exist_ok=True)
     st = load_state()
     with tempfile.TemporaryDirectory() as tmp:
-        known = users(tmp)
+        known, display = users(tmp)
         new, cursor = read_rows(tmp, st)
     more, cursors = door_rows(st)
     recent = [r for r in st.get("recent", []) if r["t"] >= NOW - KEEP]
@@ -404,15 +479,25 @@ def main():
                       for g, where in ((lan, "aus dem Heimnetz"), (out, "von außen")) if g]
         notes.append(("watch", "Anmeldungen: " + "; ".join(parts) + ", unter jeder Schwelle, keine Mitteilung."))
 
-    if (E.get("NOTIFY_PERSON") or E.get("SMTP_HOST")) and messages:   # without a person: for the mail (#703)
+    # 5. a new device: to the person, and to NOTIFY_PERSON like every message
+    for person, text, betreff in new_devices(st, new, display):
+        notes.append(("watch", "Anmeldungen: " + text.split("\n")[0]))
+        messages.append((text, betreff, person))
+    lines = []
+    for text, betreff, *person in messages:
+        if E.get("NOTIFY_PERSON") or E.get("SMTP_HOST"):   # without a person: for the mail (#703)
+            lines.append({"an": E.get("NOTIFY_PERSON", ""), "text": text, "betreff": betreff, "at": NOW})
+        if person and person[0] != E.get("NOTIFY_PERSON", "").lower():   # the person's own copy: the Bote only
+            lines.append({"an": person[0], "text": text, "betreff": betreff, "nur_bote": True, "at": NOW})
+    if lines:
         with open(os.path.join(STATE, "meldungen.jsonl"), "a") as f:
-            for text, betreff in messages:
-                f.write(json.dumps({"an": E.get("NOTIFY_PERSON", ""), "text": text, "betreff": betreff, "at": NOW}) + "\n")
+            for line in lines:
+                f.write(json.dumps(line) + "\n")
     if notes:
         with open(os.path.join(STATE, "notizen.tsv"), "a") as f:
             for kind, text in notes:
                 f.write(kind + "\t" + text.replace("\t", " ").replace("\n", " ") + "\n")
-    st = {"cursor": cursor, "recent": recent, "offen": offen}
+    st = {"cursor": cursor, "recent": recent, "offen": offen, **{k: st[k] for k in ("geraete", "salz") if k in st}}
     tmp = os.path.join(STATE, "stand.json.tmp")
     with open(tmp, "w") as f:
         json.dump(st, f)

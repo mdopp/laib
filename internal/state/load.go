@@ -232,6 +232,20 @@ func (svc *Service) applyWhen() error {
 	return errors.Join(errs...)
 }
 
+// outsideMakesSense: outside: two_factor on a public one_factor route
+// (laib#1131), publicPaths on an internal one (laib#1133).
+func outsideMakesSense(svc *Service) (errs []error) {
+	for i, r := range svc.Contract.Routes {
+		if r.Outside != "" && (r.Outside != "two_factor" || r.Auth != "one_factor" || r.Exposure != "public") {
+			errs = append(errs, fmt.Errorf("services/%s/laib.yml: routes[%d].outside is two_factor, on a public route with auth one_factor", svc.Name, i))
+		}
+		if len(r.PublicPaths) > 0 && (r.Exposure != "internal" || slices.ContainsFunc(r.PublicPaths, func(p string) bool { return !strings.HasPrefix(p, "/") || p == "/" })) {
+			errs = append(errs, fmt.Errorf("services/%s/laib.yml: routes[%d].publicPaths are path prefixes below / on an internal route (a public one uses bypass)", svc.Name, i))
+		}
+	}
+	return errs
+}
+
 func (st *State) validate() []error {
 	var errs []error
 	fail := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
@@ -239,6 +253,7 @@ func (st *State) validate() []error {
 		if err := proxySecretsDeclared(svc); err != nil {
 			errs = append(errs, err)
 		}
+		errs = append(errs, outsideMakesSense(svc)...)
 	}
 
 	if st.Box.Domain == "" {
@@ -361,7 +376,7 @@ func (st *State) validate() []error {
 				fail("services/%s/laib.yml: host %q already published by %s", name, r.Host, prev)
 			}
 			if c.Person != "" && (r.Auth == "none" || len(r.Bypass) > 0) {
-				fail("services/%s/laib.yml: routes[%d]: a person's route has a login and no bypass: Remote-User picks the instance, /p/%s/ is its only way past Authelia (#986)", name, i, c.Person)
+				fail("services/%s/laib.yml: routes[%d]: a person's route has a login and no bypass: Remote-User picks the instance, /p/%s/ past Authelia only with AGENT_PATH set (#986)", name, i, c.Person)
 			}
 			hosts[r.Host] = name
 			if r.Auth != "none" && st.Box.Roles.SSO == "" {

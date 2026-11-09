@@ -104,6 +104,9 @@ func TestReviewNamesWhatOnlyAHumanMayAllow(t *testing.T) {
 		{"a public route", func(t *testing.T, d string) {
 			edit(t, d, "services/whoami/laib.yml", "exposure: internal", "exposure: public")
 		}, "aus dem Internet erreichbar"},
+		{"paths of a home-only name for everyone (laib#1133)", func(t *testing.T, d string) {
+			edit(t, d, "services/whoami/laib.yml", "auth: one_factor", "auth: one_factor\n    publicPaths: [/share/]")
+		}, "macht auf whoami Pfade aus dem Internet erreichbar, ohne Anmeldung: /share/"},
 		{"box.yml roles", func(t *testing.T, d string) {
 			edit(t, d, "box.yml", "  proxy: caddy\n", "  proxy: whoami\n")
 		}, "Rollen"},
@@ -181,9 +184,9 @@ func TestReviewNamesWhatOnlyAHumanMayAllow(t *testing.T) {
 		}, "entfernt den Dienst whoami"},
 
 		{"nothing", func(t *testing.T, d string) {}, ""},
-		{"a newer image tag", func(t *testing.T, d string) {
+		{"a newer image tag: a human taps every new image (ADR 0034, the owner's choice c)", func(t *testing.T, d string) {
 			edit(t, d, "services/whoami/values.yml", "whoami:v1.10", "whoami:v1.11")
-		}, ""},
+		}, "ein neues Image für whoami (docker.io/traefik/whoami:v1.10 → docker.io/traefik/whoami:v1.11): neue Software nur auf deinen Tipp"},
 		{"an environment value", func(t *testing.T, d string) {
 			edit(t, d, "services/whoami/whoami.container", "WHOAMI_NAME=${SERVICE}", "WHOAMI_NAME=hello-${SERVICE}")
 		}, ""},
@@ -233,6 +236,23 @@ func TestReviewSeesARestrictionTakenAway(t *testing.T) {
 	r := Dirs(base, changed)
 	if !strings.Contains(strings.Join(r.Human, " "), "ReadOnly") {
 		t.Fatalf("removing ReadOnly=true went unnoticed: %q", r.Human)
+	}
+}
+
+// Dropping the second factor from outside (laib#1131) weakens the login
+// for everyone beyond the LAN; asking it changes how the family signs in:
+// both a human's call.
+func TestReviewSeesTheOutsideFactorTakenAway(t *testing.T) {
+	base, changed := copyTree(t, golden), copyTree(t, golden)
+	for _, d := range []string{base, changed} {
+		edit(t, d, "services/whoami/laib.yml", "exposure: internal", "exposure: public")
+	}
+	edit(t, base, "services/whoami/laib.yml", "auth: one_factor", "auth: one_factor\n    outside: two_factor")
+	if r := Dirs(base, changed); !strings.Contains(strings.Join(r.Human, " "), "ändert die Anmeldung von außerhalb des Heimnetzes für whoami (two_factor → one_factor)") {
+		t.Fatalf("taking outside: two_factor away went unnoticed: %q", r.Human)
+	}
+	if r := Dirs(changed, base); !strings.Contains(strings.Join(r.Human, " "), "ändert die Anmeldung von außerhalb des Heimnetzes für whoami (one_factor → two_factor)") {
+		t.Fatalf("asking more from outside changes the family's login, said in its words: %q", r.Human)
 	}
 }
 
