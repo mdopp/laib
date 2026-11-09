@@ -114,6 +114,46 @@ it: Einstellungen → E-Mail, at the rule open the processed mails, delete
 the failed entry; the next fetch takes the mail again. Then dismiss the
 failed task under Dateiaufgaben, which turns diag's yellow off.
 
+### The receipt: who sent it hears whether it arrived
+
+Whoever files a document by mail gets one Signal message per mail through
+the Bote (owner 2026-11-09): „Per Mail abgelegt: <Titel> (von <Absender>),
+<n> Seiten – <Link>“. Several attachments are one message that lists each;
+an attachment Paperless refused is in it too, „nicht abgelegt: <Datei>:
+schon vorhanden“ (a duplicate) or „nicht lesbar“ (any other failure). A
+mail from a household person that had no attachment Paperless takes says
+so. Scans, the consume folder, Homes and uploads are never told. Nothing
+of a document's content goes out, only its title, file name and pages.
+
+`paperless-quittung.timer` runs `paperless-quittung.sh` every five minutes:
+`sammeln` runs `paperless-quittung.py` inside the Paperless container,
+`melden` sends its lines to bote-notify from the host (as the Musik-Eingang
+does). How a document is known to have come by mail:
+
+- **The mail:** Paperless' own record of each mail its rule took
+  (`/api/processed_mail/`), of a rule on the account the values name. A scan
+  or a file from the consume folder never has one.
+- **Its documents:** the consume tasks (`/api/tasks/`, API version 9) whose
+  file name is one of the mail's attachments, made in the six hours before
+  Paperless recorded the mail; each task counts for one mail only. A task
+  still running holds the mail back, at most two hours.
+- **The sender and the attachments' names:** Paperless keeps neither, so
+  they come from the mailbox, by the record's folder and IMAP uid, read with
+  `BODY.PEEK` on a read-only select: the mail's flags never change.
+
+The recipient is the household person whose Paperless account has the
+sender's address (the e-mail of their Authelia login, LLDAP's), as their
+user name, which is their name in `box.yml` people; anyone else's mail goes
+to `notify.person`. A name bote-notify does not know goes to
+`notify.person` too. Without the Bote (`NOTIFY_TOKEN` empty) nothing is
+sent and nothing piles up; without a mail inbox nothing runs. The first run
+only notes where Paperless' record stands, so no old mail is told. What it
+does not see: a mail Paperless never fetched (a wrong filter address), and a
+mail deleted from the mailbox before the receipt read it (then, after two
+hours, only a failed one is told, by its subject, to `notify.person`).
+Failures are lines in `journalctl --user -u paperless-quittung`, never the
+text.
+
 ## The AI and the text recognition (#567)
 
 Paperless' AI (3.0: suggestions for title, correspondent, type, tags and

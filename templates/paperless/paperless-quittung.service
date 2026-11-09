@@ -1,0 +1,26 @@
+# The mail receipt (owner 2026-11-09): whoever files a document by mail hears
+# whether it arrived. paperless-quittung.sh sammeln runs paperless-quittung.py
+# inside the running Paperless container (--user paperless, as the check),
+# which reads Paperless' record of the fetched mail and its consume tasks, and
+# the sender from the mailbox, read-only; melden sends the messages to
+# bote-notify on the host's loopback. The bearer and the mailbox's password are
+# the sender's environment, never argv; the container gets the password by
+# name (-e), never the bearer. "-": a message never fails the unit.
+[Unit]
+Description=Paperless: tell whoever sent a document by mail whether it was filed
+After=paperless.service
+
+[Service]
+Type=oneshot
+Environment=PAPERLESS_MAIL_HOST=${PAPERLESS_MAIL_HOST}
+Environment=PAPERLESS_MAIL_PORT=${PAPERLESS_MAIL_PORT}
+Environment=PAPERLESS_MAIL_SECURITY=${PAPERLESS_MAIL_SECURITY}
+Environment=PAPERLESS_MAIL_USER=${PAPERLESS_MAIL_USER}
+Environment=PAPERLESS_MAIL_PASSWORD=${PAPERLESS_MAIL_PASSWORD}
+Environment=NOTIFY_PERSON=${NOTIFY_PERSON}
+Environment=NOTIFY_TOKEN=${NOTIFY_TOKEN}
+Environment=QUITTUNG=${DATA_DIR}/paperless/mailquittung
+Environment=QUITTUNG_SKRIPT=%h/.config/containers/systemd/paperless/paperless-quittung.py
+ExecStart=/bin/sh %h/.config/containers/systemd/paperless/paperless-quittung.sh sammeln
+ExecStartPost=-/bin/sh %h/.config/containers/systemd/paperless/paperless-quittung.sh melden
+TimeoutStartSec=5min
