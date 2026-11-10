@@ -292,7 +292,9 @@ in the family's data (ADR 0032): a template's `private: sealed` (the
 archive) lets no verb inside, `private: approval` (Paperless, Immich,
 Radicale, Reitti, the file share, Vaultwarden) lets an agent look, read and
 exec only for an hour after a human approved an Einblick in the Inbox, and
-the journal keeps only the size of what came out.
+the journal keeps only the size of what came out. Whose data each
+service keeps, who logs in, which keys reach it and where it crosses
+from one person to others is `docs/DATA.md`.
 
 **Watching.** The ops hand watches the journal, `/ready` and `laib logs`
 on its tick (`operator.tick`, ten minutes); red lines also reach it through

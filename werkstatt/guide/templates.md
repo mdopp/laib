@@ -119,6 +119,12 @@ The owner's rule, in this order:
    `proxySecret: <a declared secret>` to the route and trust the header
    only when `X-<Service>-Proxy` matches (ADR 0012 §3).
 
+Say in laib's `docs/DATA.md`, in the same PR, how a person's account
+comes to exist, what one person sees of another's data, what the admin
+sees, and every key another service gets to it; a template with
+`private:`, `oidc:` or `perPerson:` fails a test without its section
+there.
+
 `auth: none` without the app's own login is never right. A route with
 `auth: none`, a `bypass:` path, a weaker login or `exposure: public` is
 marked in the Inbox card and is the owner's decision.

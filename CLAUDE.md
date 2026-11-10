@@ -64,6 +64,12 @@ them.
   Details, and a lint holds it there (#855).
 - **Regression ⇒ gate.** The second time a shape breaks, it gets a test or a
   check. Not the first time.
+- **Whose data, who reaches it: `docs/DATA.md`.** A change to a template,
+  Homes, the archive or the app that adds an account model, gives a
+  service a key to another service's data, or lets one person's data
+  reach others updates `docs/DATA.md` in the same PR — the section of
+  the service and the table of crossings (owner, 2026-11-10: „Das sollte
+  direkt in der Architektur stehen“).
 - **No secrets in the tree.** Templates declare secrets in `laib.yml`; values
   live only in `secrets.age` on the box.
 - **Finish the work.** Done means merged, released, applied on the box and
@@ -87,6 +93,7 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 | The Operator's duties run in code, not in a prompt (rule 1, #858) | `operator/duties858_test.go` |
 | A skill's prompt names only tools on its menu (#858) | `TestEveryToolAPromptNamesIsOnItsMenu` |
 | Docs match the code: layout, the Operator's tools, ports, counts | `scripts/drift.sh` |
+| A template with `private:`, `oidc:` or `perPerson:` has its section in `docs/DATA.md`, naming its privacy class | `TestEveryTemplateWithFamilyDataIsInDataDoc` |
 | Dead code, staticcheck findings, duplicates and complexity only go down (see below) | `scripts/ratchet.py`, CI job `ratchet` |
 | Every touch answers at once (#588): every POST route ends done, red with a next step, or waiting with a limit | `cmd/laib/taps854_test.go` |
 | No raw or technical text in front of people (#855) | `cmd/laib/plain855_test.go`, `notify/plain855_test.go`, `frage/plain855_test.go` |
@@ -109,7 +116,7 @@ A moved or renamed function is new under its new name and gone under the
 old: `--update --accept`, the PR shows the move. `scripts/ratchet.py
 deadcode` runs one tool.
 
-Guidelines, no check: issues first, Conventional Commits, releases via
+Guidelines, no check: what a `docs/DATA.md` section says beyond its class, issues first, Conventional Commits, releases via
 release-please, weighing a change against what worked before, regression ⇒
 gate, no secrets in the tree, finishing the work. Proof on the box (rule 2)
 is the box's, not CI's.

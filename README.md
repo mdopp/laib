@@ -239,7 +239,10 @@ runs there and what is open is `docs/ZIELBILD.md`.
    "a service for the family" sequence.
 8. [`docs/SERVICES.md`](docs/SERVICES.md) — what runs on the box today
    and which templates Laib still needs for it.
-9. [`docs/BACKUP.md`](docs/BACKUP.md), [`docs/INSTALL.md`](docs/INSTALL.md),
+9. [`docs/DATA.md`](docs/DATA.md) — whose data each service keeps, who
+   logs in, what the admin sees, which keys reach it, and where one
+   person's data reaches others.
+10. [`docs/BACKUP.md`](docs/BACKUP.md), [`docs/INSTALL.md`](docs/INSTALL.md),
    [`docs/OUTSIDE.md`](docs/OUTSIDE.md) — backup, install, and what Laib
    leaves to the router, to LLDAP and to nobody.
 
