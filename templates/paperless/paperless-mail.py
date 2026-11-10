@@ -387,7 +387,8 @@ def eingang(api):
         return None
     ein, haus = tag(api, EINGANG), tag(api, HAUSHALT_TAG)
     ablauf(api, {"name": EINGANG_ABLAUF, "order": 1, "enabled": True,
-                 "triggers": [{"type": 1, "sources": [1]}],   # Consumption Started, from the consume folder
+                 # Consumption Started, from the consume folder; Paperless refuses one without a file name, path or mail rule filter
+                 "triggers": [{"type": 1, "sources": [1], "filter_filename": "*"}],
                  "actions": [{"type": 1, "assign_owner": dok, "assign_tags": [ein]}]})
     ablauf(api, {"name": HAUSHALT_ABLAUF, "order": 2, "enabled": True,
                  "triggers": [{"type": 3, "filter_has_tags": [haus]},                         # Document Updated

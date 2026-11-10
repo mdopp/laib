@@ -575,7 +575,8 @@ class Eingang(unittest.TestCase):
         self.assertTrue(all(t["owner"] is None for t in fake.tags), "the tags are everybody's")
         w = {x["name"]: x for x in fake.workflows}
         ein = w["Eingang"]
-        self.assertEqual(ein["triggers"], [{"type": 1, "sources": [1]}], "Consumption Started, the consume folder only")
+        self.assertEqual(ein["triggers"], [{"type": 1, "sources": [1], "filter_filename": "*"}],
+                         "Consumption Started, the consume folder only, every file (Paperless wants a filter)")
         self.assertEqual(ein["actions"], [{"type": 1, "assign_owner": dok, "assign_tags": [tags["Eingang"]]}],
                          "Dokumente owns it, no view for anyone else")
         hh = w["Für den Haushalt"]
