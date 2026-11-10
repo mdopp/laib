@@ -1,5 +1,5 @@
 """#521: a photo or PDF sent to the Bote with "ablegen" lands in Paperless'
-consume folder as Bote/<sender>/<title>.<ext>, and the person reads "Liegt in
+consume folder as Bote/von-<login>/<title>.<ext> (a stranger: Bote/<chat name>/), and the person reads "Liegt in
 Paperless, Titel …". The plugin (ablage_plugin.py) under fake Hermes events,
 bote-notify's real /ablage over HTTP into a temporary consume folder, and
 post-deploy turning the plugin on only while Paperless answers."""
@@ -61,15 +61,16 @@ class Ablage(unittest.TestCase):
     def filed(self):
         return sorted(str(p.relative_to(self.consume)) for p in self.consume.rglob("*") if p.is_file())
 
-    def test_a_pdf_with_ablegen_lands_tagged_with_the_sender(self):
+    def test_a_pdf_with_ablegen_lands_tagged_with_the_senders_login(self):
+        # DATA.md, gap 6: von-<login> is the tag Dokumente gives the document to that person by
         reply, _ = self.send("Stromrechnung ablegen", [self.attachment(PDF)])
         self.assertEqual(reply, "Liegt in Paperless, Titel „Stromrechnung“. Die Texterkennung braucht ein paar Minuten.")
-        self.assertEqual(self.filed(), ["Bote/Mama/Stromrechnung.pdf"])
-        self.assertEqual((self.consume / "Bote/Mama/Stromrechnung.pdf").read_bytes(), PDF)
+        self.assertEqual(self.filed(), ["Bote/von-mama/Stromrechnung.pdf"])
+        self.assertEqual((self.consume / "Bote/von-mama/Stromrechnung.pdf").read_bytes(), PDF)
         # the same title again: a second file, never replaced; nothing staged left behind
         reply, _ = self.send("bitte archivieren: Stromrechnung!", [self.attachment(PDF)])
         self.assertIn("„Stromrechnung (2)“", reply)
-        self.assertEqual(self.filed(), ["Bote/Mama/Stromrechnung (2).pdf", "Bote/Mama/Stromrechnung.pdf"])
+        self.assertEqual(self.filed(), ["Bote/von-mama/Stromrechnung (2).pdf", "Bote/von-mama/Stromrechnung.pdf"])
         self.assertFalse(any("Stromrechnung" in l for l in self.logs), "the title says what the letter is: not in the log")
 
     def test_without_a_title_sender_and_time_and_a_stranger_by_their_chat_name(self):

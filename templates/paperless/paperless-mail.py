@@ -24,9 +24,14 @@ The account and the rule are found by what they are, not by a name: the
 account by server and user, the rule by account and recipient, so the
 ones the owner made by hand (paperless-mail.sh, 2026-10-21) are taken
 over, not doubled. The rule takes attachments only, titles a document by
-the mail's subject, gives it no owner (so the family sees it, as a file
-from the consume folder) and flags the mail afterwards; Paperless skips
-flagged mail, so nothing is filed twice.
+the mail's subject and flags the mail afterwards; Paperless skips flagged
+mail, so nothing is filed twice. Who owns what comes in (DATA.md, gap 6;
+owner 2026-11-10: „Was du scannst oder hochlädst, gehört von Anfang an dir"):
+the household's address and the consume folder give it to Dokumente with
+the tag Eingang, seen by no one in the family until Dokumente's sorting
+gives it to its person or to the household (EINGANG); each person's own
+address <login>+doc@<the household address's domain> gives it to
+that person (PERSONEN_REGEL), one rule per person with a Paperless account.
 
 The check is Paperless' own connection test (POST /api/mail_accounts/test/
 with the account's id: Paperless logs in with the stored password), and
@@ -45,7 +50,7 @@ drops to the paperless user; laib's own exec runs `--user paperless`.
 Status file: {"at", "detail", "findings": [{severity, detail, fix}]}.
 Standard library only: it runs in the hooks image and in Paperless'.
 """
-import base64, json, os, sys, time, urllib.error, urllib.request
+import base64, json, os, re, sys, time, urllib.error, urllib.request
 
 E = os.environ
 SECURITY = {"none": 1, "ssl": 2, "starttls": 3}
@@ -72,7 +77,8 @@ def want():
             "action": 4, "action_parameter": None,   # flag the mail: Paperless skips flagged ones
             "assign_title_from": 1,       # the subject is the title
             "assign_correspondent_from": 1,
-            "assign_owner_from_rule": False}  # no owner: the family sees it, like a file from the consume folder
+            "assign_owner_from_rule": False, "assign_tags": [],  # no Eingang (EINGANG_SORTIERT off, or no Dokumente): the family sees it
+            "order": 100}                 # after every person's rule: a person's address holds the household's as a substring
     return account, rule
 
 
@@ -110,7 +116,9 @@ def find(api, account, rule):
     return acc, rul
 
 
-def setup(api, password):
+def setup(api, password, ein=None):
+    """the account, the household's rule and one rule per person; ein: (Dokumente's user id, the tag Eingang)
+    when what comes in is sorted first (eingang()), else None"""
     w = want()
     if w is None:
         print("paperless: kein E-Mail-Eingang (PAPERLESS_MAIL_HOST leer), in Paperless nichts geändert")
@@ -128,18 +136,71 @@ def setup(api, password):
         acc = api("PATCH", "/api/mail_accounts/%d/" % acc["id"], {**account, "password": password})
         print("paperless: Mailkonto", "unverändert" if same else "angepasst", "(Passwort aus dem Secret)")
     body = {**rule, "account": acc["id"]}
-    if rul is None:
-        api("POST", "/api/mail_rules/", body)
-        print("paperless: Regel angelegt:", rule["name"])
-    elif all(rul.get(k) == v for k, v in body.items()):
-        print("paperless: Regel unverändert:", rule["name"])
-    else:
-        api("PATCH", "/api/mail_rules/%d/" % rul["id"], body)
-        print("paperless: Regel angepasst:", rule["name"])
+    if ein:   # Dokumente's until its sorting decides: the family sees nothing of it first
+        body.update({"owner": ein[0], "assign_owner_from_rule": True, "assign_tags": [ein[1]]})
+    regel(api, rul, body)
+    personen_regeln(api, acc["id"], rule, ein)
     # fetch now, in Paperless' worker (uid 1000): the reason not to run mail_fetcher by hand,
     # which under a root podman exec leaves attachments the worker cannot read (2026-10-22)
     api("POST", "/api/mail_accounts/%d/process/" % acc["id"], {})
     print("paperless: Abruf angestoßen, Paperless holt die Mails jetzt")
+
+
+def regel(api, rul, body):
+    """one mail rule as body says: made, left or changed"""
+    if rul is None:
+        api("POST", "/api/mail_rules/", body)
+        print("paperless: Regel angelegt:", body["name"])
+    elif all(sorted(rul.get(k) or []) == sorted(v) if isinstance(v, list) else rul.get(k) == v for k, v in body.items()):
+        print("paperless: Regel unverändert:", body["name"])
+    else:
+        api("PATCH", "/api/mail_rules/%d/" % rul["id"], body)
+        print("paperless: Regel angepasst:", body["name"])
+
+
+# Each person's own address (owner 2026-11-10): <login>+doc@<the household address's domain> (and
+# <login>+doc+<anything>@), which the mailbox, a catch-all for the domain, receives like the household's.
+# Paperless' rule takes what it sends as that person's (the rule's owner), no one else sees it; the tag
+# Eingang lets Dokumente's sorting still give a household document to the household. The filter is
+# IMAP's TO search, a substring: "<login>+doc" takes both and never the person's plain <login>@ mail.
+# anna+doc is in hanna+doc, so the persons' rules run first, the longer login first, before the
+# household's, and Paperless skips a mail an earlier rule of the same fetch took.
+PERSONEN_REGEL = "Dokumente von "
+LOGIN = re.compile(r"[a-z0-9][a-z0-9._-]{0,62}")
+
+
+def adresse(login, haus):
+    """a person's own address beside the household's haus (dokumente@example.org)"""
+    return "%s+doc@%s" % (login, haus.rpartition("@")[2])
+
+
+def personen(api):
+    """the household's people Paperless has an account for: its users in the groups admins or family
+    (Paperless syncs a login's groups from Authelia), {login: user id}; the service users have no group"""
+    gids = {g["id"] for g in api.all("/api/groups/") if g.get("name") in GROUPS}
+    dienste = {k["user"] for k in KUNDEN} | {HAUSHALT["user"]}
+    return {u["username"].lower(): u["id"] for u in api.all("/api/users/")
+            if gids & set(u.get("groups") or []) and LOGIN.fullmatch(u.get("username", "").lower())
+            and u["username"].lower() not in dienste}
+
+
+def personen_regeln(api, konto, haus, ein):
+    """one rule per person on the household's account, made, kept as it should be, or removed when the
+    person is gone; none without a household address (its domain is theirs) or when that address is
+    the whole mailbox (no filter: every mail the household's)"""
+    da = {r["name"]: r for r in api.all("/api/mail_rules/") if r.get("account") == konto and str(r.get("name", "")).startswith(PERSONEN_REGEL)}
+    wer = personen(api) if haus["filter_to"] else {}
+    if not haus["filter_to"]:
+        print("paperless: keine eigenen Adressen der Personen: PAPERLESS_MAIL_FILTER_TO ist leer")
+    for i, (login, uid) in enumerate(sorted(wer.items(), key=lambda x: (-len(x[0]), x[0]))):
+        body = {**{k: v for k, v in haus.items() if k not in ("name", "filter_to", "order")}, "account": konto,
+                "name": PERSONEN_REGEL + login, "filter_to": login + "+doc", "order": i,
+                "owner": uid, "assign_owner_from_rule": True, "assign_tags": [ein[1]] if ein else []}
+        regel(api, da.pop(body["name"], None), body)
+        print("paperless: %s legt per Mail an %s ab" % (login, adresse(login, haus["filter_to"])))
+    for name, r in da.items():
+        api("DELETE", "/api/mail_rules/%d/" % r["id"])
+        print("paperless: Regel entfernt: %s (die Person hat kein Konto mehr)" % name)
 
 
 # The household's groups (templates/auth seeds them in LLDAP; Authelia sends them as the groups
@@ -289,6 +350,78 @@ def haushalt(api, have):
     benutzer(api, have, HAUSHALT, pw, HAUSHALT_RECHTE)
 
 
+# What comes in belongs to someone from the start (DATA.md, gap 6; owner 2026-11-10: „Geteilt wird nur, was
+# die Sortierung als Haushaltsdokument erkennt oder was du teilst"). Two workflows and two tags, made here:
+# - „Eingang": a file from the consume folder (the scanner, Homes, the Bote, the share) is Dokumente's from the
+#   moment Paperless takes it, with the tag Eingang, seen by no one in the family; the household's mail rule
+#   does the same (setup). Dokumente's sorting then gives it to its person (Homes' and the Bote's folder
+#   von-<login>, else the addressee the model reads), to the household, or asks the admins in Homes.
+# - „Für den Haushalt": a document with the tag Haushalt has no owner and no extra rights (the family's, as
+#   before), and loses Eingang. Dokumente sets the tag on what its sorting finds is the household's, and a
+#   person may set it on their own document to share it; the workflow runs as Paperless, so it may take a
+#   person's document out of their hands, which Paperless lets no API user but its owner do.
+# EINGANG_SORTIERT "false" (no Dokumente on this box): neither, and what comes in has no owner, as before.
+EINGANG, HAUSHALT_TAG = "Eingang", "Haushalt"
+EINGANG_ABLAUF, HAUSHALT_ABLAUF = "Eingang", "Für den Haushalt"
+
+
+def tag(api, name):
+    """a tag's id by its name (compared folded), made for everybody (no owner) when missing"""
+    t = next((t for t in api.all("/api/tags/") if str(t.get("name", "")).casefold() == name.casefold()), None)
+    if t is None:
+        t = api("POST", "/api/tags/", {"name": name, "matching_algorithm": 0, "owner": None})
+        print("paperless: Tag %s angelegt" % name)
+    return t["id"]
+
+
+def eingang(api):
+    """the two workflows and their tags; (Dokumente's user id, the tag Eingang) for the mail rules, or None
+    when switched off or Dokumente has no user here (then the workflow „Eingang" goes)"""
+    dok = next((u["id"] for u in api.all("/api/users/") if u.get("username") == DOKUMENTE_USER), None)
+    if E.get("EINGANG_SORTIERT", "true").strip().lower() == "false" or dok is None:
+        for w in api.all("/api/workflows/"):
+            if w.get("name") == EINGANG_ABLAUF:
+                api("DELETE", "/api/workflows/%d/" % w["id"])
+        print("paperless: Neues bekommt keinen Eigentümer, die Familie sieht es sofort (%s)"
+              % ("kein Benutzer dokumente" if dok is None else "EINGANG_SORTIERT ist false"))
+        return None
+    ein, haus = tag(api, EINGANG), tag(api, HAUSHALT_TAG)
+    ablauf(api, {"name": EINGANG_ABLAUF, "order": 1, "enabled": True,
+                 # Consumption Started, from the consume folder; Paperless refuses one without a file name, path or mail rule filter
+                 "triggers": [{"type": 1, "sources": [1], "filter_filename": "*"}],
+                 "actions": [{"type": 1, "assign_owner": dok, "assign_tags": [ein]}]})
+    ablauf(api, {"name": HAUSHALT_ABLAUF, "order": 2, "enabled": True,
+                 "triggers": [{"type": 3, "filter_has_tags": [haus]},                         # Document Updated
+                              {"type": 2, "sources": [1, 2, 3, 4], "filter_has_tags": [haus]}],  # Document Added (a folder Haushalt/)
+                 "actions": [{"type": 2, "remove_all_owners": True, "remove_all_permissions": True, "remove_tags": [ein]}]})
+    return dok, ein
+
+
+def ablauf(api, want):
+    """one workflow as want says, found by name, made again when what want sets differs"""
+    have = [w for w in api.all("/api/workflows/") if w.get("name") == want["name"]]
+    if len(have) == 1 and gleich(have[0], want):
+        print("paperless: Ablauf %s unverändert" % want["name"])
+        return
+    for w in have:
+        api("DELETE", "/api/workflows/%d/" % w["id"])
+    api("POST", "/api/workflows/", want)
+    print("paperless: Ablauf %s %s" % (want["name"], "erneuert" if have else "angelegt"))
+
+
+def gleich(have, want):
+    """whether have holds what want sets (a list of ids in any order, a list of objects in order)"""
+    if isinstance(want, dict):
+        return isinstance(have, dict) and all(gleich(have.get(k), v) for k, v in want.items())
+    if isinstance(want, list):
+        if not isinstance(have, list) or len(have) != len(want):
+            return False
+        if all(not isinstance(x, (dict, list)) for x in want):
+            return sorted(have, key=str) == sorted(want, key=str)
+        return all(gleich(h, w) for h, w in zip(have, want))
+    return have == want
+
+
 def dokumente(api, have):
     """kept for the tests and the README: Paperless' side of its clients"""
     kunden(api, have)
@@ -425,8 +558,25 @@ def check(api, status):
     documents it fetched or was given but could not file"""
     r = inbox(api)
     if not any("lehnt den Admin" in f["detail"] for f in r["findings"]):
-        r["findings"] += failed_consumes(api)
+        r["findings"] += failed_consumes(api) + wartend(api)
     return r
+
+
+def wartend(api, jetzt=None):
+    """a finding for documents still in the Eingang a day after they came: no one in the family sees them
+    until Dokumente's sorting or an admin's answer in Homes gives them to someone"""
+    seit = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((jetzt or time.time()) - 86400))
+    try:
+        n = (api("GET", "/api/documents/?tags__name__iexact=%s&added__lt=%s&fields=id&page_size=1" % (EINGANG, seit)) or {}).get("count") or 0
+    except (OSError, ValueError):
+        return []
+    if not n:
+        return []
+    return [{"severity": "gelb",
+             "detail": "%d neue%s Dokument%s seit über einem Tag noch niemandem zugeordnet; bis dahin sieht %s niemand in der Familie"
+                       % (n, "s" if n == 1 else "", "" if n == 1 else "e", "es" if n == 1 else "sie"),
+             "fix": "In Homes unter Deine Aufgaben (als Admin) „Wem gehört dieser Scan?“ beantworten; steht dort nichts, "
+                    "läuft Dokumente (Scannen) nicht oder sein Hausmodell antwortet nicht: laib status scan"}]
 
 
 def inbox(api):
@@ -517,7 +667,7 @@ if __name__ == "__main__":
             kunden(api, have)
             haushalt(api, have)
             befunde(api)
-            setup(api, E.get("LAIB_SECRET_PAPERLESS_MAIL_PASSWORD", ""))
+            setup(api, E.get("LAIB_SECRET_PAPERLESS_MAIL_PASSWORD", ""), eingang(api))
     else:                 # inside the Paperless container: its own admin from its environment
         api = API(E.get("PAPERLESS_API", "http://127.0.0.1:8000"), E.get("PAPERLESS_ADMIN_USER", "admin"), E.get("PAPERLESS_ADMIN_PASSWORD", ""))
         status = E.get("LAIB_STATUS_FILE", "/usr/src/paperless/data/laib-status.json")

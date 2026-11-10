@@ -31,7 +31,13 @@ PAPERLESS_MAIL_HOST: ""                 # e.g. imap.strato.de
 PAPERLESS_MAIL_PORT: "993"
 PAPERLESS_MAIL_SECURITY: ssl            # ssl | starttls | none
 PAPERLESS_MAIL_USER: ""                 # the mailbox's login, e.g. webmaster@example.org
-PAPERLESS_MAIL_FILTER_TO: ""            # only mail to this address (an alias of the mailbox); empty: every mail in the folder
+PAPERLESS_MAIL_FILTER_TO: ""            # only mail to this address (an alias of the mailbox); empty: every mail in the folder, and no person gets an own address
+# each person with a Paperless account also gets <login>+doc@<this address's domain> (and <login>+doc+<anything>@):
+# filed as theirs. The mailbox must receive it: a catch-all for the domain does; else add the alias at the mail provider.
 PAPERLESS_MAIL_FOLDER: INBOX
 PAPERLESS_MAIL_PASSWORD: !secret PAPERLESS_MAIL_PASSWORD
 NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN       # the mail receipt through the Bote; empty without the Bote, then no message
+# DATA.md, gap 6: what comes in through the consume folder and the household's address is Dokumente's (tag Eingang),
+# seen by no one in the family, until Dokumente's sorting gives it to its person or the household. "false" (a box
+# without the scan service, nothing would sort it): no owner, the family sees it at once, as before.
+EINGANG_SORTIERT: "true"

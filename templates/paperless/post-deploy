@@ -2,7 +2,8 @@
 # The household's groups and the mail inbox from values (#231, #521):
 # paperless-mail.py makes the groups admins and family with their
 # permissions, Paperless' side of Dokumente (ADR 0028: its user, its token,
-# the workflow „Dokument hinzugefügt“), makes or updates Paperless' IMAP
+# the workflow „Dokument hinzugefügt“), the workflows „Eingang“ and „Für den
+# Haushalt“ (DATA.md gap 6), makes or updates Paperless' IMAP
 # account and its rule through Paperless' API, then writes the status laib
 # shows. Idempotent; an empty PAPERLESS_MAIL_HOST changes nothing of
 # Paperless' mail.
