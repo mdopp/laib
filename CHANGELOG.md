@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.19.0](https://github.com/mdopp/laib/compare/v2.18.0...v2.19.0) (2026-11-10)
+
+
+### Features
+
+* **template:** the archive reaches Immich and reads the household's address book for Umfeld ([#1149](https://github.com/mdopp/laib/issues/1149)) ([f8b9445](https://github.com/mdopp/laib/commit/f8b94453d8e41fde8b003b059a3bb991b1cd8e93))
+
 ## [2.18.0](https://github.com/mdopp/laib/compare/v2.17.0...v2.18.0) (2026-11-09)
 
 
