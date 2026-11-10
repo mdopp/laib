@@ -23,8 +23,10 @@ Signal's day or Telegram's 48 hours; past them, or on any failure, one log
 line and nothing else.
 POST /ablage (#521) is the Bote's filing: the laib-ablage plugin in Hermes
 sends a photo or PDF someone sent with "ablegen", with the same bearer, and
-this writes it into Paperless' consume folder as Bote/<sender>/<title>.<ext>
-(Paperless makes the folders tags). Hermes runs as uid 10000 and may not
+this writes it into Paperless' consume folder as Bote/von-<login>/<title>.<ext>
+for a person of box.yml people, Bote/<chat name>/… for anyone else
+(Paperless makes the folders tags; Dokumente gives a von-<login> document
+to that person, DATA.md gap 6). Hermes runs as uid 10000 and may not
 write into the share; this container is the box's user, as Homes is.
 Stdlib only: it runs in the stock Hermes image (templates/bote)."""
 import base64, hmac, json, os, re, shutil, subprocess, sys, threading, time, urllib.request
@@ -224,20 +226,28 @@ def plain(name, fallback):
 
 
 def sender(cfg, platform, who, name):
-    """the person from people.json whose channel this is, else the chat's name for them"""
+    """(their name, their login): the person from people.json whose channel this is (box.yml people:
+    the login), else the chat's name for them and no login"""
     try:
         with open(cfg.people) as f:
             for person, channels in json.load(f).items():
                 if f"{platform}:{who}" in channels:
-                    return person.capitalize()
+                    return person.capitalize(), person
     except (OSError, ValueError, AttributeError):
         pass
-    return plain(name, "Unbekannt")
+    return plain(name, "Unbekannt"), None
+
+
+def folder_of(person, login):
+    """the consume folder's subfolder (DATA.md, gap 6): a person's von-<login>, which Paperless makes a tag
+    and Dokumente reads as whose the document is from the start; a stranger's their chat name (whose it
+    is, Dokumente's sorting decides; no one in the family sees it until then)"""
+    return "von-" + plain(login, "Unbekannt") if login else person
 
 
 def file_in(cfg, data, title, person):
-    """writes data into the consume folder, whole or not at all: staged under ._* (Paperless
-    ignores it), then renamed to a free name; the title it got"""
+    """writes data into the consume folder's Bote/<person>/ (person: folder_of), whole or not at all:
+    staged under ._* (Paperless ignores it), then renamed to a free name; the title it got"""
     ext = kind(data)
     if ext is None:
         raise ValueError("nur Fotos (JPG, PNG, GIF, WebP) und PDFs")
@@ -392,10 +402,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(400, {"fehler": "erwartet: {titel, plattform, absender, name, daten}"})
         if not data or len(data) > cfg.max_file:
             return self.reply(413, {"fehler": "leer oder zu groß (höchstens 25 MB)"})
-        person = sender(cfg, platform, who, str(msg.get("name", "")))
+        person, login = sender(cfg, platform, who, str(msg.get("name", "")))
         title = plain(str(msg.get("titel", "")), "Dokument von %s %s" % (person, time.strftime("%Y-%m-%d %H-%M")))
         try:
-            got = file_in(cfg, data, title, person)
+            got = file_in(cfg, data, title, folder_of(person, login))
         except ValueError as e:
             return self.reply(415, {"fehler": str(e)})
         except FileNotFoundError:

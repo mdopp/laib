@@ -359,11 +359,14 @@ the plugin `laib-ablage` (`ablage_plugin.py`) marks such a message in
 Hermes' `pre_gateway_dispatch`, and once Hermes let the sender in
 (`post_gateway_admission`) hands each file to bote-notify's `POST /ablage`
 on the pod's loopback, with notify's bearer. bote-notify writes it into
-Paperless' consume folder as `Bote/<sender>/<title>.<ext>` (Hermes runs as
+Paperless' consume folder as `Bote/von-<login>/<title>.<ext>` (Hermes runs as
 uid 10000 and may not write into the share), and Paperless makes the two
-folders tags. The sender is the person from box.yml `people` whose channel
-it came on, else their chat name; the title is what they wrote besides the
-word, else sender and time. The person reads "Liegt in Paperless, Titel
+folders tags. The login is the person's from box.yml `people` whose channel
+it came on; Dokumente gives the document to that person, and the family sees
+it only when Dokumente's sorting finds it is the household's or the person
+shares it (laib docs/DATA.md, gap 6). Anyone else's lands under their chat
+name, `Bote/<name>/`, and the sorting decides whose it is. The title is what
+they wrote besides the word, else sender and time. The person reads "Liegt in Paperless, Titel
 „Stromrechnung“"; the model never sees the message. Only photos (JPG, PNG,
 GIF, WebP) and PDFs, up to 25 MB, as Homes' upload.
 

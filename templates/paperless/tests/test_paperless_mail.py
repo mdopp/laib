@@ -30,7 +30,7 @@ class Fake:
         # ADR 0028: Paperless' users with their passwords, its tokens (one per user, made once), workflows, documents
         self.users, self.workflows, self.documents = users if users is not None else [], workflows or [], documents or []
         self.types = types if types is not None else []   # laib#893: the document types of medical records
-        self.passwords, self.tokens, self.bulk = {}, {}, []
+        self.passwords, self.tokens, self.bulk, self.tags = {}, {}, [], []
         fake = self
 
         class H(BaseHTTPRequestHandler):
@@ -55,7 +55,7 @@ class Fake:
                 fake.queries.append((path, query, self.headers.get("Accept", "")))
                 coll = {"/api/mail_accounts/": fake.accounts, "/api/mail_rules/": fake.rules, "/api/groups/": fake.groups,
                         "/api/custom_fields/": fake.fields, "/api/config/": fake.config, "/api/users/": fake.users,
-                        "/api/workflows/": fake.workflows, "/api/document_types/": fake.types}
+                        "/api/workflows/": fake.workflows, "/api/document_types/": fake.types, "/api/tags/": fake.tags}
                 if path == "/api/users/" and method == "POST" or path.startswith("/api/users/") and method == "PATCH":
                     if "password" in body:   # Paperless keeps it hashed and answers with stars
                         fake.passwords[body.get("username") or next(u["username"] for u in fake.users if u["id"] == int(path.split("/")[3]))] = body.pop("password")
@@ -68,6 +68,8 @@ class Fake:
                     return self.send(200, {"token": fake.tokens.setdefault(body["username"], "tok-%s-%d" % (body["username"], len(fake.tokens) + 1))})
                 if path == "/api/documents/" and method == "GET":
                     owned = [d for d in fake.documents if d.get("owner") is not None] if "owner__isnull=false" in query else fake.documents
+                    if "tags__name__iexact=Eingang" in query:   # gap 6: what still waits in the Eingang a day after
+                        owned = [d for d in fake.documents if d.get("eingang_alt")]
                     if "full_perms=true" not in query:
                         owned = [{k: v for k, v in d.items() if k != "permissions"} for d in owned]
                     return self.send(200, {"count": len(owned), "next": None, "results": owned})
@@ -397,7 +399,7 @@ class Dokumente(unittest.TestCase):
             self.assertFalse(c.startswith("delete_") or "mail" in c or "workflow" in c or "group" in c or c == "change_user", c)
         self.assertEqual(fake.passwords["dokumente"], "dok-pw")
         self.assertIn("laib-secret: PAPERLESS_TOKEN=" + fake.tokens["dokumente"], r.stdout.splitlines())
-        [w] = fake.workflows
+        [w] = [x for x in fake.workflows if x["name"] == "Dokument hinzugefügt"]
         self.assertEqual((w["name"], w["enabled"], [t["type"] for t in w["triggers"]]), ("Dokument hinzugefügt", True, [2]))
         assign, hook = w["actions"]
         self.assertEqual((assign["type"], assign["assign_view_users"], assign["assign_change_users"]), (1, [u["id"]], [u["id"]]))
@@ -426,15 +428,15 @@ class Dokumente(unittest.TestCase):
     def test_a_workflow_that_differs_is_made_again(self):
         fake = Fake()
         self.setup(fake)
-        fake.workflows[0]["actions"][1]["webhook"]["headers"] = {"X-Dokumente-Token": "old"}
+        next(x for x in fake.workflows if x["name"] == "Dokument hinzugefügt")["actions"][1]["webhook"]["headers"] = {"X-Dokumente-Token": "old"}
         self.setup(fake, LAIB_SECRET_DOKUMENTE_WEBHOOK_TOKEN="hook-new")
-        [w] = fake.workflows
+        [w] = [x for x in fake.workflows if x["name"] == "Dokument hinzugefügt"]
         self.assertEqual(w["actions"][1]["webhook"]["headers"], {"X-Dokumente-Token": "hook-new"})
 
     def test_without_the_hook_token_no_workflow(self):
         fake = Fake()
         r = self.setup(fake, LAIB_SECRET_DOKUMENTE_WEBHOOK_TOKEN="")
-        self.assertEqual(fake.workflows, [])
+        self.assertEqual([w["name"] for w in fake.workflows], ["Eingang", "Für den Haushalt"], "the hourly run sorts what comes in")
         self.assertIn("erst zur vollen Stunde", r.stdout)
         self.assertIn("laib-secret: PAPERLESS_TOKEN=", r.stdout, "the hourly run still gets its token")
 
@@ -462,7 +464,7 @@ class Haushalt(unittest.TestCase):
         self.assertEqual(fake.passwords["homes"], "homes-pw")
         self.assertIn("laib-secret: HOMES_PAPERLESS_TOKEN=" + fake.tokens["homes"], r.stdout.splitlines())
         # a person's document stays theirs: homes neither in the workflow nor on it
-        self.assertNotIn(u["id"], fake.workflows[0]["actions"][0]["assign_view_users"])
+        self.assertNotIn(u["id"], next(w for w in fake.workflows if w["name"] == "Dokument hinzugefügt")["actions"][0]["assign_view_users"])
         self.assertNotIn(u["id"], fake.documents[0]["permissions"]["view"]["users"])
         # the next apply with its own token: nothing handed back
         r = self.setup(fake, LAIB_SECRET_HOMES_PAPERLESS_TOKEN=fake.tokens["homes"], LAIB_SECRET_PAPERLESS_TOKEN=fake.tokens["dokumente"])
@@ -544,6 +546,100 @@ class PaperlessAI(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("AI_ENABLED", r.stderr)
         self.assertEqual(fake.calls, [])
+
+
+class Eingang(unittest.TestCase):
+    """DATA.md, gap 6 (owner 2026-11-10): what comes in is someone's from the start. The consume folder and
+    the household's address give it to Dokumente with the tag Eingang (no one in the family sees it); each
+    person's own address <login>+doc@ gives it to that person; the tag Haushalt makes a document the
+    household's (no owner), through a workflow that runs as Paperless."""
+    setUp, run_setup = PaperlessMail.setUp, PaperlessMail.run_setup
+    KEYS = Dokumente.KEYS
+    GROUPS = [{"id": 1, "name": "admins", "permissions": []}, {"id": 2, "name": "family", "permissions": []}]
+
+    def people(self):
+        return [{"id": 11, "username": "mdopp", "groups": [1]}, {"id": 12, "username": "anna", "groups": [2]},
+                {"id": 13, "username": "hanna", "groups": [2]}, {"id": 14, "username": "admin", "groups": []}]
+
+    def setup(self, fake, **extra):
+        r = self.run_setup(fake, {**MAIL, **self.KEYS, **extra})
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return r
+
+    def test_the_consume_folder_and_the_households_address_are_dokumentes_first(self):
+        fake = Fake(groups=list(self.GROUPS), users=self.people())
+        self.setup(fake)
+        dok = next(u["id"] for u in fake.users if u["username"] == "dokumente")
+        tags = {t["name"]: t["id"] for t in fake.tags}
+        self.assertEqual(set(tags), {"Eingang", "Haushalt"})
+        self.assertTrue(all(t["owner"] is None for t in fake.tags), "the tags are everybody's")
+        w = {x["name"]: x for x in fake.workflows}
+        ein = w["Eingang"]
+        self.assertEqual(ein["triggers"], [{"type": 1, "sources": [1]}], "Consumption Started, the consume folder only")
+        self.assertEqual(ein["actions"], [{"type": 1, "assign_owner": dok, "assign_tags": [tags["Eingang"]]}],
+                         "Dokumente owns it, no view for anyone else")
+        hh = w["Für den Haushalt"]
+        self.assertEqual([t["type"] for t in hh["triggers"]], [3, 2])
+        self.assertTrue(all(t["filter_has_tags"] == [tags["Haushalt"]] for t in hh["triggers"]))
+        self.assertEqual(hh["actions"], [{"type": 2, "remove_all_owners": True, "remove_all_permissions": True,
+                                          "remove_tags": [tags["Eingang"]]}])
+        haus = next(r for r in fake.rules if r["filter_to"] == "dokumente@example.org")
+        self.assertEqual((haus["owner"], haus["assign_owner_from_rule"], haus["assign_tags"], haus["order"]),
+                         (dok, True, [tags["Eingang"]], 100))
+        # a second apply writes nothing of it
+        fake.calls.clear()
+        r = self.setup(fake, LAIB_SECRET_PAPERLESS_TOKEN=fake.tokens["dokumente"])
+        self.assertEqual([c for c in fake.writes() if c[1] != "/api/token/" and not c[1].startswith("/api/mail_accounts/")], [], r.stdout)
+
+    def test_each_person_has_an_own_address_that_is_theirs(self):
+        fake = Fake(groups=list(self.GROUPS), users=self.people())
+        r = self.setup(fake)
+        mine = {x["name"]: x for x in fake.rules if x["name"].startswith("Dokumente von ")}
+        self.assertEqual(set(mine), {"Dokumente von mdopp", "Dokumente von anna", "Dokumente von hanna"},
+                         "the people in admins or family; not admin (no group), not the service users")
+        m = mine["Dokumente von mdopp"]
+        self.assertEqual((m["filter_to"], m["owner"], m["assign_owner_from_rule"], m["account"], m["action"], m["attachment_type"]),
+                         ("mdopp+doc", 11, True, 1, 4, 1), "a substring: also mdopp+doc+anything@, never mdopp@")
+        self.assertEqual(m["assign_tags"], [next(t["id"] for t in fake.tags if t["name"] == "Eingang")],
+                         "the sorting may still give a household document to the household")
+        self.assertIn("mdopp legt per Mail an mdopp+doc@example.org ab", r.stdout)
+        # the persons' rules before the household's, the longer login first: anna+doc is in hanna+doc
+        order = sorted(fake.rules, key=lambda x: x["order"])
+        self.assertEqual([x["name"] for x in order], ["Dokumente von hanna", "Dokumente von mdopp", "Dokumente von anna",
+                                                      "Dokumente an dokumente@example.org"])
+        # a person gone: their rule goes; a new one: theirs comes
+        fake.users[:] = [u for u in fake.users if u["username"] != "anna"] + [{"id": 15, "username": "ben", "groups": [2]}]
+        r = self.setup(fake)
+        self.assertEqual({x["name"] for x in fake.rules if x["name"].startswith("Dokumente von ")},
+                         {"Dokumente von mdopp", "Dokumente von hanna", "Dokumente von ben"})
+        self.assertIn("Regel entfernt: Dokumente von anna", r.stdout)
+
+    def test_without_a_household_address_no_persons_addresses(self):
+        fake = Fake(groups=list(self.GROUPS), users=self.people())
+        r = self.setup(fake, PAPERLESS_MAIL_FILTER_TO="")
+        self.assertEqual([x["name"] for x in fake.rules], ["Dokumente an webmaster@example.org"])
+        self.assertIn("keine eigenen Adressen", r.stdout)
+
+    def test_switched_off_everything_comes_in_for_the_family_as_before(self):
+        fake = Fake(groups=list(self.GROUPS), users=self.people())
+        self.setup(fake)
+        self.setup(fake, EINGANG_SORTIERT="false")
+        self.assertNotIn("Eingang", [w["name"] for w in fake.workflows])
+        haus = next(r for r in fake.rules if r["filter_to"] == "dokumente@example.org")
+        self.assertEqual((haus["assign_owner_from_rule"], haus["assign_tags"]), (False, []))
+        self.assertEqual(next(r for r in fake.rules if r["name"] == "Dokumente von mdopp")["owner"], 11,
+                         "a person's own address stays theirs")
+
+    def test_a_document_waiting_a_day_is_a_yellow_finding(self):
+        fake = Fake(documents=[{"id": 1, "owner": 3, "eingang_alt": True}, {"id": 2, "owner": None}])
+        r = self.run_setup(fake, MAIL)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        [f] = self.status()["findings"]
+        self.assertEqual(f["severity"], "gelb")
+        self.assertIn("1 neues Dokument seit über einem Tag noch niemandem zugeordnet", f["detail"])
+        self.assertIn("Wem gehört dieser Scan?", f["fix"])
+
+    status = PaperlessMail.status
 
 
 if __name__ == "__main__":

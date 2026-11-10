@@ -5,12 +5,13 @@ through Authelia's OIDC; the local admin stays as break-glass. Ways a
 document gets in, each ending in Paperless with its text recognised and,
 through Homes' library, findable in Homes and by the Bote (haus#13):
 
-| Way | Where it lands | Title, tags |
-|---|---|---|
-| E-mail to the inbox address (`PAPERLESS_MAIL_FILTER_TO`) | Paperless fetches it itself | the subject; the attachments only |
-| The Bote, a photo or PDF with "ablegen" or "archivieren" | `paperless-consume/Bote/<sender>/` | the words besides "ablegen", else sender and time; tags Bote and the sender |
-| Homes, "Dokument ablegen" (page and app) | `paperless-consume/` | the file's name |
-| The PC: File Browser or the network drive | `paperless-consume/`, any subfolder | the file's name; each folder on the way is a tag |
+| Way | Where it lands | Title, tags | Whose, from the start |
+|---|---|---|---|
+| E-mail to the inbox address (`PAPERLESS_MAIL_FILTER_TO`) | Paperless fetches it itself | the subject; the attachments only; Eingang | Dokumente's, until its sorting decides |
+| E-mail to a person's own address `<login>+doc@<domain>` | Paperless fetches it itself | as above | the person's |
+| The Bote, a photo or PDF with "ablegen" or "archivieren" | `paperless-consume/Bote/von-<login>/` (a stranger: `Bote/<chat name>/`) | the words besides "ablegen", else sender and time; tags Bote, von-<login>, Eingang | the person's (Dokumente hands it over) |
+| Homes, "Dokument ablegen" (page and app) | `paperless-consume/von-<login>/` | the file's name; von-<login>, Eingang | the person's (Dokumente hands it over) |
+| The scanner, the PC: File Browser or the network drive | `paperless-consume/`, any subfolder | the file's name; each folder on the way is a tag; Eingang | Dokumente's, until its sorting decides |
 
 ## Logins and groups (#231)
 
@@ -36,8 +37,36 @@ this Paperless has are given, so an older or newer one still applies.
 Paperless sets a login's groups when it logs in: an account that logged in
 before the groups existed gets them on its next login (log out, log in
 again). A document belongs to who uploaded it through the web page and is
-then only theirs (share it, or give it no owner); mail and the consume
-folder file without an owner, for the whole family.
+then only theirs (share it, give it the tag Haushalt, or give it no owner);
+mail and the consume folder file as the next section says.
+
+## Whose a new document is (DATA.md, gap 6)
+
+The owner, 2026-11-10: „Was du scannst oder hochlädst, gehört von Anfang
+an dir. Geteilt wird nur, was die Sortierung als Haushaltsdokument erkennt
+oder was du teilst.“ post-deploy makes two workflows and two tags (owner
+`null`, everybody's):
+
+- **„Eingang“** (Consumption Started, the consume folder): the document is
+  owned by `dokumente` and gets the tag `Eingang`; no one in the family sees
+  it. The household's mail rule does the same (its owner `dokumente`,
+  `assign_owner_from_rule`, the tag). Dokumente's sorting (mdopp/dokumente,
+  `ordnen/zuteilen.py`) then gives it to its person: the folder `von-<login>`
+  Homes and the Bote write (the tag of that name), else the addressee its
+  model reads; or to the household; and when it cannot tell, it stays
+  Dokumente's and Homes asks the admins „Wem gehört dieser Scan?“.
+- **„Für den Haushalt“** (Document Updated, and Document Added): a document
+  with the tag `Haushalt` loses its owner, every extra right and `Eingang`:
+  the family's, as every document without an owner. Dokumente sets the tag
+  on what its sorting finds is the household's; anyone may set it on their
+  own document to share it with the family (a folder `Haushalt/` in the
+  consume folder does the same). The workflow runs as Paperless, which may
+  take a document out of its owner's hands; through the API only the owner
+  may (or a superuser).
+
+`EINGANG_SORTIERT: "false"` (a box without the scan service) makes neither
+workflow and files what comes in without an owner, as before. A document
+still in the Eingang a day after it came is a yellow finding in diag.
 
 ## The consume folder from a PC
 
@@ -62,11 +91,34 @@ stay behind.
 
 Paperless fetches one IMAP mailbox every ten minutes and files the
 attachments of mail addressed to `PAPERLESS_MAIL_FILTER_TO`, with the
-subject as the title and no owner (the whole family sees them); then it
+subject as the title, Dokumente's until its sorting decides (above); then it
 flags the mail, and a flagged mail is never fetched again. A mailbox whose
 address is an alias of another (Strato: `dokumente@` an alias of
 `webmaster@`) is the usual case: the login is the real mailbox, the filter
 the alias, and nothing else in that mailbox is touched.
+
+**Each person's own address** (owner 2026-11-10): every person with a
+Paperless account (a user in `admins` or `family`, made at their first
+login) gets a rule „Dokumente von <login>“ for
+`<login>+doc@<the domain of PAPERLESS_MAIL_FILTER_TO>`, for example
+`mdopp+doc@example.org`: what arrives there is that person's (the rule's
+owner, `assign_owner_from_rule`), no one else's, with the tag Eingang so
+Dokumente may still give a household document to the family. The rule's
+filter is `<login>+doc`, because IMAP's TO search is a substring: it takes
+`mdopp+doc+mueller-sanitaer@` too, and never mdopp's plain `mdopp@` mail.
+`anna+doc` is in `hanna+doc`, so the persons' rules run first (the longer
+login first), before the household's, and Paperless skips a mail an
+earlier rule of the same fetch took.
+
+**The one delivery condition:** these addresses reach Paperless only
+through the mailbox's catch-all for the domain. If a real mailbox
+`<login>@<domain>` exists at a provider that does plus-addressing, the
+provider delivers `<login>+…@` there instead, and Paperless never sees it:
+then add a forwarding or alias rule at the provider that sends
+`<login>+doc…@` to the Paperless mailbox. A person without a Paperless account yet has no rule
+(their mail is not fetched); the apply after their first login makes it, and
+a person gone loses theirs. Without `PAPERLESS_MAIL_FILTER_TO` no person gets
+an address. Homes shows each person theirs on its Dokumente page.
 
 post-deploy makes the account and the rule through Paperless' API on every
 apply, from the values (`paperless-mail.py setup`), and takes over an
