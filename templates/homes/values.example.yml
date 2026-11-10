@@ -21,7 +21,7 @@ HAUSHALT_TOKEN: !secret HOMES_HAUSHALT_TOKEN
 RADICALE_ADDRESSBOOK: ""                               # the address book written to; empty: "Haushalt"
 RADICALE_PUBLIC_URL: https://caldav.${DOMAIN}           # Radicale as phones reach it (haus#66): its web page and the CalDAV addresses to copy
 PAPERLESS_URL: http://host.containers.internal:8000    # document search for the Haushalt (haus#11)
-PAPERLESS_TOKEN: !secret HOMES_PAPERLESS_TOKEN
+PAPERLESS_TOKEN: !secret HOMES_PAPERLESS_TOKEN         # minted by paperless' post-deploy for its read-only user homes
 PAPERLESS_PUBLIC_URL: https://paperless.${DOMAIN}      # where a found document opens
 PAPERLESS_LAN_ONLY: "true"                             # paperless' route is internal (haus#68): "In Paperless öffnen" says "nur zu Hause im WLAN"
 IMMICH_URL: http://host.containers.internal:2283       # Immich (homes 2026-11-05): its named people and their faces for the contacts

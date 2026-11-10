@@ -217,6 +217,13 @@ on every apply, each step changing only what differs:
 - **Documents a person owns** (an upload through the web page is only
   theirs): `dokumente` gets view and change on them, merged, so the owner's
   and everyone else's stay.
+- **Homes' user `homes`** (docs/DATA.md, gap 2): view documents, notes,
+  tags, correspondents, document types and custom fields, nothing else; no
+  group, not in the workflow, so it sees what the household shares (no
+  owner, or shared with it) and never a person's „nur für mich“. Its
+  password is the box's `PAPERLESS_HOMES_PASSWORD`; its token is handed
+  back as `HOMES_PAPERLESS_TOKEN`, Homes' secret, replacing a person's token
+  pasted there before. Homes and the Bote read Paperless only with it.
 - **The record moves once**: `laib-vertraege.json` from Paperless' data
   folder to `${DATA_DIR}/dokumente` (backed up), while Dokumente has none; the old file stays
   for a rollback.

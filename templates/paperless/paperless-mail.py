@@ -271,16 +271,34 @@ def kunden(api, have):
         besitz(api, uids)
 
 
+# Homes' own Paperless user (DATA.md, gap 2): Homes and, through it, the Bote and every family member
+# see Paperless as this user does, so it may only read, and only what the household shares: the
+# documents without an owner and those shared with it. Never a person's token: that showed one
+# person's „nur für mich“ documents to the whole family. Its token goes to Homes as
+# HOMES_PAPERLESS_TOKEN; it is in no group and gets nothing from the workflow.
+HAUSHALT = {"user": "homes", "name": "Homes", "passwort": "PAPERLESS_HOMES_PASSWORD", "token": "HOMES_PAPERLESS_TOKEN"}
+HAUSHALT_RECHTE = ["view_document", "view_note", "view_tag", "view_correspondent", "view_documenttype", "view_customfield"]
+
+
+def haushalt(api, have):
+    """Homes' read-only user and its token; without its password (an older box) left out and said"""
+    pw = E.get("LAIB_SECRET_" + HAUSHALT["passwort"], "")
+    if not pw:
+        print("paperless: kein %s, Homes nicht eingerichtet" % HAUSHALT["passwort"])
+        return
+    benutzer(api, have, HAUSHALT, pw, HAUSHALT_RECHTE)
+
+
 def dokumente(api, have):
     """kept for the tests and the README: Paperless' side of its clients"""
     kunden(api, have)
 
 
-def benutzer(api, have, k, pw):
-    """one client's user (no administrator, exactly its rights, the box's password) and its token,
-    printed as laib-secret when it differs from the one the box has"""
+def benutzer(api, have, k, pw, rechte=DOKUMENTE_RECHTE):
+    """one client's user (no administrator, no group, exactly its rights, the box's password) and its
+    token, printed as laib-secret when it differs from the one the box has"""
     want = {"is_superuser": False, "is_staff": False, "is_active": True, "groups": [],
-            "user_permissions": sorted(c for c in DOKUMENTE_RECHTE if c in have)}
+            "user_permissions": sorted(c for c in rechte if c in have)}
     u = next((x for x in api.all("/api/users/") if x.get("username") == k["user"]), None)
     if u is None:
         u = api("POST", "/api/users/", {"username": k["user"], "first_name": k["name"], "password": pw, **want})
@@ -497,6 +515,7 @@ if __name__ == "__main__":
             have = groups(api)
             config(api)
             kunden(api, have)
+            haushalt(api, have)
             befunde(api)
             setup(api, E.get("LAIB_SECRET_PAPERLESS_MAIL_PASSWORD", ""))
     else:                 # inside the Paperless container: its own admin from its environment

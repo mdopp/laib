@@ -73,7 +73,7 @@ laib.yml) belong to whichever account the owner made them in; the
 | file-share | per person (Samba, File Browser) | yes: one shared tree | root: all | approval |
 | vaultwarden | per person, SSO | no (vaults are encrypted per person) | admin page: accounts, not contents | approval |
 | archiv | one instance per person | no | root: nothing while the vault is closed (with listed exceptions), everything while open | sealed |
-| homes | per person, forward-auth | by design for the household parts; Paperless as one account sees it (gap 2); see flows | root: all of `${DATA_DIR}/homes` | none |
+| homes | per person, forward-auth | by design for the household parts; Paperless as its read-only user `homes` sees it; see flows | root: all of `${DATA_DIR}/homes` | none |
 | bote | per messenger number | **yes: one shared memory** | root: all | none |
 | scan (Dokumente) | none of its own | files into Paperless without an owner | root: all | none |
 | home-assistant | per person, OIDC | yes: one house | admins group are HA admins | none |
@@ -136,7 +136,8 @@ laib.yml) belong to whichever account the owner made them in; the
   (templates/paperless/paperless.container, paperless-mail.py `GROUPS`).
   The local admin (`PAPERLESS_ADMIN_USER`) is break-glass and a
   superuser. The service user `dokumente` (no administrator) belongs to
-  the scan service (ADR 0028).
+  the scan service (ADR 0028); the service user `homes` (read only, no
+  group) to Homes.
 - **Separation:** Paperless separates by a document's *owner*. A
   document without an owner is seen by everyone with `view_document`,
   which the `family` group has. **Most ways in give no owner:**
@@ -155,10 +156,11 @@ laib.yml) belong to whichever account the owner made them in; the
     document a person owns**, and the workflow „Dokument hinzugefügt“
     grants it the same on every new document. So the scan service reads
     private documents too, by design (it reads contracts and invoices).
-  - `HOMES_PAPERLESS_TOKEN` — the account whose token the owner pastes
-    („Mein Profil → API-Token“, templates/homes/laib.yml `hilfe:`), in
-    practice the owner's. Homes mirrors what that user sees into
-    `${DATA_DIR}/homes-dokumente` for its memory library
+  - `HOMES_PAPERLESS_TOKEN` — user `homes`, minted by post-deploy
+    (paperless-mail.py `HAUSHALT`): view rights only, no group, not in
+    the workflow, so it sees the documents without an owner and those
+    shared with it, never a person's „nur für mich“. Homes mirrors what
+    it sees into `${DATA_DIR}/homes-dokumente` for its memory library
     (templates/homes/homes-documents-export.service). See Homes.
   - `PAPERLESS_MAIL_PASSWORD` — the household's document mailbox, not a
     person's.
@@ -354,10 +356,10 @@ and the app's API (`/napi/`); references below are to mdopp/homes.
   - `HOMES_RADICALE_PASSWORD` — Radicale's `homes`: owns the household's
     books; reads and writes every person's `privat-*` and
     `handy-kontakte`, reads their mirrors (radicale above).
-  - `HOMES_PAPERLESS_TOKEN` — the account the owner pasted; GET only plus
-    Paperless' document chat (internal/paperless/paperless.go,
-    vertraege.go). **Every family member sees what this one account sees**
-    — see the gaps.
+  - `HOMES_PAPERLESS_TOKEN` — Paperless' read-only user `homes` (minted
+    by paperless' post-deploy); GET only plus Paperless' document chat
+    (internal/paperless/paperless.go, vertraege.go). Every family member
+    sees what the household shares in Paperless, nothing a person owns.
   - `HOMES_HA_TOKEN` — HA user `homes`, an administrator: states,
     history, cameras, service calls, Assist debug runs (internal/ha/).
   - `HOMES_JELLYFIN_KEY` (an administrator's: every person's watched
@@ -490,7 +492,7 @@ design and not listed again.
 | 2 | Every household contact becomes a person (name, birthday) in the owner's Immich | household book → owner's Immich | homes internal/gesichter/abgleich.go |
 | 3 | A name the owner gives a person in Immich renames the household contact („Automatisch zurück“) | owner's Immich → household book → every phone | homes internal/gesichter/abgleich.go `folgen` (CorrectShared) |
 | 4 | The firms in the owner's phone contacts, notes stripped, are the Haushalt tool `handy_firmen` | owner's `handy-kontakte` → the Bote (anyone it talks to), Dokumente | homes internal/haushalt/firmenkontakte.go |
-| 5 | Paperless as `HOMES_PAPERLESS_TOKEN`'s account sees it: Homes' Dokumente pages, `/napi/portal/documents`, the Bote's `dokumente_suchen` and `notizen_finden`, the qmd mirror — no per-person filter | that account's view → every family member and the Bote | homes internal/paperless/, internal/dokumente/dokumente.go, internal/haushalt/haushalt.go, internal/napi/tools.go |
+| 5 | Paperless as its read-only user `homes` sees it (the household's documents, none a person owns): Homes' Dokumente pages, `/napi/portal/documents`, the Bote's `dokumente_suchen` and `notizen_finden`, the qmd mirror — no per-person filter | the household's documents → every family member and the Bote | homes internal/paperless/, internal/dokumente/dokumente.go, internal/haushalt/haushalt.go, internal/napi/tools.go |
 | 6 | Scans, the app's photo uploads, the Bote's „ablegen“ and mailed documents enter Paperless without an owner | the sender → every family member | paperless-mail.py (`assign_owner_from_rule: False`), templates/bote/notify.py `/ablage`, homes internal/napi/upload.go |
 | 7 | Paperless' user `dokumente` (the scan service) may view and change every document a person owns | each person's private documents → the scan service | templates/paperless/paperless-mail.py `besitz`, workflow „Dokument hinzugefügt“ |
 | 8 | The Bote's memory and `session_search` span every person's conversations | each person → every later conversation | templates/bote/README.md, "Memory (#884)" |
@@ -525,16 +527,13 @@ listed again.
    `MEMORY.md`, one `state.db`: what one person told the Bote can surface
    in another's conversation; only the SOUL's prompt asks it not to.
    Open on #884 (a profile per person).
-2. **Homes shows Paperless as one account sees it, to everyone** (row 5).
-   If `HOMES_PAPERLESS_TOKEN` is the owner's token — which its `hilfe:`
-   text asks for („In Paperless … auf deinen Namen → Mein Profil“) — the
-   owner's „nur für mich“ documents are findable by every family member
-   in Homes and through the Bote, and the mirror copies their text into
-   `homes-dokumente`. **Unverified which account the token is on the
-   box**: the owner opens Paperless → Mein Profil and compares the token,
-   or an Einblick runs `GET /api/ui_settings/` with it and reads the user.
-   A per-person view (each person's own token, or filtering by owner) is
-   not built.
+2. **Closed: Homes read Paperless with a person's token.** Its key page
+   asked for „deinen Namen → Mein Profil“, so the owner's „nur für mich“
+   documents reached every family member, the Bote and the mirror.
+   Paperless' post-deploy now mints the token of its own read-only user
+   `homes` (no group, not in the workflow) into `HOMES_PAPERLESS_TOKEN`,
+   replacing the pasted one; the owner no longer sets it. A person's own
+   documents in Homes would need a per-person view; not built.
 3. **„Nur für mich“ promises the admins see every document**
    (homes internal/pages/scannen.go `saysScanFuer`). In Paperless an
    owned document is seen by its owner, the users it is shared with and
@@ -577,8 +576,6 @@ darf eine Stunde lang in Immich hineinsehen“ — an ADR 0032 Einblick.
 
 ## Unverified, and what would verify it
 
-- Which account `HOMES_PAPERLESS_TOKEN` is (gap 2): Paperless → Mein
-  Profil, or the token's `/api/ui_settings/` in an Einblick.
 - Whether Paperless' `admins` members are superusers (gap 3): Paperless
   → Benutzer.
 - Which Immich user owns the file share's `photos/` as an external

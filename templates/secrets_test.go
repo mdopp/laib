@@ -55,7 +55,7 @@ func TestSecretsTheServiceWorksWithoutAreOptional(t *testing.T) {
 // owner must not set it.
 func TestOnlyTheOwnersKeysSayOwner(t *testing.T) {
 	want := map[string]bool{
-		"homes/HOMES_DISCOGS_KEY": true, "homes/HOMES_DISCOGS_SECRET": true, "homes/HOMES_PAPERLESS_TOKEN": true, "homes/HOMES_IMMICH_KEY": true,
+		"homes/HOMES_DISCOGS_KEY": true, "homes/HOMES_DISCOGS_SECRET": true, "homes/HOMES_IMMICH_KEY": true,
 		"caddy/DNS_API_TOKEN": true, "auth/AUTHELIA_SMTP_PASSWORD": true, "paperless/PAPERLESS_MAIL_PASSWORD": true,
 		"bote/BOTE_MODEL_KEY": true, "bote/BOTE_TELEGRAM_TOKEN": true, "bote/BOTE_DISCORD_TOKEN": true, "bote/BOTE_MATRIX_TOKEN": true,
 		"media/JELLYFIN_HA_PASSWORD":        true,

@@ -157,8 +157,9 @@ refresh with new notes about 1 GB more for a moment. embeddinggemma comes
 under the Gemma Terms of Use, which fit a family's own use.
 
 Documents (#219): the library indexes Paperless's documents too. Homes
-mirrors what its Paperless user sees (the OCR text Paperless already
-has) into `${DATA_DIR}/homes-dokumente`, one `<id>.md` per document
+mirrors what its Paperless user `homes` sees (read only, minted by
+paperless' post-deploy: the household's documents, never a person's „nur
+für mich“; the OCR text Paperless already has) into `${DATA_DIR}/homes-dokumente`, one `<id>.md` per document
 (title, date, sender, tags, then the text): `homes export-documents` in
 Homes's container, as its own oneshot (`homes-documents-export.service`)
 that the refresh wants and runs after. A document changed in Paperless
