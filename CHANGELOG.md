@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.19.1](https://github.com/mdopp/laib/compare/v2.19.0...v2.19.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **paperless:** Homes reads Paperless as its own read-only user, never a person's token ([#1152](https://github.com/mdopp/laib/issues/1152)) ([beab296](https://github.com/mdopp/laib/commit/beab29618bd9d1cba2787ba4c2c58c34cab80272))
+
 ## [2.19.0](https://github.com/mdopp/laib/compare/v2.18.0...v2.19.0) (2026-11-10)
 
 
