@@ -117,9 +117,8 @@ laib.yml) belong to whichever account the owner made them in; the
     apps/archiv/immich.go `umfeldRechte`: `asset.read`, `asset.view`,
     `person.read`; stored at `immich-schluessel` inside the vault,
     apps/archiv/umfeld.go). The code only reads (`/api/users/me`,
-    `/api/api-keys/me`, `/api/search/metadata`). Not wired on the box
-    yet: templates/archiv/archiv.container sets no `IMMICH_URL`, so the
-    archive's Umfeld is off (apps/archiv/main.go, `immichURL`).
+    `/api/api-keys/me`, `/api/search/metadata`);
+    templates/archiv/archiv.container gives it `IMMICH_URL`.
   - Reitti: each person enters their own key in Reitti's settings
     (templates/reitti/README.md, "Immich").
 - **Public:** immich-public-proxy serves only what a person shared as a
@@ -286,6 +285,13 @@ subscriptions). Its data folder holds only the status and the last run.
   public key, its HMAC dedupe sets, the status files (ADR 0029
   amendment 2026-11-01; apps/archiv/briefkasten.go). Briefkasten packets
   are age-encrypted to the person's key.
+- **Umfeld (archiv#27):** the contact net, the answers to „Wie steht X
+  zu Y?“ and who is hidden live only in the vault
+  (`umfeld/netz.json`, `umfeld/antworten.json`, `umfeld/verborgen.json`;
+  apps/archiv/umfeld.go, fragen.go). An answer leaves only by the
+  person's „Übernehmen“: a form POST of an HMAC-signed packet to Homes
+  (apps/archiv/uebernahme.go), written only after they confirm on Homes'
+  page (flow 20).
 - **Inbox `archiv-eingang/<person>/`:** Homes writes it as the device's
   person; each instance mounts only its own folder. Signal and WhatsApp
   databases arrive encrypted by the messenger, SMS age-encrypted on the
@@ -296,7 +302,9 @@ subscriptions). Its data folder holds only the status and the last run.
   `archiv-<person>` in Radicale (read only), the person's IMAP app
   password (outside the vault, `EXAMINE` only). **Keys others hold to
   it:** `ARCHIV_HOMES_SECRET` (Homes, per instance: `/intern/` for a new
-  phone's restore, WhatsApp media only while open); the msgvault key on
+  phone's restore, WhatsApp media only while open; it also signs the
+  archive's „Übernehmen“ packets, which Homes checks with the same
+  secret); the msgvault key on
   `/p/<person>/` only where the person set `AGENT_PATH` (off by default,
   templates/archiv/values.example.yml).
 
@@ -507,6 +515,7 @@ design and not listed again.
 | 17 | A public access request reaches `HOMES_TEASER_PERSON` | outsider → one person | homes internal/pages/teaser.go |
 | 18 | Admin keys read every person's Jellyfin and ABS history; Homes shows each person only their own | each person → Homes (service) | homes internal/jellyfin/gesehen.go, internal/abs/gehoert.go, internal/pages/gesehen.go |
 | 19 | Planned, refused today: the archive's Umfeld reads the household address book | household → the person's archive | archiv apps/archiv/umfeld.go; `[archiv-sonst-nichts]` |
+| 20 | A relation the person answered in their archive („Wie steht X zu Y?“), after their tap there and their confirmation on Homes' page: both ends household contacts → both household cards by UID (the family sees it); otherwise → only the person's own phone, by name. A household card never gets a name from the person's phone or photos. Homes takes the packet only from that person's login, signed with that person's archive secret, for at most two hours. (archiv#29, homes#335) | the person's archive → household book, or → the person's phone | archiv apps/archiv/uebernahme.go; homes internal/uebernahme, internal/pages/uebernehmen.go |
 
 Not crossings, checked: location goes to the person's own Reitti with
 their own token (homes internal/napi/standort.go); phone backups go to
