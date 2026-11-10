@@ -13,7 +13,9 @@ amendment 2026-11-10) that login also reads the household's address book
 `homes/haushalt-kontakte`, and the archive reaches Immich at `IMMICH_URL`
 with the person's own API key, which they enter on the archive's page into
 the open vault; the template carries none. `IMMICH_PUBLIC_URL` is where the
-page opens a photo.
+page opens a photo. A tap on an answer is written server to server to
+Homes' own port `ARCHIV_HOMES_INTERN` (never through Caddy), signed with
+`ARCHIV_HOMES_SECRET`.
 
 No agent path by default (laib#1121, security plan item 12): an instance
 gets `archiv.<domain>/p/<person>/` past Authelia, for an agent with the
