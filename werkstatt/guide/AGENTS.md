@@ -47,6 +47,12 @@ No podman: images are built by the repo's CI and published to ghcr.
   what): `laib net`, and answer with the flowchart of `laib net --mermaid`.
   It is computed from the rendered config; never reconstruct it from
   templates (#439).
+- **Whose data lives where and who can reach it** (accounts per person,
+  what the admin sees, every key one service holds to another, every
+  flow from one person's data to others): the laib repo's
+  `docs/DATA.md`. Answer from it, not from a post-deploy script. A
+  change that adds an account model, such a key or such a flow updates
+  it in the same PR.
 - **How to check, measure and ask:** the skills in
   `/opt/werkstatt/guide/skills/` (pi and Claude Code load them by their
   description): a probe that cannot fail, a deployment you have looked at,
