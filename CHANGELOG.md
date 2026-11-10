@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.20.0](https://github.com/mdopp/laib/compare/v2.19.1...v2.20.0) (2026-11-10)
+
+
+### Features
+
+* **paperless:** a new document is someone's from the start; own +doc address per person (DATA.md gap 6) ([#1160](https://github.com/mdopp/laib/issues/1160)) ([d98bf6e](https://github.com/mdopp/laib/commit/d98bf6e44eff8e6aed67024463d3bad68bebb7d9))
+
+
+### Bug Fixes
+
+* **templates:** the archive writes a tapped answer to Homes' own port ([#1157](https://github.com/mdopp/laib/issues/1157)) ([dec45f3](https://github.com/mdopp/laib/commit/dec45f335b75999ed5bb7521bc391cea2dd9095d))
+
 ## [2.19.1](https://github.com/mdopp/laib/compare/v2.19.0...v2.19.1) (2026-11-10)
 
 
