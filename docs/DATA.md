@@ -296,6 +296,13 @@ subscriptions). Its data folder holds only the status and the last run.
   server, never through a browser or Caddy, and Homes writes it at once;
   Rückgängig takes it back the same way (apps/archiv/uebernahme.go,
   fragen_seite.go; flow 20).
+  The net also reads the person's own msgvault in the same open vault
+  (`POST /api/v1/query`, read only): group chats and mail threads become
+  ties between participants matched to the phone books' cards;
+  `netz.json` keeps only those card keys, sizes, counts, the last time
+  and a chat's title, no number, address or subject (apps/archiv/
+  gespraeche.go, archiv `6ae89f3`). Derived relations (abgeleitet.go)
+  are questions only, never written.
 - **Inbox `archiv-eingang/<person>/`:** Homes writes it as the device's
   person; each instance mounts only its own folder. Signal and WhatsApp
   databases arrive encrypted by the messenger, SMS age-encrypted on the
