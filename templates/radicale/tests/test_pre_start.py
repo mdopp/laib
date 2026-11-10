@@ -119,17 +119,23 @@ class Rights(unittest.TestCase):
             self.assertEqual(allowed(self.rules, "archiv-anna", coll), "r", coll)
         for coll in ("anna/google-kontakte", "anna/google-kontakte/x.vcf", "anna/kalender", "anna/abo-feiertage", "anna/tagebuch/x.ics",
                      "ben", "ben/handy-kontakte", "ben/privat-sport/y.ics", "ben/google-familie",
-                     "homes", "homes/haushalt", "homes/haushalt-kontakte/x.vcf", "homes/familie-geburtstage", "homes/abo-muell",
+                     "homes", "homes/haushalt", "homes/haushalt/x.ics", "homes/familie-geburtstage", "homes/abo-muell",
+                     "homes/haushalt-kontakte-alt", "homes/privat-x", "anna/haushalt-kontakte",
                      "archiv-anna", "archiv-anna/x", "homeassistant", "anna/handy-kontakte-alt", "annax/handy-kontakte"):
             self.assertEqual(allowed(self.rules, "archiv-anna", coll), "", f"archiv-anna reaches {coll}")
 
+    def test_the_archive_reads_the_households_address_book_and_writes_nothing(self):   # ADR 0029 amendment 2026-11-10, archiv#27
+        for who in ("archiv-anna", "archiv-ben"):
+            for coll in ("homes/haushalt-kontakte", "homes/haushalt-kontakte/x.vcf"):
+                self.assertEqual(allowed(self.rules, who, coll), "r", (who, coll))
+
     def test_no_section_before_the_archives_grants_it_more(self):   # laib#1009
-        # Radicale takes the first section that matches: every section above the archive's three may give
+        # Radicale takes the first section that matches: every section above the archive's four may give
         # an archiv-<person> at most what [root] gives everyone, R on the root itself
         cp = configparser.ConfigParser(interpolation=None)
         cp.read_string(self.text)
         first = cp.sections().index("archiv-home")
-        self.assertEqual(cp.sections()[first:first + 3], ["archiv-home", "archiv-lesen", "archiv-sonst-nichts"])
+        self.assertEqual(cp.sections()[first:first + 4], ["archiv-home", "archiv-lesen", "archiv-haushalt-kontakte", "archiv-sonst-nichts"])
         self.assertEqual(cp.sections()[:first], ["root"], "a section before the archive's could give it more")
 
     def test_the_other_service_accounts_keep_exactly_what_they_had(self):   # laib#1009

@@ -11,7 +11,7 @@ beschreibung: Deine Nachrichten, im Tresor nur für dich
 # person's vault (gocryptfs, opened only with their Archiv-Passwort), the
 # Briefkasten (packets imported while the vault is closed) and msgvault.
 perPerson: true
-uses: [radicale]   # the contacts and calendars, read only, while the vault is open (archiv#21)
+uses: [radicale, immich]   # the contacts and calendars, read only, while the vault is open (archiv#21); Immich's photos for Umfeld (archiv#27), with the person's own key from the vault
 private: sealed       # ADR 0032: no laib look, read, exec or write reaches the person's archive, for no hand
 template: {registry: builtin, name: archiv, version: 1}
 provides: [archiv]
