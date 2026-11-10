@@ -289,9 +289,13 @@ subscriptions). Its data folder holds only the status and the last run.
   zu Y?“ and who is hidden live only in the vault
   (`umfeld/netz.json`, `umfeld/antworten.json`, `umfeld/verborgen.json`;
   apps/archiv/umfeld.go, fragen.go). An answer leaves only by the
-  person's „Übernehmen“: a form POST of an HMAC-signed packet to Homes
-  (apps/archiv/uebernahme.go), written only after they confirm on Homes'
-  page (flow 20).
+  person's tap on it in their own open archive (owner 2026-11-10: the tap
+  is their consent): the archive posts an HMAC-signed packet to Homes'
+  own port on the box (`ARCHIV_HOMES_INTERN`,
+  `http://host.containers.internal:8650/intern/uebernahme`), server to
+  server, never through a browser or Caddy, and Homes writes it at once;
+  Rückgängig takes it back the same way (apps/archiv/uebernahme.go,
+  fragen_seite.go; flow 20).
 - **Inbox `archiv-eingang/<person>/`:** Homes writes it as the device's
   person; each instance mounts only its own folder. Signal and WhatsApp
   databases arrive encrypted by the messenger, SMS age-encrypted on the
@@ -302,9 +306,9 @@ subscriptions). Its data folder holds only the status and the last run.
   `archiv-<person>` in Radicale (read only), the person's IMAP app
   password (outside the vault, `EXAMINE` only). **Keys others hold to
   it:** `ARCHIV_HOMES_SECRET` (Homes, per instance: `/intern/` for a new
-  phone's restore, WhatsApp media only while open; it also signs the
-  archive's „Übernehmen“ packets, which Homes checks with the same
-  secret); the msgvault key on
+  phone's restore, WhatsApp media only while open; the archive also signs
+  with it the answers it posts to Homes' `/intern/uebernahme`, which Homes
+  checks with the same secret); the msgvault key on
   `/p/<person>/` only where the person set `AGENT_PATH` (off by default,
   templates/archiv/values.example.yml).
 
@@ -378,7 +382,11 @@ and the app's API (`/napi/`); references below are to mdopp/homes.
   - `BOTE_API_KEY` (as `HOMES_BOTE_KEY`) — speaks to the Bote as the
     signed-in person (internal/bote/bote.go).
   - `HOMES_ARCHIV_SECRET_<PERSON>` — each archive's `/intern/`
-    (internal/napi/sicherung_letzte.go).
+    (internal/napi/sicherung_letzte.go); the same secret checks the
+    answers that archive posts to Homes' `POST /intern/uebernahme`
+    (internal/uebernahme): only for that person, within two minutes, each
+    nonce once, and refused when the request came through Caddy
+    (`X-Homes-Proxy`, `X-Forwarded-*`, `Remote-User`).
   - `HOMES_LAIB_TOKEN` — the hand `homes` (status, inbox, restart,
     person_invite …). Any paired phone may ask it to restart a service;
     approving is refused (internal/napi/napi.go).
@@ -515,7 +523,7 @@ design and not listed again.
 | 17 | A public access request reaches `HOMES_TEASER_PERSON` | outsider → one person | homes internal/pages/teaser.go |
 | 18 | Admin keys read every person's Jellyfin and ABS history; Homes shows each person only their own | each person → Homes (service) | homes internal/jellyfin/gesehen.go, internal/abs/gehoert.go, internal/pages/gesehen.go |
 | 19 | Planned, refused today: the archive's Umfeld reads the household address book | household → the person's archive | archiv apps/archiv/umfeld.go; `[archiv-sonst-nichts]` |
-| 20 | A relation the person answered in their archive („Wie steht X zu Y?“), after their tap there and their confirmation on Homes' page: both ends household contacts → both household cards by UID (the family sees it); otherwise → only the person's own phone, by name. A household card never gets a name from the person's phone or photos. Homes takes the packet only from that person's login, signed with that person's archive secret, for at most two hours. (archiv#29, homes#335) | the person's archive → household book, or → the person's phone | archiv apps/archiv/uebernahme.go; homes internal/uebernahme, internal/pages/uebernehmen.go |
+| 20 | A relation the person answered in their archive („Wie steht X zu Y?“), at their one tap there (owner 2026-11-10: the tap in their own open archive is their consent; no second confirmation): both ends household contacts → both household cards by UID (the family sees it); otherwise → only the person's own phone, by name; a person only on photos → stays in the vault. A household card never gets a name from the person's phone or photos. The archive posts it server to server to Homes' own port on the box (`/intern/uebernahme`, not through Caddy), signed with that person's archive secret, valid two minutes, each nonce once; Rückgängig takes it back. | the person's archive → household book, or → the person's phone | archiv apps/archiv/uebernahme.go, fragen_seite.go; homes internal/uebernahme |
 
 Not crossings, checked: location goes to the person's own Reitti with
 their own token (homes internal/napi/standort.go); phone backups go to

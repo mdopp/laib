@@ -20,6 +20,9 @@ Environment=PROXY_SECRET=${PROXY}
 Environment=ARCHIV_HOMES_SECRET=${HOMES_SECRET}
 Environment=TZ=${TZ}
 Environment=PUBLIC_URL=https://archiv.${DOMAIN}/
+# Homes' own port on the box (archiv#27, homes internal/uebernahme): the person's tap on an answer
+# is written there server to server, signed with ARCHIV_HOMES_SECRET; never through Caddy
+Environment=ARCHIV_HOMES_INTERN=http://host.containers.internal:8650
 # contacts and calendars from Radicale, read only (archiv#21, laib#1009): its
 # root on the host, its own login; the password a file, never the environment
 Environment=RADICALE_URL=http://host.containers.internal:5232
