@@ -439,6 +439,42 @@ class Dokumente(unittest.TestCase):
         self.assertIn("laib-secret: PAPERLESS_TOKEN=", r.stdout, "the hourly run still gets its token")
 
 
+class Haushalt(unittest.TestCase):
+    """DATA.md, gap 2: Homes reads Paperless as its own user homes, never a person's token. Read only,
+    no group, nothing from the workflow: it sees the documents without an owner and those shared
+    with it, never a person's „nur für mich“. Its token replaces the one the box has (a person's,
+    pasted before) and goes to Homes as HOMES_PAPERLESS_TOKEN."""
+    setUp, run_setup = PaperlessMail.setUp, PaperlessMail.run_setup
+    KEYS = {**Dokumente.KEYS, "LAIB_SECRET_PAPERLESS_HOMES_PASSWORD": "homes-pw"}
+
+    def setup(self, fake, **extra):
+        r = self.run_setup(fake, {"PAPERLESS_MAIL_HOST": "", **self.KEYS, **extra}, password="")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return r
+
+    def test_a_read_only_user_whose_token_replaces_a_persons(self):
+        fake = Fake(documents=[{"id": 2, "owner": 3, "permissions": {"view": {"users": [3], "groups": []}, "change": {"users": [3], "groups": []}}}])
+        r = self.setup(fake, LAIB_SECRET_HOMES_PAPERLESS_TOKEN="a-persons-token")
+        u = next(x for x in fake.users if x["username"] == "homes")
+        self.assertEqual((u["is_superuser"], u["is_staff"], u["groups"]), (False, False, []))
+        self.assertEqual(set(u["user_permissions"]), {"view_document", "view_note", "view_tag", "view_correspondent",
+                                                      "view_documenttype", "view_customfield"})
+        self.assertEqual(fake.passwords["homes"], "homes-pw")
+        self.assertIn("laib-secret: HOMES_PAPERLESS_TOKEN=" + fake.tokens["homes"], r.stdout.splitlines())
+        # a person's document stays theirs: homes neither in the workflow nor on it
+        self.assertNotIn(u["id"], fake.workflows[0]["actions"][0]["assign_view_users"])
+        self.assertNotIn(u["id"], fake.documents[0]["permissions"]["view"]["users"])
+        # the next apply with its own token: nothing handed back
+        r = self.setup(fake, LAIB_SECRET_HOMES_PAPERLESS_TOKEN=fake.tokens["homes"], LAIB_SECRET_PAPERLESS_TOKEN=fake.tokens["dokumente"])
+        self.assertNotIn("laib-secret:", r.stdout)
+
+    def test_without_its_password_no_user(self):
+        fake = Fake()
+        r = self.setup(fake, LAIB_SECRET_PAPERLESS_HOMES_PASSWORD="")
+        self.assertEqual([u["username"] for u in fake.users], ["dokumente"])
+        self.assertIn("kein PAPERLESS_HOMES_PASSWORD, Homes nicht eingerichtet", r.stdout)
+
+
 class Befunde(unittest.TestCase):
     """laib#893: the document types of medical records, made when missing and nobody's, so dokumente
     sees them. Gesundheit, once a second client, is gone (2026-11-07): Dokumente is the only one,

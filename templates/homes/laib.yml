@@ -106,9 +106,8 @@ secrets:
     was: HAUS_RADICALE_PASSWORD
     external: true
     optional: true
-  - name: HOMES_PAPERLESS_TOKEN    # a Paperless API token (haus#11): the Bote finds what that user sees; without it no document search
+  - name: HOMES_PAPERLESS_TOKEN    # minted by paperless' post-deploy for its user homes (DATA.md, gap 2): read only, what the household shares, never a person's „nur für mich“; without Paperless no document search
     was: HAUS_PAPERLESS_TOKEN
-    owner: {label: "Paperless: Zugang für die Dokumentensuche", warum: "Damit findet Homes eure Dokumente in Paperless, etwa wenn du den Boten nach einem Vertrag fragst.", hilfe: "In Paperless oben rechts auf deinen Namen → Mein Profil, beim API-Token auf Erzeugen tippen und ihn kopieren. Homes findet dann, was dieses Konto sieht.", link: "https://paperless.${DOMAIN}/"}   # set by the owner on the box page, „Schlüssel hinterlegen“ (#696)
     external: true
     optional: true
   - name: HOMES_IMMICH_KEY         # an API key of the owner's Immich account (homes 2026-11-05): Immich keeps its people per user, so Homes works with the owner's; without it a contact's „Fotos“ searches Immich by name, no faces, no persons for the contacts (homes 2026-11-06: person.create makes a contact's person, person.update keeps its name and birthday, person.merge joins two persons of one name and the pairs the owner confirms, user.read says whose key it is; asset.upload, face.read and asset.delete put the owner's own contacts' pictures into Immich archived, read the face Immich found and delete Homes' own upload: „Ist das …?“ asks, nothing merged without a Ja; person.statistics optional, photo counts)

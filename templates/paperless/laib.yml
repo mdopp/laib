@@ -23,6 +23,8 @@ upstream: [https://github.com/paperless-ngx/paperless-ngx, https://docs.paperles
 # longer inside this container: post-deploy makes its Paperless user
 # dokumente (no administrator), mints its token into PAPERLESS_TOKEN and
 # makes the workflow „Dokument hinzugefügt“ that posts to Dokumente's hook;
+# and Homes' user homes (read only, what the household shares), whose token
+# it mints into HOMES_PAPERLESS_TOKEN (DATA.md, gap 2);
 # the contract and invoice fields stay made here.
 after: [auth, file-share]      # the share's folders are mounted here (#36)
 routes:
@@ -48,6 +50,10 @@ secrets:
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
   - name: PAPERLESS_DOKUMENTE_PASSWORD   # the Paperless user dokumente's (ADR 0028): only post-deploy logs in with it, to mint PAPERLESS_TOKEN
   - name: PAPERLESS_TOKEN            # minted here (ADR 0028): the token of Paperless' user dokumente, no administrator, handed back for the scan service; post-deploy compares it
+    external: true
+    optional: true
+  - name: PAPERLESS_HOMES_PASSWORD   # the Paperless user homes's (DATA.md, gap 2): only post-deploy logs in with it, to mint HOMES_PAPERLESS_TOKEN
+  - name: HOMES_PAPERLESS_TOKEN      # minted here: the token of Paperless' user homes, read only, no group, sees what the household shares; handed back for Homes; post-deploy compares it
     external: true
     optional: true
   - name: DOKUMENTE_WEBHOOK_TOKEN    # generated (ADR 0028): the workflow „Dokument hinzugefügt“ sends it as X-Dokumente-Token, the scan service's hook takes only that
