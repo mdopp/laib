@@ -248,3 +248,37 @@ off by default and stays off until the person asks for it (laib#1121).
 No assistant searches an archive for now, as decided in §2 (no key for
 the Bote). An instance without it has no bypass rule and no `/p/` handle;
 a request there is the login like any other.
+
+## Amendment 2026-11-10: Umfeld, from photos, phone books and messages
+
+The owner decided on 2026-11-10 (homes
+[ADR 0002](https://github.com/mdopp/homes/blob/main/docs/adr/0002-household-boundary.md),
+[archiv#27](https://github.com/mdopp/archiv/issues/27)) that the contact
+network „Umfeld“ (who is close to whom, how two people relate, groups)
+moves from Homes into the person's archive.
+
+1. **Its sources.** While the vault is open, the archive computes Umfeld
+   from Immich's photos, the phone books and msgvault's WhatsApp, Signal
+   and mail.
+   - **Immich:** the archive reaches it at `IMMICH_URL`
+     (`host.containers.internal`, ADR 0007) with the person's own API key.
+     The person enters the key on the archive's page into the open vault;
+     the template and the state repo carry none. `IMMICH_PUBLIC_URL` is
+     where the page opens a photo.
+   - **The phone books:** the person's `handy-kontakte` as before, and the
+     household's address book `homes/haushalt-kontakte`. The owner, asked
+     „Darf das Archiv das Haushalts-Adressbuch mitlesen?“, answered
+     „Beides ja“. Radicale's rights give `archiv-<person>` `r` on that one
+     book in its own section, before every general one, and still nothing
+     else of `homes/`: not its root, not the Haushalt's calendar, not
+     `familie-*`. This narrows the 2026-11-02 amendment's „not the
+     Haushalt“ by exactly that book, read only.
+2. **Umfeld's boundary.** Everything derived (closeness, answers to „Wie
+   steht X zu Y?“, group suggestions) stays in the vault; `/data` outside it
+   holds none of it, and a closed vault means no graph. A relation or a
+   group leaves the archive only through Homes' confirmation page, which
+   writes it after the person's tap, as `RELATED` or `CATEGORIES`, into the
+   book and onto the phone.
+3. **The limit, as before:** the household's address book in Radicale is
+   readable by the box's admin and by every family member; only the
+   archive's derived data is in the vault.

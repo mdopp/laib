@@ -61,9 +61,10 @@ chmod 644 "$C/config"
 # them there (homes/internal/napi, laib ADR 0029); the person owns it like the privat-* calendars.
 # The archive (templates/archiv, one instance per person, ADR 0029) logs in as `archiv-<person>` (laib#1009) and
 # only reads: it lists <person>'s home and reads <person>/handy-kontakte, google-* (not google-kontakte) and
-# privat-*. These three sections come before every `.+` and `(.+)` one, and the last gives it nothing else: not
-# its own home archiv-<person>/, not another person's, not the Haushalt. mdopp/archiv's integration.sh runs a
-# real Radicale with these rights.
+# privat-*, and (ADR 0029 amendment 2026-11-10, archiv#27: Umfeld) the household's address book
+# homes/haushalt-kontakte, nothing else of the Haushalt. These four sections come before every `.+` and `(.+)` one,
+# and the last gives it nothing else: not its own home archiv-<person>/, not another person's, not homes/ itself,
+# the Haushalt's calendar or familie-*. mdopp/archiv's integration.sh runs a real Radicale with these rights.
 cat > "$C/rights" <<'RIGHTS'
 # rendered by laib pre-start (templates/radicale)
 [root]
@@ -79,6 +80,11 @@ permissions: R
 [archiv-lesen]
 user: archiv-(.+)
 collection: {0}/(handy-kontakte|google-(?!kontakte(/|$))[^/]+|privat-[^/]+)(/.*)?
+permissions: r
+
+[archiv-haushalt-kontakte]
+user: archiv-.+
+collection: homes/haushalt-kontakte(/.*)?
 permissions: r
 
 [archiv-sonst-nichts]

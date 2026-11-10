@@ -25,6 +25,10 @@ Environment=PUBLIC_URL=https://archiv.${DOMAIN}/
 Environment=RADICALE_URL=http://host.containers.internal:5232
 Environment=RADICALE_USER=archiv-${PERSON}
 Secret=${RADICALE_PASSWORD},type=mount,target=radicale-password
+# Immich for Umfeld (archiv#27, ADR 0029 amendment 2026-11-10): the photos that show who meets whom. The key is
+# the person's own, entered on the archive's page into the open vault; the box never holds one for the archive
+Environment=IMMICH_URL=${IMMICH_URL}
+Environment=IMMICH_PUBLIC_URL=${IMMICH_PUBLIC_URL}
 
 [Service]
 Restart=always

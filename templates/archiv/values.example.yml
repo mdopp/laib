@@ -2,6 +2,8 @@ ARCHIV_IMAGE: ghcr.io/mdopp/archiv:2ec8b462a9e6abd6e3d60b61bfbec6dd9fcd4160   # 
 PROXY: !secret ARCHIV_PROXY_SECRET
 HOMES_SECRET: !secret ARCHIV_HOMES_SECRET
 RADICALE_PASSWORD: !secret ARCHIV_RADICALE_PASSWORD
+IMMICH_URL: http://host.containers.internal:2283   # Immich as the container reaches it, for Umfeld (archiv#27); no key here: the person enters theirs into the vault
+IMMICH_PUBLIC_URL: https://photos.${DOMAIN}         # where the archive's page opens a photo in Immich
 # an agent's way to this person's archive at archiv.<domain>/p/<person>/, past the login with msgvault's key
 # (laib#1121): off. Only the person decides to set it ("on"), in their instance's values.yml, by a proposal.
 AGENT_PATH: 

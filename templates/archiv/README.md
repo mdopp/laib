@@ -8,7 +8,12 @@ FUSE for the vault, the proxy secret, the status file, and the archive's
 own Radicale login `archiv-<person>` (laib#1009): the auth template seeds
 it, templates/radicale lets it read that person's phone contacts and own
 calendars and nothing else, and its password reaches the container as
-`/run/secrets/radicale-password`.
+`/run/secrets/radicale-password`. For Umfeld (archiv#27, ADR 0029
+amendment 2026-11-10) that login also reads the household's address book
+`homes/haushalt-kontakte`, and the archive reaches Immich at `IMMICH_URL`
+with the person's own API key, which they enter on the archive's page into
+the open vault; the template carries none. `IMMICH_PUBLIC_URL` is where the
+page opens a photo.
 
 No agent path by default (laib#1121, security plan item 12): an instance
 gets `archiv.<domain>/p/<person>/` past Authelia, for an agent with the
