@@ -330,6 +330,23 @@ subscriptions). Its data folder holds only the status and the last run.
   and a chat's title, no number, address or subject (apps/archiv/
   gespraeche.go, archiv `6ae89f3`). Derived relations (abgeleitet.go)
   are questions only, never written.
+  The person's categories of group chats (Familie, Arbeit, …) stay in the
+  vault (`umfeld/gruppen.json`) and never reach an address book
+  (apps/archiv/gruppen.go).
+- **Message excerpts to the box's model (archiv#27, owner 2026-11-11;
+  ADR 0029 amendment 2026-11-11):** only while the vault is open, a
+  message with a relation word whose sender and recipients the phone
+  books know goes, with their names, at most 600 characters of its text
+  and what the archive knows of them, to the household model through
+  laib-lease's proxy (`MODEL_URL`, `MODEL_KEY`, `MODEL_LEASE` in
+  templates/archiv/archiv.container), at most ten a round, none while a
+  lease holds the card. The answer is kept per message in the vault
+  (`umfeld/hinweise.json`), so nothing is sent twice. The archive logs
+  only counts (apps/archiv/hinweise.go). laib-lease does not log bodies,
+  and llama-server runs without `--verbose` (templates/llama), so the
+  prompt is not kept. **Unverified on the box:** that no layer between
+  them keeps it. The model process is the household's, so root reads its
+  memory while it answers, as it reads an open vault (flow 22).
 - **Inbox `archiv-eingang/<person>/`:** Homes writes it as the device's
   person; each instance mounts only its own folder. Signal and WhatsApp
   databases arrive encrypted by the messenger, SMS age-encrypted on the
@@ -337,7 +354,8 @@ subscriptions). Its data folder holds only the status and the last run.
   Briefkasten encrypts it — indefinitely if the person has no vault yet
   (apps/archiv/briefkasten.go). Not in the backup (`backup: false`).
 - **Keys it holds:** the person's Immich key (in the vault, read only),
-  `archiv-<person>` in Radicale (read only), the person's IMAP app
+  the box's model key (`MODEL_KEY`, the household's, for the model's
+  proxy), `archiv-<person>` in Radicale (read only), the person's IMAP app
   password (outside the vault, `EXAMINE` only). **Keys others hold to
   it:** `ARCHIV_HOMES_SECRET` (Homes, per instance: `/intern/` for a new
   phone's restore, WhatsApp media only while open; the archive also signs
@@ -568,6 +586,7 @@ design and not listed again.
 | 19 | Planned, refused today: the archive's Umfeld reads the household address book | household → the person's archive | archiv apps/archiv/umfeld.go; `[archiv-sonst-nichts]` |
 | 20 | A relation the person answered in their archive („Wie steht X zu Y?“), at their one tap there (owner 2026-11-10: the tap in their own open archive is their consent; no second confirmation): both ends household contacts → both household cards by UID (the family sees it); otherwise → only the person's own phone, by name; a person only on photos → stays in the vault. A household card never gets a name from the person's phone or photos. The archive posts it server to server to Homes' own port on the box (`/intern/uebernahme`, not through Caddy), signed with that person's archive secret, valid two minutes, each nonce once; Rückgängig takes it back. | the person's archive → household book, or → the person's phone | archiv apps/archiv/uebernahme.go, fragen_seite.go; homes internal/uebernahme |
 | 21 | A scan Dokumente's sorting could not give anyone: its sender, date, page count and arrival go to Homes and are shown to the admins („Wem gehört dieser Scan?“, Deine Aufgaben), who give it to a person or the household; never its title or text | the scan's metadata → the admins | dokumente ordnen/zuteilen.py `fragen`; homes cmd/homes/zuordnen.go, internal/pages/dokumente_zuordnen.go |
+| 22 | Excerpts of a person's messages that carry a relation word („Mama“, „Schatz“), with the names of sender and recipients and what the archive knows of them, go to the household model so it can suggest how two people relate. Only while that person's vault is open; at most 600 characters a message; never to a cloud model. The answer stays in the vault, and nothing is logged. Owner, 2026-11-11: „dann gehen Absender, Empfänger und Text zum LLM“. | the person's archive → the box's model process (shared by the household; root can read its memory while it answers) | archiv apps/archiv/hinweise.go; templates/archiv/archiv.container; ADR 0029 amendment 2026-11-11 |
 
 Not crossings, checked: location goes to the person's own Reitti with
 their own token (homes internal/napi/standort.go); phone backups go to
