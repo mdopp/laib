@@ -333,6 +333,16 @@ subscriptions). Its data folder holds only the status and the last run.
   The person's categories of group chats (Familie, Arbeit, …) stay in the
   vault (`umfeld/gruppen.json`) and never reach an address book
   (apps/archiv/gruppen.go).
+  A Facebook or LinkedIn export the person shares to the Homes app
+  („Ins Archiv“, owner 2026-11-11) reaches the inbox only as its friends
+  list or `Connections.csv`, age-encrypted on the phone to the person's
+  key (`<person>/sozial/*.age`; Homes stores ciphertext, never reads it);
+  opened, the archive keeps the names (LinkedIn: e-mail if shared,
+  company, position, date) in the vault (`umfeld/sozial.json`) as reasons
+  and names for „+ Beziehung“, never as a contact or an address-book line
+  (archiv apps/archiv/sozial.go, archiv#36, homes#341,
+  homes-android#272). Mail cannot bring them: both platforms mail only a
+  link that needs their login.
 - **Message excerpts to the box's model (archiv#27, owner 2026-11-11;
   ADR 0029 amendment 2026-11-11):** only while the vault is open, a
   message with a relation word whose sender and recipients the phone
