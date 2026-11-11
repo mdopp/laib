@@ -23,7 +23,7 @@ jobs:
       tag: ${{ steps.rp.outputs.tag_name }}
       sha: ${{ steps.rp.outputs.sha }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         id: rp
         # no release-type input: with it the action ignores release-please-config.json,
         # and the extra-files (README, ZIELBILD version lines, drift check 9) never bump
@@ -41,7 +41,7 @@ jobs:
       attestations: write
       packages: write     # the images of laib's own programs: operator, notify, haushalt, lease (ADR 0027)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.release-please.outputs.tag }}
           fetch-depth: 20   # the merge before the release and the train head it merged (#604)
@@ -81,7 +81,7 @@ jobs:
             sleep 60
           done
           echo "vm-install did not finish in time"; exit 1
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
       # laib-operator, laib-notify, laib-haushalt and laib-lease are containers
@@ -89,55 +89,55 @@ jobs:
       # into this laib, so they move with it — the self-update brings them, a
       # self rollback takes the previous laib's back. The release carries no
       # binary of them.
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: operator
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: operator/Containerfile
           push: true
           tags: ghcr.io/mdopp/laib-operator:${{ needs.release-please.outputs.tag }}
       - id: notify
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: notify/Containerfile
           push: true
           tags: ghcr.io/mdopp/laib-notify:${{ needs.release-please.outputs.tag }}
       - id: haushalt
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: haushalt/Containerfile
           push: true
           tags: ghcr.io/mdopp/laib-haushalt:${{ needs.release-please.outputs.tag }}
       - id: lease
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: lease/Containerfile
           push: true
           tags: ghcr.io/mdopp/laib-lease:${{ needs.release-please.outputs.tag }}
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ghcr.io/mdopp/laib-operator
           subject-digest: ${{ steps.operator.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ghcr.io/mdopp/laib-notify
           subject-digest: ${{ steps.notify.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ghcr.io/mdopp/laib-haushalt
           subject-digest: ${{ steps.haushalt.outputs.digest }}
           push-to-registry: true
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-name: ghcr.io/mdopp/laib-lease
           subject-digest: ${{ steps.lease.outputs.digest }}
@@ -161,7 +161,7 @@ jobs:
           done
       - run: cp scripts/boot-check.sh laib-boot-check.sh && cp scripts/host-image.sh laib-host-image.sh && cp scripts/install-box.sh laib-install-box.sh && cp scripts/self-update.sh laib-self-update.sh   # the boot check and the host image follower (#368), the installer and Laib's own update (#547), verified with the binaries
       - run: sha256sum laib-* > SHA256SUMS
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: |
             laib-*

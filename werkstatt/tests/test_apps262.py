@@ -64,6 +64,26 @@ class Scaffold(unittest.TestCase):
         self.assertTrue(image["if"].startswith("github.event_name == 'push'"))
         self.assertIn("templates", wf["jobs"])
 
+    def test_a_new_repo_pins_its_actions_and_base_images(self):
+        # #1165: what builds an image is pinned as what runs it (ADR 0034);
+        # the new repo carries the same check as laib and runs it in CI
+        self.assertEqual((HERE / "scaffold/repo/scripts/pins.sh").read_text(), (ROOT / "scripts/pins.sh").read_text(),
+                         "the scaffold's scripts/pins.sh is a copy of laib's")
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d) / "laib-apps"
+            self.assertEqual(laib_app("new", "hallo", "--repo", str(repo), "--owner", "mdopp").returncode, 0)
+            p = subprocess.run(["bash", "scripts/pins.sh"], cwd=repo, capture_output=True, text=True, timeout=60)
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.assertIn("bash scripts/pins.sh", (repo / ".github/workflows/apps.yml").read_text())
+            # and the check can go red: a tag where a commit belongs
+            wf = repo / ".github/workflows/apps.yml"
+            wf.write_text(re.sub(r"actions/checkout@[0-9a-f]{40}", "actions/checkout@v4", wf.read_text(), count=1))
+            cf = repo / "apps/hallo/Containerfile"
+            cf.write_text(re.sub(r"@sha256:[0-9a-f]{64}", "", cf.read_text(), count=1))
+            p = subprocess.run(["bash", "scripts/pins.sh"], cwd=repo, capture_output=True, text=True, timeout=60)
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn("pins: 2 ", p.stdout)
+
     def test_names_and_existing_apps_are_refused(self):
         with tempfile.TemporaryDirectory() as d:
             for bad in ("Hallo", "h", "hallo-welt", "1x"):

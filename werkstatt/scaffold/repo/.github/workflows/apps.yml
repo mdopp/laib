@@ -16,7 +16,7 @@ jobs:
     outputs:
       apps: ${{ steps.ls.outputs.apps }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - id: ls
         run: echo "apps=$(ls -d apps/*/ 2>/dev/null | xargs -rn1 basename | jq -Rnc '[inputs]')" >> "$GITHUB_OUTPUT"
   test:
@@ -30,9 +30,9 @@ jobs:
       run:
         working-directory: apps/${{ matrix.app }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - if: hashFiles(format('apps/{0}/go.mod', matrix.app)) != ''
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: apps/${{ matrix.app }}/go.mod
       - name: tests
@@ -49,13 +49,13 @@ jobs:
       matrix:
         app: ${{ fromJSON(needs.list.outputs.apps) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: apps/${{ matrix.app }}
           file: apps/${{ matrix.app }}/Containerfile
@@ -65,7 +65,7 @@ jobs:
   templates:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: laib template lint
         run: |
           curl -fsSL -o laib https://github.com/mdopp/laib/releases/latest/download/laib-linux-amd64
@@ -73,3 +73,9 @@ jobs:
           grep ' laib-linux-amd64$' SHA256SUMS | sed 's/laib-linux-amd64$/laib/' | sha256sum -c -
           chmod +x laib
           for t in templates/*/; do ./laib template lint "$t" || exit 1; done
+  pins:
+    # actions by commit, base images by digest; Dependabot moves them (laib ADR 0034, laib#1165)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - run: bash scripts/pins.sh

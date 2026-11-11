@@ -3,7 +3,7 @@
 # command (laibctl) and the autoloop with the pi-first / needs-claude router.
 # The toolbox a small app needs (#262): what the guide prescribes is here,
 # a tool that does not download fails the build instead of going missing.
-FROM docker.io/library/node:22-bookworm-slim
+FROM docker.io/library/node:22-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d
 ARG PI_VERSION=latest
 ARG CLAUDE_VERSION=latest
 ARG PI_WEB_VERSION=latest

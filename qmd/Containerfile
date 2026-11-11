@@ -6,7 +6,7 @@
 # Vulkan or ARM builds (~640 MB), and no llama.cpp source to build from.
 # The embed model is not in the image: the first `qmd embed` downloads it
 # into the mounted cache.
-FROM docker.io/library/node:22-bookworm-slim AS build
+FROM docker.io/library/node:22-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d AS build
 WORKDIR /opt/qmd
 COPY qmd/package.json qmd/package-lock.json ./
 # no install scripts: every native part ships prebuilt (better-sqlite3's
@@ -17,7 +17,7 @@ RUN npm ci --omit=dev --omit=peer --ignore-scripts --no-audit --no-fund \
  && rm -rf node_modules/node-llama-cpp/llama/gitRelease.bundle \
  && test -d node_modules/@node-llama-cpp/linux-x64/bins/linux-x64
 
-FROM docker.io/library/node:22-bookworm-slim
+FROM docker.io/library/node:22-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d
 LABEL org.opencontainers.image.source=https://github.com/mdopp/laib
 COPY --from=build /opt/qmd /opt/qmd
 COPY qmd/vermittler.mjs /opt/qmd/

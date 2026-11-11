@@ -94,6 +94,7 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 | A skill's prompt names only tools on its menu (#858) | `TestEveryToolAPromptNamesIsOnItsMenu` |
 | Docs match the code: layout, the Operator's tools, ports, counts | `scripts/drift.sh` |
 | A template with `private:`, `oidc:` or `perPerson:` has its section in `docs/DATA.md`, naming its privacy class | `TestEveryTemplateWithFamilyDataIsInDataDoc` |
+| What builds an image is pinned: every `uses:` by commit, every `FROM` by digest (ADR 0034, #1165); the same file in each of the owner's repos and the scaffold | `scripts/pins.sh` |
 | Dead code, staticcheck findings, duplicates and complexity only go down (see below) | `scripts/ratchet.py`, CI job `ratchet` |
 | Every touch answers at once (#588): every POST route ends done, red with a next step, or waiting with a limit | `cmd/laib/taps854_test.go` |
 | No raw or technical text in front of people (#855) | `cmd/laib/plain855_test.go`, `notify/plain855_test.go`, `frage/plain855_test.go` |
