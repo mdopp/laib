@@ -28,9 +28,6 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
-# 22,100: asked on #1166 (the template exceptions: lintNetwork in `laib template lint`, about 80
-# lines in internal/registry and internal/proposal), the kernel at 21,998 before; NOT YET APPROVED —
-# the owner's yes goes into this line before the PR merges, or the PR waits for a cut (#1047).
 # All caps +10 % (kernel 22,000, Operator 3,300, each program's, the skills' 55 / 220 / 275): set by
 # the owner, mdopp, 2026-10-30, on train 2026-10-30b ("Erhöhe alle Grenzen um 10%"): the review
 # issues of #851 landed in one train with the kernel at 19,433, the Operator at 2,941, frage at 399.
@@ -51,7 +48,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 22100 cmd internal
+budget kernel 22000 cmd internal
 budget operator 3300 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,
