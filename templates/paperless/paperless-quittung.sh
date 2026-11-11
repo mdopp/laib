@@ -23,7 +23,7 @@ sammeln() {
 	[ -n "$PAPERLESS_MAIL_HOST" ] || exit 0
 	mkdir -p "$S" || exit 1
 	${PODMAN:-/usr/bin/podman} exec -i --user paperless -e PAPERLESS_MAIL_HOST -e PAPERLESS_MAIL_PORT \
-		-e PAPERLESS_MAIL_SECURITY -e PAPERLESS_MAIL_USER -e PAPERLESS_MAIL_PASSWORD -e NOTIFY_PERSON \
+		-e PAPERLESS_MAIL_SECURITY -e PAPERLESS_MAIL_USER -e PAPERLESS_MAIL_PASSWORD -e NOTIFY_PERSON -e ARCHIV_URL \
 		"${CONTAINER:-systemd-paperless}" python3 - quittung <"${QUITTUNG_SKRIPT:?paperless-quittung.py}" >"$S/neu.jsonl"
 	rc=$?
 	cat "$S/neu.jsonl" >>"$F" && rm -f "$S/neu.jsonl"

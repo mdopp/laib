@@ -58,7 +58,7 @@ func TestOnlyTheOwnersKeysSayOwner(t *testing.T) {
 		"homes/HOMES_DISCOGS_KEY": true, "homes/HOMES_DISCOGS_SECRET": true, "homes/HOMES_IMMICH_KEY": true,
 		"caddy/DNS_API_TOKEN": true, "auth/AUTHELIA_SMTP_PASSWORD": true, "paperless/PAPERLESS_MAIL_PASSWORD": true,
 		"bote/BOTE_MODEL_KEY": true, "bote/BOTE_TELEGRAM_TOKEN": true, "bote/BOTE_DISCORD_TOKEN": true, "bote/BOTE_MATRIX_TOKEN": true,
-		"media/JELLYFIN_HA_PASSWORD":        true,
+		"media/JELLYFIN_HA_PASSWORD": true, "archiv/DOKUMENTE_MAIL_PASSWORD": true, // archiv#34: the document mailbox for a person's archive, per person
 		"werkstatt/CLAUDE_CODE_OAUTH_TOKEN": true, "werkstatt/WERKSTATT_GIT_TOKEN": true, "werkstatt/WERKSTATT_PI_GIT_TOKEN": true,
 	}
 	files, _ := filepath.Glob("*/laib.yml")

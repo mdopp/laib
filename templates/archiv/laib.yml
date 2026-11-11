@@ -32,6 +32,12 @@ secrets:
     was: ARCHIV_HAUS_SECRET   # ADR 0031: the value moves along (#1021); goes once the box moved
   - name: ARCHIV_RADICALE_PASSWORD   # the archive's own Radicale login, archiv-<person> (laib#1009): the auth template seeds it, templates/radicale lets it read the person's contacts and calendars and write nothing
     account: archiv-${PERSON}
+  - name: DOKUMENTE_MAIL_PASSWORD    # the household's document mailbox (Paperless' catch-all, PAPERLESS_MAIL_*) for this person's archive (archiv#34): the archive reads only mail to <person>+doc@<domain>, read-only. Per person (DOKUMENTE_MAIL_PASSWORD_<PERSON>), so the owner decides for whom; a read-only login of the provider where one exists, else the mailbox's own password
+    owner: {label: "Dokumenten-Mails im Archiv: Passwort des Dokumenten-Postfachs", warum: "Damit liegen die Mails, mit denen diese Person Dokumente an Paperless schickt, auch in ihrem Archiv.", hilfe: "Das Passwort des Postfachs, das Paperless abruft (dasselbe wie bei Paperless), oder ein eigenes Nur-Lese-Passwort, wenn der Anbieter eins anbietet. Dazu im values.yml dieses Archivs DOKUMENTE_MAIL_HOST und DOKUMENTE_MAIL_USER wie bei Paperless eintragen."}
+    external: true
+    optional: true                   # without it the archive reads no document mail
+requires:                            # a document mailbox needs its login and password: refused at plan
+  DOKUMENTE_MAIL_HOST: [DOKUMENTE_MAIL_USER, DOKUMENTE_MAIL_PASSWORD]
 data:
   - path: ${DATA_DIR}/${SERVICE}               # the vault's cipher folder, the Briefkasten, the keys (outside the vault, ADR 0029 amendment), the status
   - path: ${DATA_DIR}/archiv-eingang/${PERSON}  # Homes writes the phone's backups here (haus#207); letzte/ holds the newest per source for a new phone:

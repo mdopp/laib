@@ -7,3 +7,10 @@ IMMICH_PUBLIC_URL: https://photos.${DOMAIN}         # where the archive's page o
 # an agent's way to this person's archive at archiv.<domain>/p/<person>/, past the login with msgvault's key
 # (laib#1121): off. Only the person decides to set it ("on"), in their instance's values.yml, by a proposal.
 AGENT_PATH: 
+# the household's document mailbox (archiv#34): the same as Paperless' PAPERLESS_MAIL_*; empty host: the archive does not read it
+DOKUMENTE_MAIL_HOST: ""                   # e.g. imap.strato.de (Paperless' PAPERLESS_MAIL_HOST)
+DOKUMENTE_MAIL_PORT: "993"                # TLS; 143 only with STARTTLS
+DOKUMENTE_MAIL_USER: ""                   # the mailbox's login (Paperless' PAPERLESS_MAIL_USER)
+DOKUMENTE_MAIL_DOMAIN: ${DOMAIN}          # of <person>+doc@<domain>: the domain of Paperless' PAPERLESS_MAIL_FILTER_TO
+DOKUMENTE_MAIL_ORDNER: INBOX              # the folder Paperless reads (PAPERLESS_MAIL_FOLDER)
+DOKUMENTE_MAIL_PASSWORD: !secret DOKUMENTE_MAIL_PASSWORD
