@@ -1,0 +1,4 @@
+# scripts/loc.sh: one cap on the production lines, then the folders it counts.
+# Raising it: the reason here, the owner's yes in the PR.
+# 2,000: laib-app new's start, a new repo's room for a few small household apps (laib#1170)
+2000 apps

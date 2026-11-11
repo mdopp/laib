@@ -44,7 +44,7 @@ class Scaffold(unittest.TestCase):
                 self.assertTrue((repo / f).is_file(), f)
             for f in repo.rglob("*"):
                 if f.is_file() and ".git" not in f.parts:
-                    self.assertNotRegex(f.read_text(), r"__[A-Za-z]+__", f"placeholder left in {f}")
+                    self.assertNotRegex(f.read_text(), r"__[A-Z][A-Za-z]*__", f"placeholder left in {f}")
             self.assertIn("X-Hallo-Proxy", (repo / "apps/hallo/main.go").read_text(), "the header laib renders for proxySecret")
             if shutil.which("go"):
                 t = subprocess.run(["go", "test", "./..."], cwd=repo / "apps/hallo", capture_output=True, text=True, timeout=300)
@@ -83,6 +83,36 @@ class Scaffold(unittest.TestCase):
             p = subprocess.run(["bash", "scripts/pins.sh"], cwd=repo, capture_output=True, text=True, timeout=60)
             self.assertNotEqual(p.returncode, 0)
             self.assertIn("pins: 2 ", p.stdout)
+
+    def test_a_new_repo_carries_the_gates_from_one_source(self):
+        # #1170: ratchet.py and its test are laib's own, copied; copies.sh fails
+        # on a copy that differs, loc.sh holds the one cap of scripts/loc.txt
+        for f in ("ratchet.py", "test_ratchet.py", "copies.sh"):
+            self.assertEqual((HERE / "scaffold/repo/scripts" / f).read_text(), (ROOT / "scripts" / f).read_text(),
+                             f"the scaffold's scripts/{f} is a copy of laib's")
+        self.assertEqual(subprocess.run(["bash", "scripts/copies.sh"], cwd=ROOT, capture_output=True, text=True).returncode, 0)
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d) / "laib-apps"
+            self.assertEqual(laib_app("new", "hallo", "--repo", str(repo), "--owner", "mdopp").returncode, 0)
+            wf = (repo / ".github/workflows/apps.yml").read_text()
+            for step in ("bash scripts/copies.sh", "sh scripts/loc.sh", "python3 scripts/ratchet.py"):
+                self.assertIn(step, wf)
+            src = dict(os.environ, COPIES_FROM=str(HERE / "scaffold/repo/scripts"))
+            copies = lambda: subprocess.run(["bash", "scripts/copies.sh"], cwd=repo, env=src, capture_output=True, text=True, timeout=60)
+            p = copies()
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            loc = lambda: subprocess.run(["sh", "scripts/loc.sh"], cwd=repo, capture_output=True, text=True, timeout=60)
+            p = loc()
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.assertRegex(p.stdout, r"production: [1-9]\d* +tests: [1-9]\d* +\(cap 2000: apps\)")
+            # and both can go red: a copy edited here, an app over its cap
+            r = repo / "scripts/ratchet.py"
+            r.write_text(r.read_text().replace("COGNIT_OVER = 30", "COGNIT_OVER = 60"))
+            p = copies()
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn("scripts/ratchet.py differs", p.stdout)
+            (repo / "scripts/loc.txt").write_text("10 apps\n")
+            self.assertNotEqual(loc().returncode, 0)
 
     def test_names_and_existing_apps_are_refused(self):
         with tempfile.TemporaryDirectory() as d:

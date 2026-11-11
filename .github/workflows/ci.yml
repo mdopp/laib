@@ -16,6 +16,8 @@ jobs:
         with:
           go-version-file: go.mod
       - run: scripts/ratchet.py
+      - name: the gates' files are the scaffold's, the copies every repo carries (laib#1170)
+        run: bash scripts/copies.sh
   test:
     runs-on: ubuntu-latest
     permissions:

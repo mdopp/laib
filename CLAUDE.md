@@ -97,6 +97,7 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 | A template with `private:`, `oidc:` or `perPerson:` has its section in `docs/DATA.md`, naming its privacy class | `TestEveryTemplateWithFamilyDataIsInDataDoc` |
 | What builds an image is pinned: every `uses:` by commit, every `FROM` by digest (ADR 0034, #1165); the same file in each of the owner's repos and the scaffold | `scripts/pins.sh` |
 | Dead code, staticcheck findings, duplicates and complexity only go down (see below) | `scripts/ratchet.py`, CI job `ratchet` |
+| The gates have one source (#1170): `ratchet.py`, `test_ratchet.py`, `pins.sh`, `copies.sh` are `werkstatt/scaffold/repo/scripts/`'s, copied unchanged into every repo of the household (and `loc.sh` with one cap where a repo has `scripts/loc.txt`); a fix goes here first, then to the copies | `scripts/copies.sh`, in each repo's CI |
 | Every touch answers at once (#588): every POST route ends done, red with a next step, or waiting with a limit | `cmd/laib/taps854_test.go` |
 | No raw or technical text in front of people (#855) | `cmd/laib/plain855_test.go`, `notify/plain855_test.go`, `frage/plain855_test.go` |
 
@@ -116,7 +117,9 @@ gocognit over 30 on production functions. CI fails when
 
 A moved or renamed function is new under its new name and gone under the
 old: `--update --accept`, the PR shows the move. `scripts/ratchet.py
-deadcode` runs one tool.
+deadcode` runs one tool. The same file ratchets a Python repo (a
+`ruff.toml` at its root, as dokumente): ruff's lint and McCabe complexity
+over 10, pinned in the script (#1170).
 
 Guidelines, no check: what a `docs/DATA.md` section says beyond its class, issues first, Conventional Commits, releases via
 release-please, weighing a change against what worked before, regression ⇒
