@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.23.0](https://github.com/mdopp/laib/compare/v2.22.2...v2.23.0) (2026-11-11)
+
+
+### Features
+
+* **bote:** mark a decided proposal's chat notice instead of deleting it ([#1185](https://github.com/mdopp/laib/issues/1185)) ([b5089cb](https://github.com/mdopp/laib/commit/b5089cb26857c19f59b22b58931bd9126464c0b6)), closes [#1183](https://github.com/mdopp/laib/issues/1183)
+
 ## [2.22.2](https://github.com/mdopp/laib/compare/v2.22.1...v2.22.2) (2026-11-11)
 
 
