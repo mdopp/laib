@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.22.2](https://github.com/mdopp/laib/compare/v2.22.1...v2.22.2) (2026-11-11)
+
+
+### Bug Fixes
+
+* **operator:** retry and report a refused task ask, grant aufgabe through routineblick ([#1182](https://github.com/mdopp/laib/issues/1182)) ([8f4b82e](https://github.com/mdopp/laib/commit/8f4b82e18f16243a82e51300daa6c5f7dc21f625))
+
 ## [2.22.1](https://github.com/mdopp/laib/compare/v2.22.0...v2.22.1) (2026-11-11)
 
 
