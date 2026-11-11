@@ -1,0 +1,7 @@
+# The packages scripts/ratchet.py mutation tests (laib#1167): the trust kernel
+# of ADR 0019 §2 — who may approve, the envelope, tokens, proposals, the Inbox.
+internal/policy
+internal/envelope
+internal/token
+internal/proposal
+internal/inbox

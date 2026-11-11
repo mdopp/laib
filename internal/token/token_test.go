@@ -48,3 +48,18 @@ func mustRead(t *testing.T, p string) []byte {
 	}
 	return b
 }
+
+// ttl 0 means no expiry, not "expired at once" (#1167: the mutant ttl >= 0 lived).
+func TestMintWithoutTTLNeverExpires(t *testing.T) {
+	s, err := Load(filepath.Join(t.TempDir(), "tokens.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, rec, err := s.Mint("claude", 0, "forever")
+	if err != nil || !rec.Expires.IsZero() {
+		t.Fatal(rec.Expires, err)
+	}
+	if _, ok := s.Lookup(plain, time.Now().Add(24*365*time.Hour)); !ok {
+		t.Fatal("a token without ttl expired")
+	}
+}

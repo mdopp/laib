@@ -3,6 +3,7 @@ package envelope
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mdopp/laib/internal/journal"
@@ -43,6 +44,16 @@ func TestJailKeepsReadsInsideTheServiceData(t *testing.T) {
 			t.Fatalf("%s allowed", bad)
 		}
 	}
+	// the jail refuses a path outside by itself, not only through the root's
+	// refusal to climb out of it (#1167: the negated prefix check lived)
+	for _, out := range []string{filepath.Join(data, "immich", "secret.env"), "/etc/passwd"} {
+		if r, rel, err := jail(st, svc, out); err == nil || !strings.Contains(err.Error(), "outside") {
+			if r != nil {
+				r.Close()
+			}
+			t.Fatalf("%s: jail gave %q, %v", out, rel, err)
+		}
+	}
 	// no data declared: the service's own folder under DATA_DIR
 	bare := &state.Service{Name: "beets"}
 	os.WriteFile(filepath.Join(data, "beets", "config.yaml"), []byte("ok"), 0o644)
@@ -74,5 +85,9 @@ func TestSpentCountsActionsNotRefusals(t *testing.T) {
 	}
 	if used, _ := spent(recent, "scan", "ops"); used != 1 {
 		t.Fatalf("scan used %d", used)
+	}
+	// only the asking hand's own applies count (#1167: the mutant != lived)
+	if used, _ := spent(recent, "paperless", "claude"); used != 2 {
+		t.Fatalf("claude used %d, want 2", used)
 	}
 }
