@@ -35,4 +35,4 @@ jobs:
         if: github.event_name != 'pull_request'
       - name: sign the image; Laib proposes a digest of ours only with this signature (ADR 0034)
         if: github.event_name != 'pull_request'
-        run: cosign sign --yes ghcr.io/mdopp/laib-lease@${{ steps.build.outputs.digest }}
+        run: cosign sign --yes --new-bundle-format=false --use-signing-config=false ghcr.io/mdopp/laib-lease@${{ steps.build.outputs.digest }}
