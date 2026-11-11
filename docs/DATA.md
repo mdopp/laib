@@ -112,8 +112,9 @@ laib.yml) belong to whichever account the owner made them in; the
     the OIDC block on every apply. No photo rights.
   - `HOMES_IMMICH_KEY` — **the owner's own account**, pasted on the box
     page; rights `person.read/create/update/merge`, `user.read`,
-    `asset.upload`, `face.read`, `asset.delete` (+ optional
-    `person.statistics`) — templates/homes/laib.yml,
+    `asset.read`, `asset.view`, `asset.upload`, `face.read`,
+    `asset.delete`, `album.create`, `album.read`, `albumAsset.create`
+    (+ optional `person.statistics`) — templates/homes/laib.yml,
     homes internal/immich/immich.go. Homes therefore works on the owner's
     Immich only; see Homes and the flows below.
   - The archive: each person's own key, inside their vault (archiv
@@ -487,8 +488,10 @@ and the app's API (`/napi/`); references below are to mdopp/homes.
   - `HOMES_IMMICH_KEY` — the owner's Immich account (internal/immich/
     immich.go). Reads people, faces, thumbnails, metadata search; writes
     `POST /api/people`, `PUT /api/people/{id}`, `/api/people/merge`,
-    `POST /api/assets` (the owner's own contacts' pictures, archived),
-    `DELETE /api/assets` (only those).
+    `POST /api/assets` (the owner's own contacts' pictures and the
+    household contacts' photos, archived), `DELETE /api/assets` (only
+    those), `POST /api/albums` and `PUT /api/albums/{id}/assets` (one
+    album, *Homes · Kontaktfotos*, of those photos; row 25).
   - `HOMES_RADICALE_PASSWORD` — Radicale's `homes`: owns the household's
     books; reads and writes every person's `privat-*` and
     `handy-kontakte`, reads their mirrors (radicale above).
@@ -663,6 +666,7 @@ design and not listed again.
 | 22 | Excerpts of a person's messages that carry a relation word („Mama“, „Schatz“), with the names of sender and recipients and what the archive knows of them, go to the household model so it can suggest how two people relate. Only while that person's vault is open; at most 600 characters a message; never to a cloud model. The answer stays in the vault, and nothing is logged. Owner, 2026-11-11: „dann gehen Absender, Empfänger und Text zum LLM“. | the person's archive → the box's model process (shared by the household; root can read its memory while it answers) | archiv apps/archiv/hinweise.go; templates/archiv/archiv.container; ADR 0029 amendment 2026-11-11 |
 | 23 | Which person has no second factor in Vaultwarden, or no network-drive password, becomes their login in a template's status file and in aufgaben.yml (`fuer: person:<login>`, #1168). The person sees their own task; Homes and the Bote, acting for one person, see only that person's (`aufgaben.Sees`); the admins in diag, the journal and Homes' Befunde see that a task exists, not whose | each person's account state → Laib's whole hands (owner at the shell, claude, the Operator) | templates/vaultwarden/vaultwarden-check.py, templates/file-share/file-share-check.py; internal/diag/aufgaben.go `cover`; operator/findings.go `aufgaben` |
 | 24 | The mail a person sends to their own document address (`<login>+doc@`) also goes into their archive, read from the household's document mailbox with its login, only mail whose recipient is exactly that address (owner 2026-11-11); Paperless keeps the link to it as a note on the document | the household's document mailbox → the person's archive; the Message-ID → a note on the person's document | archiv apps/archiv/dokumentenpost.go `Passt`, mail.go; templates/archiv (`DOKUMENTE_MAIL_*`); templates/paperless/paperless-quittung.py `notiz` |
+| 25 | The photo on each household contact card (Homes' own address books only; never a person's `handy-kontakte` or archive; firms and faces Homes wrote aside) goes into the owner's Immich, one upload per photo hash, archived (out of the timeline), in one album Homes keeps; Immich's own face detection runs on it, Homes runs no ML. When its one face lands in an unnamed Immich person, Homes' „Wer ist das?“ offers that contact's name, and only the owner's tap names the person. A changed photo replaces the upload, a photo on no card any more deletes it. **Owner-decided 2026-11-11**, accepting that faces of people outside the family then live in the owner's Immich. | household book → owner's Immich (and its face recognition) | homes internal/gesichter/kontaktfotos.go, internal/immich/immich.go `Album`, `InsAlbum`; internal/pages/kontakte_wer.go (homes#352) |
 
 Not crossings, checked: location goes to the person's own Reitti with
 their own token (homes internal/napi/standort.go); phone backups go to
