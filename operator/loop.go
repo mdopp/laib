@@ -183,6 +183,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		text, isErr, err := mcp.Call(ctx, "laib_diag", map[string]any{})
 		if fs, raw, ok := parseDiag(text); ok && err == nil && !isErr {
 			fs, raw = forLook(fs, raw)
+			o.aufgaben(ctx, fs, mem)
 			// nothing new (#550): every finding the last look saw too; one
 			// that went away is remembered, so its return is news again
 			last, had := mem.Seen[sk.Name]

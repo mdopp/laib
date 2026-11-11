@@ -17,6 +17,8 @@ routes:
 secrets:
   - name: VAULTWARDEN_ADMIN_TOKEN
     login: {user: admin, host: vault, path: /admin, note: "Vaultwardens Admin-Seite: nur das Token zählt"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
+  - name: VAULTWARDEN_LDAP_PASSWORD   # the read-only LLDAP account vaultwarden-check reads logins and addresses with (#1168), seeded by the auth template
+    external: true
 oidc:
   clientId: vaultwarden
   redirectUris: ["https://vault.${DOMAIN}/identity/connect/oidc-signin"]
@@ -28,7 +30,7 @@ data:
     backup: false
 health:
   http: http://127.0.0.1:8222/alive
-status:                            # the Box page's line (#785): "3 Konten, 2 mit zweitem Faktor"
+status:                            # the Box page's line (#785): "3 Konten, 2 mit zweitem Faktor"; per account without one, its person's task (#1168)
   file: ${DATA_DIR}/vaultwarden/check/laib-status.json
   check: vaultwarden-check.service
   stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older

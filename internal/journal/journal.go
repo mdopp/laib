@@ -137,12 +137,3 @@ func readFile(file string, since time.Time) ([]Entry, int, error) {
 	}
 	return out, skipped, nil
 }
-
-// Last returns the newest entry, if any.
-func Last(dir string) (Entry, bool) {
-	es, err := Read(dir, time.Time{})
-	if err != nil || len(es) == 0 {
-		return Entry{}, false
-	}
-	return es[len(es)-1], true
-}

@@ -7,7 +7,11 @@
   read-only; the key goes into the request header and nowhere else);
 - the network drive: of the members samba-members.py lists, how many have set
   their password, from samba-accounts.sh's status file ("<name> <epoch>", 0:
-  none). The passwords FIFO beside it is never opened.
+  none). The passwords FIFO beside it is never opened. Each member without one
+  is a finding that asks for their own task (#1168): „Netzlaufwerk-Passwort
+  festlegen“ for person:<name>, the way Homes' /netzlaufwerk, closed by laib
+  once the row has a time. The finding's words name nobody: the admins read
+  the count, as in the line.
 
 A part that cannot be measured says "nicht gemessen" and why; the others stay.
 Only reads.
@@ -21,6 +25,7 @@ URL = os.environ.get("SYNCTHING_URL", "http://127.0.0.1:8384").rstrip("/")
 CONFIG = os.environ.get("SYNCTHING_CONFIG", "/syncthing/config.xml")
 ACCOUNTS = os.environ.get("ACCOUNTS_DIR", "/samba-accounts")
 STATUS = os.path.join(os.environ.get("STATUS_DIR", "/data"), "laib-status.json")
+MEMBER = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")   # a login as samba-members.py takes it
 
 
 def status(detail, findings=()):
@@ -64,10 +69,16 @@ def syncthing():
 
 
 def accounts():
+    """the line, and a finding asking for the task of each member without a password"""
     with open(os.path.join(ACCOUNTS, "status")) as f:
         rows = [l.split() for l in f if l.strip()]
     have = sum(1 for r in rows if len(r) == 2 and r[1].isdigit() and int(r[1]) > 0)
-    return f"Netzlaufwerk: {have} von {len(rows)} Person{'en' if len(rows) != 1 else ''} mit Passwort"
+    asks = [{"severity": "info", "topic": "netzlaufwerk." + r[0], "detail": "Netzlaufwerk: eine Person ohne Passwort, ihre Aufgabe steht in Homes",
+             "neue_aufgabe": {"titel": "Netzlaufwerk-Passwort festlegen", "fuer": "person:" + r[0], "weg": {"seite": "/netzlaufwerk"},
+                              "warum": "Damit du die Dateien des Hauses am Computer öffnen kannst. Ohne Passwort versucht es dein "
+                                       "Computer immer wieder vergeblich. Laib hakt die Aufgabe ab, sobald es gesetzt ist."}}
+            for r in rows if len(r) == 2 and r[1] == "0" and MEMBER.match(r[0])]
+    return f"Netzlaufwerk: {have} von {len(rows)} Person{'en' if len(rows) != 1 else ''} mit Passwort", asks
 
 
 def main():
@@ -89,7 +100,9 @@ def main():
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
         miss("Syncthing", e, "laib inspect file-share")
     try:
-        parts.append(accounts())
+        line, asks = accounts()
+        parts.append(line)
+        findings += asks
     except FileNotFoundError:
         pass   # samba-accounts.sh writes it once members exist: nothing to say yet
     except OSError as e:

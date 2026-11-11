@@ -10,13 +10,29 @@ against its rate limit (3 in 5 minutes by default): the timer runs every 15
 minutes, laib's look at most once per stale. A refused token or a silent
 Vaultwarden is "nicht gemessen" and why, never a number.
 
-Environment: VAULTWARDEN_URL, ADMIN_TOKEN, STATUS_DIR.
+Whose account has no second factor (#1168): LLDAP's logins and mail
+addresses, read through its GraphQL with the read-only account vaultwarden
+(LDAP_PASSWORD, seeded by the auth template like file-share's), never as
+the admin. An enabled account without a second factor whose address is a
+login's is a finding that asks for that person's task, „Zweiten Faktor für
+deinen Passwort-Tresor einrichten“; laib closes it once the account has
+one. The finding's words name nobody: the admins read the count, as in the
+line. Without LDAP_PASSWORD only the line; LLDAP refusing or silent is
+"nicht gemessen", so no task closes on a guess.
+
+Environment: VAULTWARDEN_URL, ADMIN_TOKEN, LLDAP_URL, LDAP_PASSWORD, STATUS_DIR.
 """
-import datetime, http.cookiejar, json, os, urllib.error, urllib.parse, urllib.request
+import datetime, http.cookiejar, json, os, re, urllib.error, urllib.parse, urllib.request
 
 URL = os.environ.get("VAULTWARDEN_URL", "http://127.0.0.1:8222").rstrip("/")
 TOKEN = os.environ.get("ADMIN_TOKEN", "")
 STATUS = os.path.join(os.environ.get("STATUS_DIR", "/data"), "laib-status.json")
+LLDAP = os.environ.get("LLDAP_URL", "http://127.0.0.1:17170").rstrip("/")
+LDAP_PASSWORD = os.environ.get("LDAP_PASSWORD", "")
+LOGIN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,48}$")   # a login the kernel takes for person:<login>, short enough for the topic
+WEG = "/einrichten/passwoerter"   # Homes' page for the vault: its address and the Bitwarden app
+WARUM = ("Dein Tresor ist bisher nur mit dem Master-Passwort geschützt. Öffne ihn im Browser, dann Einstellungen → "
+         "Sicherheit → Zweistufige Anmeldung, und richte eine Authenticator-App ein. Laib hakt die Aufgabe ab, sobald es klappt.")
 
 
 def status(detail, findings=()):
@@ -33,6 +49,37 @@ def unmeasured(why, fix):
 
 def n(x):
     return f"{int(x or 0):,}".replace(",", ".")
+
+
+def logins():
+    """LLDAP's mail addresses, lower case, to their logins, through the read-only account"""
+    def post(path, body, token=None):
+        req = urllib.request.Request(LLDAP + path, data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json", **({"Authorization": "Bearer " + token} if token else {})})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.load(r)
+    token = post("/auth/simple/login", {"username": "vaultwarden", "password": LDAP_PASSWORD})["token"]
+    res = post("/api/graphql", {"query": "{ users { id email } }"}, token)
+    if res.get("errors"):
+        raise ValueError("LLDAP antwortet mit einem Fehler")
+    return {str(u["email"]).lower(): u["id"] for u in res["data"]["users"] if u.get("email") and LOGIN.match(u["id"])}
+
+
+def asks(users):
+    """a finding per enabled account without a second factor whose address is a login's"""
+    try:
+        whose = logins()
+    except (OSError, ValueError, KeyError, TypeError) as e:   # urllib's errors name the URL and the status, never the body sent
+        why = f"LLDAP antwortet nicht ({e.code if isinstance(e, urllib.error.HTTPError) else type(e).__name__})"
+        return [{"severity": "info", "unmeasured": True, "detail": "Wessen Konto ohne zweiten Faktor ist, nicht gemessen: " + why, "fix": "laib logs auth"}]
+    out = []
+    for u in users:
+        login = whose.get(str(u.get("email") or "").lower())
+        if login and u.get("userEnabled", True) and not u.get("twoFactorEnabled"):
+            out.append({"severity": "info", "topic": "zweiter-faktor." + login, "detail": "Ein Konto ohne zweiten Faktor, seine Aufgabe steht in Homes",
+                        "neue_aufgabe": {"titel": "Zweiten Faktor für deinen Passwort-Tresor einrichten", "warum": WARUM,
+                                         "fuer": "person:" + login, "weg": {"seite": WEG}}})
+    return out
 
 
 class Stay(urllib.request.HTTPRedirectHandler):
@@ -64,7 +111,7 @@ def main():
     detail = f"{n(len(on))} Kont" + ("o" if len(on) == 1 else "en") + f", {n(two)} mit zweitem Faktor"
     if off:
         detail += f" · {n(off)} gesperrt"
-    status(detail)
+    status(detail, asks(users) if LDAP_PASSWORD else [])
 
 
 if __name__ == "__main__":

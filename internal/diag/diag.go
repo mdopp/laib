@@ -63,6 +63,8 @@ type Finding struct {
 	// Wartet: why a unit or health red is expected now (#907, #908); it is
 	// then info (an apply, a pause) or gelb (busy), and offers no repair.
 	Wartet string `json:"wartet,omitempty"`
+	// NeueAufgabe: the task a status file asks for (#1168); the Operator's look adds it (cover)
+	NeueAufgabe *aufgaben.Aufgabe `json:"neue_aufgabe,omitempty"`
 }
 
 // Cmd runs the built-in probes: failed units, drift between state and

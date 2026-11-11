@@ -71,8 +71,24 @@ class Check(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertRegex(st["detail"], r"^\d+(,\d)? (TB|GB) frei von \d+(,\d)? (TB|GB) · Syncthing: 2 von 3 Geräten verbunden · "
                                        r"Netzlaufwerk: 2 von 3 Personen mit Passwort$")
-        self.assertEqual(st["findings"], [])
+        self.assertEqual([f["topic"] for f in st["findings"]], ["netzlaufwerk.admin"])   # #1168: admin has none
         self.assertNotIn(KEY, r.stdout + r.stderr + json.dumps(st))
+
+    def test_a_member_without_password_asks_for_their_task(self):
+        # #1168: one ask per member without a password, for that person, the way to Homes' page;
+        # the finding's words name nobody (the admins read the count), and a name the kernel
+        # could not take as a login asks for nothing
+        _, st = run(Fake().url, accounts="anna 0\nbert 1761400000\nCarl 0\nmdopp 0\n")
+        self.assertIn("Netzlaufwerk: 1 von 4 Personen mit Passwort", st["detail"])
+        asks = {f["topic"]: f for f in st["findings"]}
+        self.assertEqual(sorted(asks), ["netzlaufwerk.anna", "netzlaufwerk.mdopp"])
+        a = asks["netzlaufwerk.anna"]
+        self.assertEqual((a["severity"], a["neue_aufgabe"]["fuer"], a["neue_aufgabe"]["weg"]), ("info", "person:anna", {"seite": "/netzlaufwerk"}))
+        self.assertEqual(a["neue_aufgabe"]["titel"], "Netzlaufwerk-Passwort festlegen")
+        self.assertNotIn("anna", a["detail"])
+        self.assertFalse(a.get("unmeasured"))
+        _, st = run(Fake().url, accounts="anna 1761400000\n")
+        self.assertEqual(st["findings"], [], "everyone has one: nothing asked, an open task closes")
 
     def test_size_words(self):
         sys.path.insert(0, str(SCRIPT.parent))

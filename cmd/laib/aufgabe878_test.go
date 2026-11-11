@@ -8,8 +8,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/mcp"
 )
 
@@ -62,7 +64,7 @@ func TestATaskIsForSomeoneAndHausSeesOnlyItsPersonsOwn(t *testing.T) {
 	tools := mcp.Tools(st, "homes")
 	i := slices.IndexFunc(tools, func(m map[string]any) bool { return m["name"] == "laib_aufgabe" })
 	props := tools[i]["inputSchema"].(map[string]any)["properties"].(map[string]any)
-	for _, p := range []string{"fuer", "weg", "fertig_wenn", "befund", "von"} {
+	for _, p := range []string{"fuer", "weg", "fertig_wenn", "von"} {
 		if props[p] == nil {
 			t.Errorf("laib_aufgabe lacks %s", p)
 		}
@@ -80,11 +82,15 @@ func TestATaskIsForSomeoneAndHausSeesOnlyItsPersonsOwn(t *testing.T) {
 		}
 		return l[0]
 	}
-	if a := add("claude", map[string]any{"titel": "Sicherung außer Haus", "befund": "backup offsite"}); a.Fuer != "admins" || a.FertigWenn != "backup offsite" || a.Weg != nil {
-		t.Fatalf("an old-shape add is the admins' with its befund as fertig_wenn: %+v", a)
+	if a := add("claude", map[string]any{"titel": "Sicherung außer Haus", "fertig_wenn": "backup offsite"}); a.Fuer != "admins" || a.FertigWenn != "backup offsite" || a.Weg != nil {
+		t.Fatalf("without fuer it is the admins': %+v", a)
 	}
 	if a := add("claude", map[string]any{"titel": "Stimme aufnehmen", "fuer": "person:anna", "weg": "/stimme"}); a.Fuer != "person:anna" || a.Weg == nil || a.Weg.Seite != "/stimme" {
 		t.Fatalf("anna's: %+v", a)
+	}
+	// #1168: the journal says that a person's task exists, not whose
+	if es, _ := journal.Read(env.Paths.Journal, time.Time{}); !strings.HasSuffix(es[len(es)-1].Detail, "Stimme aufnehmen für eine Person") || strings.Contains(es[len(es)-1].Detail, "anna") {
+		t.Fatalf("the journal names the person: %+v", es[len(es)-1])
 	}
 	if a := add("homes", map[string]any{"titel": "Joshua auf Signal", "fuer": "person:bert", "weg": "gespraech", "von": "mama"}); a.Fuer != "person:bert" || a.Weg == nil || !a.Weg.Gespraech {
 		t.Fatalf("bert's: %+v", a)

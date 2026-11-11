@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/mdopp/laib/internal/aufgaben"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -48,6 +49,7 @@ func ReadStatus(st *state.State, svc *state.Service) Report {
 			Severity, Detail, Fix, Topic, Effect, Undo, Does string
 			Repair                                           []string
 			Unmeasured                                       bool
+			NeueAufgabe                                      *aufgaben.Aufgabe `json:"neue_aufgabe"`
 		} `json:"findings"`
 	}
 	var all map[string]json.RawMessage
@@ -79,7 +81,7 @@ func ReadStatus(st *state.State, svc *state.Service) Report {
 			sev = "info"
 		}
 		r.Findings = append(r.Findings, Finding{Severity: sev, Probe: "status", Service: svc.Name, Detail: x.Detail, Fix: x.Fix,
-			Topic: x.Topic, Repair: x.Repair, Unmeasured: x.Unmeasured, Effect: x.Effect, Undo: x.Undo, Does: x.Does}) // #759: a repair laib offers runs only as one (inbox.Repairable)
+			Topic: x.Topic, Repair: x.Repair, Unmeasured: x.Unmeasured, Effect: x.Effect, Undo: x.Undo, Does: x.Does, NeueAufgabe: x.NeueAufgabe}) // #759: a repair laib offers runs only as one (inbox.Repairable)
 	}
 	return r
 }

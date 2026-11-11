@@ -889,6 +889,16 @@ aufgaben:
   nightly job.
 - `fertig_wenn` matches a finding by its probe and its service or topic
   (`backup offsite`); one without either covers only findings without one.
+- **A check that knows who is missing (#1168).** A status file's finding
+  may carry `neue_aufgabe` — `{titel, warum, fuer, weg: {seite}}`, the
+  shape of a task — with its `topic` (`netzlaufwerk.<login>`). diag passes
+  it on while no task with `fertig_wenn: status <topic>` is open and none
+  was ticked off by a person (laib's own tick lets it come back when the
+  finding does); the Operator's look adds it as ops, in code, before
+  anything else, and laib closes it when the finding is measured gone. A
+  person's task covers its finding with „Aufgabe #N für die Person“ and
+  the journal says „für eine Person“: the admins learn that it exists,
+  not whose. The template's words in `detail` name nobody either.
 - Readiness carries `aufgaben` and `aufgabenFaellig`, counting the tasks
   that are nobody's own (the admins' and everyone's); the morning report
   names the due ones. A person's own count is laib_aufgabe's `offen` for

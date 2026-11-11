@@ -274,6 +274,19 @@ subscriptions). Its data folder holds only the status and the last run.
 - **Shares out:** a File Browser share link works from anywhere
   (`publicPaths`), with its own password and expiry, made by whoever
   shares.
+- **A person's task (#1168):** `file-share-check.py` asks, per member
+  whose row in samba-accounts' status has no time, for that person's
+  Box-Aufgabe „Netzlaufwerk-Passwort festlegen“ (`fuer: person:<login>`,
+  `weg: /netzlaufwerk`, `fertig_wenn: status netzlaufwerk.<login>`); the
+  Operator's look adds it and diag closes it once the row has a time.
+  **Who sees what:** the person sees one password task in Homes (Homes'
+  own, from the same status file, shown at once; Laib's stands behind it
+  for the Bote and closes itself, homes internal/pages/einrichtung.go
+  `mitLaibs`); the admins
+  see in diag and the journal that a person's task exists („Aufgabe #N
+  für die Person“, „für eine Person“), no name beyond the status line's
+  count; Laib's whole hands (the owner at the shell, claude, the
+  Operator) read the login in the finding's topic and in aufgaben.yml.
 
 ### vaultwarden
 
@@ -288,6 +301,17 @@ subscriptions). Its data folder holds only the status and the last run.
   passwords. Sharing goes through Vaultwarden organisations, which a
   person sets up.
 - **Keys held to it:** none.
+- **A person's task (#1168):** `vaultwarden-check.py` reads, besides the
+  admin page's accounts, LLDAP's logins and mail addresses with the
+  read-only account `vaultwarden` (`VAULTWARDEN_LDAP_PASSWORD`, seeded by
+  templates/auth; no password, no group). An enabled account without a
+  second factor whose address is a login's asks for that person's
+  Box-Aufgabe „Zweiten Faktor für deinen Passwort-Tresor einrichten“
+  (`fuer: person:<login>`, `weg: /einrichten/passwoerter`, `fertig_wenn:
+  status zweiter-faktor.<login>`); closed once the account has one. The
+  status file keeps the login, never the address. **Who sees what:** as
+  for file-share's: the person their own task; the admins that one exists;
+  Laib's whole hands the login.
 
 ### archiv
 
@@ -597,6 +621,7 @@ design and not listed again.
 | 20 | A relation the person answered in their archive („Wie steht X zu Y?“), at their one tap there (owner 2026-11-10: the tap in their own open archive is their consent; no second confirmation): both ends household contacts → both household cards by UID (the family sees it); otherwise → only the person's own phone, by name; a person only on photos → stays in the vault. A household card never gets a name from the person's phone or photos. The archive posts it server to server to Homes' own port on the box (`/intern/uebernahme`, not through Caddy), signed with that person's archive secret, valid two minutes, each nonce once; Rückgängig takes it back. | the person's archive → household book, or → the person's phone | archiv apps/archiv/uebernahme.go, fragen_seite.go; homes internal/uebernahme |
 | 21 | A scan Dokumente's sorting could not give anyone: its sender, date, page count and arrival go to Homes and are shown to the admins („Wem gehört dieser Scan?“, Deine Aufgaben), who give it to a person or the household; never its title or text | the scan's metadata → the admins | dokumente ordnen/zuteilen.py `fragen`; homes cmd/homes/zuordnen.go, internal/pages/dokumente_zuordnen.go |
 | 22 | Excerpts of a person's messages that carry a relation word („Mama“, „Schatz“), with the names of sender and recipients and what the archive knows of them, go to the household model so it can suggest how two people relate. Only while that person's vault is open; at most 600 characters a message; never to a cloud model. The answer stays in the vault, and nothing is logged. Owner, 2026-11-11: „dann gehen Absender, Empfänger und Text zum LLM“. | the person's archive → the box's model process (shared by the household; root can read its memory while it answers) | archiv apps/archiv/hinweise.go; templates/archiv/archiv.container; ADR 0029 amendment 2026-11-11 |
+| 23 | Which person has no second factor in Vaultwarden, or no network-drive password, becomes their login in a template's status file and in aufgaben.yml (`fuer: person:<login>`, #1168). The person sees their own task; Homes and the Bote, acting for one person, see only that person's (`aufgaben.Sees`); the admins in diag, the journal and Homes' Befunde see that a task exists, not whose | each person's account state → Laib's whole hands (owner at the shell, claude, the Operator) | templates/vaultwarden/vaultwarden-check.py, templates/file-share/file-share-check.py; internal/diag/aufgaben.go `cover`; operator/findings.go `aufgaben` |
 
 Not crossings, checked: location goes to the person's own Reitti with
 their own token (homes internal/napi/standort.go); phone backups go to

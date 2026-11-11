@@ -126,10 +126,7 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 		if d := val["--erinnern"]; d != "" && aufgaben.Day(d) != nil {
 			return env.Fail(aufgaben.Day(d))
 		}
-		fw := cmp.Or(val["--fertig-wenn"], val["--befund"]) // --befund: its name until #878
-		if b := val["--befund"]; b != "" && val["--fertig-wenn"] != "" && b != val["--fertig-wenn"] {
-			return env.Fail(errors.New("--befund ist der alte Name von --fertig-wenn: nur eines von beiden"))
-		}
+		fw := val["--fertig-wenn"]
 		if fw != "" && aufgaben.Befund(fw) != nil {
 			return env.Fail(aufgaben.Befund(fw))
 		}
@@ -165,7 +162,9 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 		case "add":
 			list, a = aufgaben.Add(list, a, by, now)
 			msg, detail = fmt.Sprintf("Box-Aufgabe #%d angelegt: %s", a.ID, a.Titel), fmt.Sprintf("add #%d %s", a.ID, a.Titel)
-			if a.Fuer != aufgaben.Admins {
+			if strings.HasPrefix(a.Fuer, "person:") { // the journal says only that it exists (#1168)
+				detail += " für eine Person"
+			} else if a.Fuer != aufgaben.Admins {
 				detail += " für " + a.Fuer
 			}
 			if a.FertigWenn != "" && aufgaben.ClosesItself(a.FertigWenn) {
