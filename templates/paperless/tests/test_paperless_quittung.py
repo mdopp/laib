@@ -22,7 +22,8 @@ class Fake:
         self.users = users if users is not None else [{"username": "mama", "email": "Mama@Example.org"}]
         self.accounts = [{"id": 1, "imap_server": "imap.example.org", "username": "webmaster@example.org"},
                          {"id": 2, "imap_server": "other.example.org", "username": "x@example.org"}]
-        self.rules = [{"id": 7, "account": 1}, {"id": 8, "account": 2}]
+        self.rules = [{"id": 7, "account": 1}, {"id": 8, "account": 2}, {"id": 9, "account": 1, "name": "Dokumente von anna"}]
+        self.notes, self.posted = {}, []
 
     def all(self, path):
         return {"/api/mail_accounts/": self.accounts, "/api/mail_rules/": self.rules,
@@ -32,9 +33,16 @@ class Fake:
         if path.startswith("/api/tasks/"):
             assert "version=9" in accept
             return self.tasks
+        if path.startswith("/api/documents/") and path.endswith("/notes/"):
+            return self.notes.get(int(path.split("/")[3]), [])
         if path.startswith("/api/documents/"):
             return self.docs[int(path.split("/")[3])]
         raise AssertionError(path)
+
+    def post(self, path, body):
+        assert path.startswith("/api/documents/") and path.endswith("/notes/"), path
+        self.posted.append((path, body))
+        self.notes.setdefault(int(path.split("/")[3]), []).append({"note": body["note"]})
 
 
 class Postfach:
@@ -132,6 +140,48 @@ class Receipt(unittest.TestCase):
         self.assertEqual(zeilen[0]["text"], "Per Mail nicht abgelegt: Hallo (von mama@example.org): kein Anhang, den Paperless ablegen kann")
 
 
+class ArchiveNote(unittest.TestCase):
+    """archiv#34: a document from a person's own address links to the mail in their archive"""
+
+    def setUp(self):
+        os.environ.update(PAPERLESS_MAIL_HOST="imap.example.org", PAPERLESS_MAIL_USER="webmaster@example.org",
+                          NOTIFY_PERSON="papa", PAPERLESS_URL="https://paperless.example.org", ARCHIV_URL="https://archiv.example.org/")
+
+    def tearDown(self):
+        os.environ.pop("ARCHIV_URL", None)
+
+    def fake(self, rule):
+        return Fake([mail(1, 101, rule=rule)], [task(11, "a.pdf", doc=5), task(12, "b.pdf", status="FAILURE", result="Error")],
+                    docs={5: {"id": 5, "title": "A", "page_count": 1}})
+
+    def box(self):
+        return Postfach({101: ("anna@example.org", ["a.pdf", "b.pdf"], "x1+y@mail.example.org")})
+
+    def test_a_persons_document_gets_the_link_once(self):
+        fake = self.fake(9)
+        zeilen, stand = Q.quittung(fake, {"bis": 0}, JETZT, self.box()), None
+        self.assertEqual(len(zeilen), 1, "the receipt still goes out")
+        self.assertEqual(fake.posted, [("/api/documents/5/notes/",
+                                        {"note": "Die Mail dazu im Archiv: https://archiv.example.org/tresor/mail?id=x1%2By%40mail.example.org"})])
+        Q.quittung(fake, {"bis": 0}, JETZT, self.box())   # a run that died before sichern: the same mail again
+        self.assertEqual(len(fake.posted), 1, "the note was written twice")
+
+    def test_the_households_address_without_archive_or_message_id_gets_none(self):
+        fake = self.fake(7)
+        Q.quittung(fake, {"bis": 0}, JETZT, self.box())
+        self.assertEqual(fake.posted, [], "a household mail is in nobody's archive")
+        fake = self.fake(9)
+        Q.quittung(fake, {"bis": 0}, JETZT, Postfach({101: ("anna@example.org", ["a.pdf"], "")}))
+        self.assertEqual(fake.posted, [])
+        os.environ["ARCHIV_URL"] = ""
+        Q.quittung(fake, {"bis": 0}, JETZT, self.box())
+        self.assertEqual(fake.posted, [])
+
+    def test_message_ids_are_read_as_the_archive_keeps_them(self):
+        for wert, want in {"<a@b>": "a@b", " <a@b> ": "a@b", "a@b": "a@b", "": "", "<a b>": "", "x <a@b> y": "a@b"}.items():
+            self.assertEqual(Q.message_id(wert), want, wert)
+
+
 class Mailbox(unittest.TestCase):
     def test_the_sender_and_the_attachments_names_come_from_the_mail(self):
         from email.message import EmailMessage
@@ -155,7 +205,7 @@ class Mailbox(unittest.TestCase):
 
         p = Q.Postfach()
         p.imap = Imap()
-        self.assertEqual(p.mail("INBOX", 101), ("Mama@Example.org", ["Rechnung März.pdf"]))
+        self.assertEqual(p.mail("INBOX", 101), ("Mama@Example.org", ["Rechnung März.pdf"], ""))
         self.assertEqual(p.imap.calls, [("select", '"INBOX"', True), ("FETCH", "101", "(BODY.PEEK[])")],
                          "the mailbox is read with PEEK, read-only: no flag of the mail changes")
 

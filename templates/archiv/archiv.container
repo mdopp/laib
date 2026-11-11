@@ -40,6 +40,14 @@ Environment=MODEL_URL=${MODEL_URL}
 Environment=MODEL_LEASE=${MODEL_LEASE}
 Environment=MODEL_KEY=${MODEL_KEY}
 Environment=MODEL_NAME=qwen3.6-35b-a3b
+# the household's document mailbox (archiv#34): the archive reads only mail to <person>+doc@<domain>,
+# read-only, and never deletes there; the password a file, never the environment; empty: no file, not read
+Environment=DOKUMENTE_MAIL_HOST=${DOKUMENTE_MAIL_HOST}
+Environment=DOKUMENTE_MAIL_PORT=${DOKUMENTE_MAIL_PORT}
+Environment=DOKUMENTE_MAIL_USER=${DOKUMENTE_MAIL_USER}
+Environment=DOKUMENTE_MAIL_DOMAIN=${DOKUMENTE_MAIL_DOMAIN}
+Environment=DOKUMENTE_MAIL_ORDNER=${DOKUMENTE_MAIL_ORDNER}
+Secret=${DOKUMENTE_MAIL_PASSWORD},type=mount,target=dokumente-mail-password
 
 [Service]
 Restart=always

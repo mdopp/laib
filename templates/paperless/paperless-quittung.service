@@ -18,6 +18,7 @@ Environment=PAPERLESS_MAIL_SECURITY=${PAPERLESS_MAIL_SECURITY}
 Environment=PAPERLESS_MAIL_USER=${PAPERLESS_MAIL_USER}
 Environment=PAPERLESS_MAIL_PASSWORD=${PAPERLESS_MAIL_PASSWORD}
 Environment=NOTIFY_PERSON=${NOTIFY_PERSON}
+Environment=ARCHIV_URL=${ARCHIV_URL}
 Environment=NOTIFY_TOKEN=${NOTIFY_TOKEN}
 Environment=QUITTUNG=${DATA_DIR}/paperless/mailquittung
 Environment=QUITTUNG_SKRIPT=%h/.config/containers/systemd/paperless/paperless-quittung.py

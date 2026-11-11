@@ -36,6 +36,7 @@ PAPERLESS_MAIL_FILTER_TO: ""            # only mail to this address (an alias of
 # filed as theirs. The mailbox must receive it: a catch-all for the domain does; else add the alias at the mail provider.
 PAPERLESS_MAIL_FOLDER: INBOX
 PAPERLESS_MAIL_PASSWORD: !secret PAPERLESS_MAIL_PASSWORD
+ARCHIV_URL: https://archiv.${DOMAIN}     # a document from a person's own address gets the note „Die Mail dazu im Archiv“ linking here (archiv#34); empty: no note
 NOTIFY_TOKEN: !secret BOTE_NOTIFY_TOKEN       # the mail receipt through the Bote; empty without the Bote, then no message
 # DATA.md, gap 6: what comes in through the consume folder and the household's address is Dokumente's (tag Eingang),
 # seen by no one in the family, until Dokumente's sorting gives it to its person or the household. "false" (a box

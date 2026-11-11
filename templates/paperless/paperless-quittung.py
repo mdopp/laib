@@ -32,10 +32,18 @@ user name, which is their name in box.yml people; else NOTIFY_PERSON.
 Nobody to tell: no line. The first run only notes where Paperless' record
 stands, so the mail before it is never told.
 
+The mail in the archive (archiv#34): a mail to a person's own address
+(<login>+doc@, a rule „Dokumente von <login>“) is in that person's archive
+too, which reads the same mailbox. Each document filed from it gets one
+Paperless note „Die Mail dazu im Archiv: <ARCHIV_URL>/tresor/mail?id=<its
+Message-ID>“, which opens the mail in the person's archive; written once
+(a note with that text already there is not written again), never for the
+household's address, never without ARCHIV_URL or a Message-ID.
+
 State: QUITTUNG_STAND (in Paperless' data folder): {"bis", "offen", "aufgaben"}.
 Standard library only.
 """
-import base64, email, email.policy, imaplib, json, os, re, ssl, sys, time, unicodedata, urllib.error, urllib.request
+import base64, email, email.policy, imaplib, json, os, re, ssl, sys, time, unicodedata, urllib.error, urllib.parse, urllib.request
 from datetime import datetime
 from email.utils import getaddresses
 
@@ -60,6 +68,12 @@ class API:
             data = resp.read()
             return json.loads(data) if data else None
 
+    def post(self, path, body):
+        r = urllib.request.Request(self.base + path, data=json.dumps(body).encode(), method="POST",
+                                   headers={"Authorization": self.auth, "Accept": "application/json", "Content-Type": "application/json"})
+        with urllib.request.urlopen(r, timeout=30) as resp:
+            resp.read()
+
     def all(self, path):
         out, page = [], path + ("&" if "?" in path else "?") + "page_size=100"
         while page:
@@ -83,12 +97,23 @@ def name(s):
     return re.sub(r"[^\w.]+|_", "", unicodedata.normalize("NFC", s or "")).casefold()
 
 
+PERSONEN_REGEL = "Dokumente von "   # paperless-mail.py's name of a person's rule, for <login>+doc@
+
+
 def regeln(api):
-    """the ids of the rules on the account the values name"""
+    """the rules on the account the values name: id -> the login whose own address it serves, "" for the household's"""
     host, user = E.get("PAPERLESS_MAIL_HOST", "").strip().lower(), E.get("PAPERLESS_MAIL_USER", "").strip().lower()
     konten = {a["id"] for a in api.all("/api/mail_accounts/")
               if (a.get("imap_server") or "").lower() == host and (a.get("username") or "").lower() == user}
-    return {r["id"] for r in api.all("/api/mail_rules/") if r.get("account") in konten}
+    return {r["id"]: (r.get("name") or "")[len(PERSONEN_REGEL):] if (r.get("name") or "").startswith(PERSONEN_REGEL) else ""
+            for r in api.all("/api/mail_rules/") if r.get("account") in konten}
+
+
+def message_id(wert):
+    """a Message-ID as the archive looks it up: without its angle brackets; "" when there is none"""
+    w = (wert or "").strip()
+    m = re.search(r"<([^<>\s]+)>", w)
+    return m.group(1) if m else ("" if re.search(r"[<>\s]", w) else w)
 
 
 class Postfach:
@@ -122,7 +147,7 @@ class Postfach:
         self.imap = imap
 
     def mail(self, ordner, uid):
-        """(the sender's address, [attachment names]), or None when the mailbox does not answer"""
+        """(the sender's address, [attachment names], its Message-ID), or None when the mailbox does not answer"""
         try:
             if self.imap is None:
                 self.verbinden()
@@ -139,7 +164,7 @@ class Postfach:
             return None
         msg = email.message_from_bytes(roh, policy=email.policy.default)
         von = next((a for _, a in getaddresses([str(msg.get("From", ""))]) if "@" in a), "")
-        return von, [p.get_filename() for p in msg.walk() if p.get_filename()]
+        return von, [p.get_filename() for p in msg.walk() if p.get_filename()], message_id(str(msg.get("Message-ID", "")))
 
 
 def seiten(n):
@@ -161,7 +186,7 @@ def ergebnis(api, t, base):
             log("Dokument %s nicht lesbar: %s" % (doc, e))
             d = {}
         return ("ok", d.get("title") or t.get("task_file_name") or "?", d.get("page_count"),
-                "%s/documents/%s/details" % (base, doc))
+                "%s/documents/%s/details" % (base, doc), doc)
     return ("nein", t.get("task_file_name") or "?", "nicht lesbar")
 
 
@@ -177,6 +202,26 @@ def text(von, teile, betreff):
     zeilen = ["abgelegt: %s%s – %s" % (p[1], seiten(p[2]), p[3]) for p in ok]
     zeilen += ["nicht abgelegt: %s: %s" % (p[1], p[2]) for p in nein]
     return "Per Mail%s:\n%s" % (v, "\n".join(zeilen))
+
+
+def notiz(api, teile, mid):
+    """on each document filed from a person's own address, the link to the mail in their archive (archiv#34)"""
+    base = E.get("ARCHIV_URL", "").strip().rstrip("/")
+    if not base or not mid:
+        return
+    text = "Die Mail dazu im Archiv: %s/tresor/mail?id=%s" % (base, urllib.parse.quote(mid, safe=""))
+    for p in teile:
+        if p[0] != "ok" or len(p) < 5:
+            continue
+        try:
+            alt = api("/api/documents/%s/notes/" % p[4]) or []
+            if isinstance(alt, dict):
+                alt = alt.get("results", [])
+            if any(text in (n.get("note") or "") for n in alt):
+                continue   # a run that died before sichern: written already
+            api.post("/api/documents/%s/notes/" % p[4], {"note": text})
+        except (OSError, ValueError) as e:   # the receipt goes out anyway
+            log("Notiz an Dokument %s nicht geschrieben: %s" % (p[4], e))
 
 
 def empfaenger(api, von):
@@ -231,7 +276,8 @@ def quittung(api, stand, jetzt, postfach):
         gelesen = postfach.mail(m.get("folder") or "INBOX", m.get("uid"))
         if gelesen is None and not lange:
             continue   # the mailbox once more on the next run
-        von, namen = gelesen or ("", [])
+        von, namen = (gelesen or ("", []))[:2]
+        mid = gelesen[2] if gelesen and len(gelesen) > 2 else ""
         probe = set(belegt)
         teile = [ergebnis(api, t, base) for t in zuordnen(m, namen, aufgaben, probe)]
         if None in teile and not lange:
@@ -239,6 +285,8 @@ def quittung(api, stand, jetzt, postfach):
         teile = [p for p in teile if p is not None]
         belegt = probe
         offen.pop(str(m["id"]), None)
+        if meine.get(m.get("rule")):   # a person's own address: the mail is in their archive too
+            notiz(api, teile, mid)
         an, person = empfaenger(api, von)
         if not teile and m.get("status") == "FAILED":   # no task to read: what Paperless recorded
             teile = [("nein", m.get("subject") or "?", "nicht lesbar")]

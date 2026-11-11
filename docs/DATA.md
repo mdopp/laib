@@ -191,7 +191,15 @@ laib.yml) belong to whichever account the owner made them in; the
     it sees into `${DATA_DIR}/homes-dokumente` for its memory library
     (templates/homes/homes-documents-export.service). See Homes.
   - `PAPERLESS_MAIL_PASSWORD` — the household's document mailbox, not a
-    person's.
+    person's. The same login may also be given to a person's archive
+    (`DOKUMENTE_MAIL_PASSWORD_<PERSON>`, set by the owner per person) to
+    read that person's `+doc` mail (flow 24).
+- **The mail behind a document (archiv#34):** a document filed from a
+  person's own address gets one Paperless note „Die Mail dazu im Archiv:
+  https://archiv.<domain>/tresor/mail?id=<Message-ID>“
+  (paperless-quittung.py `notiz`, as the admin; `ARCHIV_URL`, empty: no
+  note). The link carries the Message-ID only; it opens the mail only in
+  the person's own open archive.
 
 ### radicale
 
@@ -334,10 +342,12 @@ subscriptions). Its data folder holds only the status and the last run.
   (`sealed`). Inside the vault (gocryptfs, apps/archiv/tresor.go): the
   msgvault database, the Briefkasten's private key, the Signal and
   WhatsApp keys, the contacts and calendar copies, the person's Immich
-  key. **While the vault is open, root reads it** (ADR 0029; the page
-  says so, apps/archiv/seite.go). **While closed, outside the vault in
-  plaintext:** the IMAP host, user and app password (root can read the
-  person's mailbox with it), the person's own number, the Briefkasten's
+  key, and the settings for deleting old mail at the provider
+  (`mail-aufraeumen.json`). **While the vault is open, root reads it**
+  (ADR 0029; the page says so, apps/archiv/seite.go). **While closed,
+  outside the vault in plaintext:** the IMAP hosts, users and app
+  passwords of each mailbox the person entered (root can read the
+  person's mailboxes with them), the person's own number, the Briefkasten's
   public key, its HMAC dedupe sets, the status files (ADR 0029
   amendment 2026-11-01; apps/archiv/briefkasten.go). Briefkasten packets
   are age-encrypted to the person's key.
@@ -395,10 +405,30 @@ subscriptions). Its data folder holds only the status and the last run.
   phone; **WhatsApp `Media/` arrives in plaintext** and stays so until the
   Briefkasten encrypts it — indefinitely if the person has no vault yet
   (apps/archiv/briefkasten.go). Not in the backup (`backup: false`).
+- **Mail (archiv#34, owner 2026-11-11):** the person's own mailboxes,
+  several, fetched hourly with `EXAMINE`/`BODY.PEEK`. Where the owner set
+  it for this person, also the household's document mailbox (the one
+  Paperless reads), but only mail addressed to `<person>+doc@<domain>` or
+  `+doc+…@`, checked by the archive on the full address (IMAP's TO search
+  is a substring: `hanna+doc` holds `anna+doc`), read-only, never deleted
+  there (flow 24). **Deleting at the provider** is the person's opt-in per
+  own mailbox (off by default): only mail older than their limit, not
+  flagged, not a draft, and proven in their msgvault by Message-ID plus the
+  SHA-256 of its raw bytes; first a count the person confirms, then
+  monthly, only while the vault is open (it needs msgvault for the proof);
+  this alone uses `SELECT`, `\Deleted` + `UID EXPUNGE`, on Gmail a `MOVE`
+  to its Trash (archiv apps/archiv/aufraeumen.go). Irreversible at the
+  provider; the archive keeps the mail.
 - **Keys it holds:** the person's Immich key (in the vault, read only),
   the box's model key (`MODEL_KEY`, the household's, for the model's
   proxy), `archiv-<person>` in Radicale (read only), the person's IMAP app
-  password (outside the vault, `EXAMINE` only). **Keys others hold to
+  passwords (outside the vault; `EXAMINE` for the fetch, `SELECT` only for
+  the deletion the person allowed), and, where the owner set
+  `DOKUMENTE_MAIL_PASSWORD_<PERSON>`, the household's document mailbox's
+  login (a file in the container, `/run/secrets/dokumente-mail-password`;
+  it reads the whole mailbox, every person's document mail: the archive's
+  address check keeps the others out, not the provider; a read-only login
+  of the provider, where one exists, is the narrower key). **Keys others hold to
   it:** `ARCHIV_HOMES_SECRET` (Homes, per instance: `/intern/` for a new
   phone's restore, WhatsApp media only while open; the archive also signs
   with it the answers it posts to Homes' `/intern/uebernahme`, which Homes
@@ -632,6 +662,7 @@ design and not listed again.
 | 21 | A scan Dokumente's sorting could not give anyone: its sender, date, page count and arrival go to Homes and are shown to the admins („Wem gehört dieser Scan?“, Deine Aufgaben), who give it to a person or the household; never its title or text | the scan's metadata → the admins | dokumente ordnen/zuteilen.py `fragen`; homes cmd/homes/zuordnen.go, internal/pages/dokumente_zuordnen.go |
 | 22 | Excerpts of a person's messages that carry a relation word („Mama“, „Schatz“), with the names of sender and recipients and what the archive knows of them, go to the household model so it can suggest how two people relate. Only while that person's vault is open; at most 600 characters a message; never to a cloud model. The answer stays in the vault, and nothing is logged. Owner, 2026-11-11: „dann gehen Absender, Empfänger und Text zum LLM“. | the person's archive → the box's model process (shared by the household; root can read its memory while it answers) | archiv apps/archiv/hinweise.go; templates/archiv/archiv.container; ADR 0029 amendment 2026-11-11 |
 | 23 | Which person has no second factor in Vaultwarden, or no network-drive password, becomes their login in a template's status file and in aufgaben.yml (`fuer: person:<login>`, #1168). The person sees their own task; Homes and the Bote, acting for one person, see only that person's (`aufgaben.Sees`); the admins in diag, the journal and Homes' Befunde see that a task exists, not whose | each person's account state → Laib's whole hands (owner at the shell, claude, the Operator) | templates/vaultwarden/vaultwarden-check.py, templates/file-share/file-share-check.py; internal/diag/aufgaben.go `cover`; operator/findings.go `aufgaben` |
+| 24 | The mail a person sends to their own document address (`<login>+doc@`) also goes into their archive, read from the household's document mailbox with its login, only mail whose recipient is exactly that address (owner 2026-11-11); Paperless keeps the link to it as a note on the document | the household's document mailbox → the person's archive; the Message-ID → a note on the person's document | archiv apps/archiv/dokumentenpost.go `Passt`, mail.go; templates/archiv (`DOKUMENTE_MAIL_*`); templates/paperless/paperless-quittung.py `notiz` |
 
 Not crossings, checked: location goes to the person's own Reitti with
 their own token (homes internal/napi/standort.go); phone backups go to

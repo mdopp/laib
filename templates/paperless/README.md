@@ -206,6 +206,17 @@ hours, only a failed one is told, by its subject, to `notify.person`).
 Failures are lines in `journalctl --user -u paperless-quittung`, never the
 text.
 
+**The mail in the archive (archiv#34).** A person's archive can read the
+mail they send to their own address too (templates/archiv,
+`DOKUMENTE_MAIL_*`). So the same run gives each document filed from a
+person's own address (a rule „Dokumente von <login>“) one note: „Die Mail
+dazu im Archiv: https://archiv.<domain>/tresor/mail?id=<Message-ID>“, which
+opens the mail in that person's open archive. Written once (a note with
+that text is not written again), as the admin; never for the household's
+address, a mail without a Message-ID, or with `ARCHIV_URL` empty (a box
+without archives). The Message-ID comes from the same read-only look at
+the mailbox as the sender.
+
 ## The AI and the text recognition (#567)
 
 Paperless' AI (3.0: suggestions for title, correspondent, type, tags and
