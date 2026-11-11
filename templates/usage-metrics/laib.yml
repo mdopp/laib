@@ -24,3 +24,6 @@ status:                            # the Box page's line (#785): "letzte 7 Tage:
   stale: 20m
 ports:
   - {port: 8094, lan: false}         # 8095 is music-assistant's; in-box callers only
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  usage-metrics.container:
+    unhardened: "unknown, kept until measured: laib's own image, runs as 65532 already"

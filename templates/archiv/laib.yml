@@ -45,3 +45,7 @@ ports:
 upstream:
   - https://github.com/mdopp/archiv
   - https://www.msgvault.io/docs/
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  archiv.container:
+    labelOff: "the vault is a gocryptfs (FUSE) mount inside the container: /dev/fuse and the mount need labelling off, as Homes's shared inbox does"
+    unhardened: "AddCapability=SYS_ADMIN mounts the vault (FUSE); DropCapability=all would take it"

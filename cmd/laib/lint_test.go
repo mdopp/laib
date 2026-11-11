@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mdopp/laib/internal/cli"
@@ -20,9 +21,18 @@ func writeTemplate(t *testing.T, root, name, contract string, files map[string]s
 		if f == "pre-start" || f == "post-deploy" {
 			mode = 0o755
 		}
-		os.WriteFile(filepath.Join(dir, f), []byte(body), mode)
+		os.WriteFile(filepath.Join(dir, f), []byte(hardened(f, body)), mode)
 	}
 	return dir
+}
+
+// hardened gives a test container the #1166 default, the hardening lines,
+// so a test sees only the shape it is about; lint1166_test.go writes its own.
+func hardened(f, body string) string {
+	if !strings.HasSuffix(f, ".container") || strings.Contains(body, "ReadOnly=") {
+		return body
+	}
+	return strings.Replace(body, "[Container]\n", "[Container]\nReadOnly=true\nNoNewPrivileges=true\nDropCapability=all\n", 1)
 }
 
 func TestLintRefusesAnUndeclaredBindSource(t *testing.T) {

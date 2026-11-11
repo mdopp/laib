@@ -24,3 +24,6 @@ health:
   http: http://127.0.0.1:8080/
 ports:
   - {port: 8080, lan: false}
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  whoami.container:
+    unhardened: "unknown, kept until measured: a static binary on port 80 inside; binding 80 may need NET_BIND_SERVICE"

@@ -1,0 +1,13 @@
+name: stimme
+template: {registry: builtin, name: stimme, version: 1}
+provides: [voice]
+# Stimme's openWakeWord as the template ships it (#1166): its own pod, 10400
+# published on the box's loopback for Home Assistant on the host network, and
+# the three hardening lines. The template's other units stay on the host
+# network and are not part of this case (TestOpenWakeWordGoldenIsTheTemplates).
+routes: []
+secrets: []
+data: []
+health: {none: "the voice pipeline has no HTTP endpoint to probe; the unit state is the check"}
+ports:
+  - {port: 10400, lan: false}      # openwakeword, published on 127.0.0.1 only (#1166)

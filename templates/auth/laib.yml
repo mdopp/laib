@@ -70,3 +70,10 @@ ports:
   - {port: 9091, lan: false}
   - {port: 17170, lan: false}
   - {port: 3890, lan: false}        # LDAP for other pods via host.containers.internal; never the WLAN
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  auth-authelia.container:
+    unhardened: "unknown, kept until measured: Authelia's entrypoint may chown /config and drop to its user"
+  auth-lldap.container:
+    unhardened: "unknown, kept until measured: lldap's entrypoint chowns /data and drops to its user lldap (gosu), likely CHOWN, SETUID, SETGID"
+  auth-sessions.container:
+    unhardened: "valkey's entrypoint starts as root, chowns its data folder and drops to its own user (gosu/su-exec): needs CHOWN, SETUID and SETGID"

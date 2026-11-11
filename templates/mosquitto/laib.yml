@@ -24,3 +24,6 @@ status:                            # the Box page's line (#785): "5 Geräte und 
   stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 1883, lan: true}
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  mosquitto.container:
+    unhardened: "the entrypoint chowns /mosquitto as root and mosquitto drops to its user itself: needs CHOWN, SETUID, SETGID"

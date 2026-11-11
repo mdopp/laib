@@ -50,3 +50,8 @@ status:                            # the Box page's line (#785): "8 Lautsprecher
   stale: 20m
 ports:
   - {port: 8095, lan: true}        # HA and the speakers at home
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  music-assistant.container:
+    hostNetwork: "player discovery and streaming: mDNS, Chromecast, DLNA/UPnP and AirPlay need the LAN's multicast (laib.yml)"
+    labelOff: "upstream's compose: SYS_ADMIN and DAC_READ_SEARCH with AppArmor unconfined, to mount SMB/NFS music sources; this is the SELinux counterpart. Whether it mounts anything here is unknown, kept until measured"
+    unhardened: "AddCapability=SYS_ADMIN,DAC_READ_SEARCH (upstream's compose): DropCapability=all would take them"

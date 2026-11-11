@@ -508,12 +508,20 @@ func ContractOf(b []byte, name, person string, offset int) []byte {
 }
 
 // onlyNames: laib.yml in the worktree differs from main's only in its title
-// or beschreibung lines, the Box page's name (#785).
+// or beschreibung lines, the Box page's name (#785), or in its exceptions:
+// block, the reasons the template lint reads (#1166): nothing runs
+// differently.
 func onlyNames(repo, wt, f string) bool {
 	strip := func(root string) []string {
 		b, _ := os.ReadFile(filepath.Join(root, f))
+		block := false
 		return slices.DeleteFunc(strings.Split(string(b), "\n"), func(l string) bool {
-			return strings.HasPrefix(l, "title:") || strings.HasPrefix(l, "beschreibung:")
+			if strings.HasPrefix(l, "exceptions:") {
+				block = true
+			} else if l != "" && l[0] != ' ' {
+				block = false
+			}
+			return block || l == "" || strings.HasPrefix(l, "title:") || strings.HasPrefix(l, "beschreibung:")
 		})
 	}
 	return slices.Equal(strip(repo), strip(wt))

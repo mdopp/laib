@@ -98,11 +98,13 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 | What builds an image is pinned: every `uses:` by commit, every `FROM` by digest (ADR 0034, #1165); the same file in each of the owner's repos and the scaffold | `scripts/pins.sh` |
 | Dead code, staticcheck findings, duplicates and complexity only go down (see below) | `scripts/ratchet.py`, CI job `ratchet` |
 | The gates have one source (#1170): `ratchet.py`, `test_ratchet.py`, `pins.sh`, `copies.sh` are `werkstatt/scaffold/repo/scripts/`'s, copied unchanged into every repo of the household (and `loc.sh` with one cap where a repo has `scripts/loc.txt`); a fix goes here first, then to the copies | `scripts/copies.sh`, in each repo's CI |
+| A template container on the host network, with labelling off or without the hardening lines says why in its `laib.yml` `exceptions:`, and their count only falls (#1166) | `laib template lint`, `scripts/ratchet.py exceptions` |
 | Every touch answers at once (#588): every POST route ends done, red with a next step, or waiting with a limit | `cmd/laib/taps854_test.go` |
 | No raw or technical text in front of people (#855) | `cmd/laib/plain855_test.go`, `notify/plain855_test.go`, `frage/plain855_test.go` |
 
 **The ratchet** (owner, 2026-11-03). `scripts/ratchet.py` runs four pinned
-tools and compares with `scripts/ratchet/<tool>.txt`, today's findings
+tools, and counts the templates' exceptions (#1166, `exceptions`), and
+compares with `scripts/ratchet/<tool>.txt`, today's findings
 without line numbers: deadcode over every main package (`dead`: no caller
 even in a test; `test-only`: production code only a test runs, fakes
 aside), staticcheck's default checks with U1000 (not ST1005: the error

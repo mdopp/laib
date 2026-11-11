@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Die Erkennung von „Hey Mycroft“ läuft jetzt abgeschottet in einem eigenen Bereich der Box; für euch ändert sich nichts
 Der Lautsprecher hört jetzt auf „Hey Mycroft“ und spricht mit ${ASSISTANT}; nichts muss mehr trainiert werden, und Aufnahmen von euch werden nicht mehr gesammelt
 Startet Home Assistant geplant neu, meldet die Box die kurzen Aussetzer von der Stimme nicht mehr als Fehler
 ${ASSISTANT} versteht „Schalte … an“ und „Schalte … aus“ jetzt besser

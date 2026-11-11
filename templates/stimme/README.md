@@ -1,8 +1,10 @@
 # stimme — the Wyoming set for Home Assistant Assist (ADR 0015)
 
 Whisper on 10300 (Home Assistant reaches it through stimme-wakes on 10301,
-below), Piper on 10200, openWakeWord on 10400, all on the host
-network so Home Assistant reaches them at `127.0.0.1`. Nobody adds them in
+below), Piper on 10200, openWakeWord on 10400, all at `127.0.0.1` for Home
+Assistant: openWakeWord in its own pod with 10400 published on the box's
+loopback and the three hardening lines (#1166), the others on the host
+network, each with its reason in `laib.yml` `exceptions:`. Nobody adds them in
 HA by hand: home-assistant's post-deploy adds a Wyoming entry for each
 server that answers, once, found by host and port, and points an Assist
 pipeline part whose engine is gone at Stimme (#540). After `laib add

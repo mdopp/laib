@@ -3,6 +3,10 @@ Description=Notizbuch of ${PERSON}
 
 [Container]
 Image=${IMAGE}
+# the #1166 default for a template container
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
 PublishPort=127.0.0.1:8480:8080
 Volume=${DATA_DIR}/${SERVICE}:/data:Z
 Environment=NOTIZBUCH_OWNER=${PERSON}

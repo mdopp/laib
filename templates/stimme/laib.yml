@@ -6,7 +6,8 @@ provides: [voice]
 upstream: [https://github.com/rhasspy/wyoming-piper, https://github.com/rhasspy/wyoming-faster-whisper, https://github.com/rhasspy/wyoming-openwakeword]   # where the Operator's web search looks first (#544)
 # The Wyoming set Home Assistant Assist speaks (ADR 0015): Whisper (STT),
 # Piper (TTS, German voice), openWakeWord („Hey Mycroft“, built in, ADR 0030),
-# and stimme-wakes in front of Whisper (#825). Host network so HA finds them at 127.0.0.1. On the
+# and stimme-wakes in front of Whisper (#825). Home Assistant finds them at 127.0.0.1: openWakeWord
+# in its own pod with 10400 on the box's loopback (#1166), the others on the host network. On the
 # GPU box Whisper takes the card and follows the lease's
 # voice-device.env (cpu while a mode holds the card); on a box without a
 # GPU set the CPU image and device in values.yml.
@@ -31,5 +32,16 @@ ports:
   - {port: 10300, lan: false}      # whisper
   - {port: 10301, lan: false}      # stimme-wakes, in front of Whisper: Home Assistant's Whisper entry (#825)
   - {port: 10200, lan: false}      # piper: on 0.0.0.0 for pods (host.containers.internal), never the LAN (#242)
-  - {port: 10400, lan: false}      # openwakeword
+  - {port: 10400, lan: false}      # openwakeword, published on 127.0.0.1 only (#1166)
 gpu: true
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  stimme-piper.container:
+    hostNetwork: "Home Assistant reaches it at 127.0.0.1:10200 and pods at host.containers.internal:10200 (#242); a pod publishing 10200 would serve both, unknown, kept until measured"
+    unhardened: "unknown, kept until measured: it downloads its voice into /data"
+  stimme-wakes.container:
+    hostNetwork: "it sits between Home Assistant (127.0.0.1:10301) and Whisper on the box's 127.0.0.1:10300, which is on the host network; it moves when Whisper does"
+    unhardened: "unknown, kept until measured: stock Python, the standard library; likely tolerates all three"
+  stimme-whisper.container:
+    hostNetwork: "Home Assistant and stimme-wakes reach it at 127.0.0.1:10300; nothing else needs the box's network, unknown, kept until measured with the GPU"
+    labelOff: "the GPU (AddDevice=nvidia.com/gpu=all): under SELinux a container_t process may not open the /dev/nvidia* nodes; NVIDIA's CDI guide disables the label"
+    unhardened: "a linuxserver image: s6-overlay starts as root, writes /run and /etc, chowns /config and drops to its user abc: needs a writable root, CHOWN, SETUID and SETGID"

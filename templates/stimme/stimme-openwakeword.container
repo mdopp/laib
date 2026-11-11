@@ -4,10 +4,17 @@ After=network-online.target
 
 [Container]
 Image=${OPENWAKEWORD_IMAGE}
-Network=host
+# its own pod, 10400 published on 127.0.0.1 (stimme-openwakeword.pod): Home Assistant reaches it there
+# as before (#1166)
+Pod=stimme-openwakeword.pod
 # serves streaming satellites with its built-in models, hey_mycroft among them (ADR 0030); the
 # Voice PE wakes on the device. No preload: a satellite asks for its model by name.
-Exec=--uri tcp://127.0.0.1:10400
+# Every address of the pod: the published port arrives on the pod's interface, not its loopback.
+Exec=--uri tcp://0.0.0.0:10400
+# the default for a template container (#1166): it reads its built-in models and writes nothing
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
 AutoUpdate=registry
 
 [Service]

@@ -177,3 +177,10 @@ status:                          # the Box page's line (#785): "3 Geräte angeme
 ports:
   - {port: 8650, lan: false}
   - {port: 8652, lan: false}       # the public listener: Kontakt prüfen lassen (kontakt.<domain>) and the teaser (<domain>)
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  homes-qmd.container:
+    labelOff: "it reads the notes in the shared file-share tree, mounted without :z, which needs labelling off (#230)"
+    unhardened: "unknown, kept until measured: laib's own qmd image, writes only /cache"
+  homes.container:
+    labelOff: "it writes notes and uploads into the shared file-share tree, mounted without :z, which needs labelling off (#230)"
+    unhardened: "unknown, kept until measured: laib's own image, likely tolerates all three"

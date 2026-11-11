@@ -28,3 +28,7 @@ status:                            # the Box page's line (#785): "1 Gerät einge
   stale: 20m
 ports:
   - {port: 6052, lan: false}
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  esphome.container:
+    hostNetwork: "mDNS discovery of the ESP devices and OTA uploads, where the device connects back to the box (laib.yml)"
+    unhardened: "unknown, kept until measured: ESPHome compiles firmware with PlatformIO, which writes toolchains outside /config"

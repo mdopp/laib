@@ -114,7 +114,7 @@ func LintTemplate(env *cli.Env, dir string) int {
 			}
 		}
 	}
-	if errs := slices.Concat(lintMounts(st, name, out, neighbours), lintEnvironment(name, out), lintHostWrites(name, out), lintPodNetwork(name, out), lintInstances(names, out)); len(errs) > 0 {
+	if errs := slices.Concat(lintMounts(st, name, out, neighbours), lintEnvironment(name, out), lintHostWrites(name, out), lintPodNetwork(name, out), lintInstances(names, out), lintNetwork(dir)); len(errs) > 0 {
 		for _, e := range errs {
 			fmt.Fprintln(env.Errw(), e)
 		}
@@ -355,6 +355,79 @@ func lintPodNetwork(name string, out render.Output) []string {
 					errs = append(errs, fmt.Sprintf("%s: %s joins the network of %s, a container in a pod: podman refuses it (exit 125); use --pod with the pod's name", key, k, c))
 				}
 			}
+		}
+	}
+	return errs
+}
+
+// exceptionHints: the kinds of laib.yml exceptions: (#1166, docs/STATE.md),
+// where a template container departs from the default; scripts/ratchet.py
+// counts the same three, so their number only falls.
+var exceptionHints = map[string]string{
+	"hostNetwork": "Network=host reaches every loopback listener of the box: move it into a pod with its port on 127.0.0.1 (templates/homes/homes.pod), or say why it needs the box's network",
+	"labelOff":    "SecurityLabelDisable=true: say why (the shared file-share tree, #230; a device, #417)",
+	"unhardened":  "the default is " + strings.Join(hardening, ", ") + ": add them, or say why the container cannot run so",
+}
+
+// hardening is the template container's default (#1166), what laib's own
+// units carry (render.ownUnit).
+var hardening = []string{"ReadOnly=true", "NoNewPrivileges=true", "DropCapability=all"}
+
+// unitExceptions: the exceptions a .container's text makes, in the order
+// hostNetwork, labelOff, unhardened.
+func unitExceptions(text string) []string {
+	lines := map[string]bool{}
+	for _, l := range strings.Split(text, "\n") {
+		k, v, _ := strings.Cut(strings.TrimSpace(l), "=")
+		lines[k+"="+strings.ToLower(v)] = true
+	}
+	var out []string
+	if lines["Network=host"] {
+		out = append(out, "hostNetwork")
+	}
+	if lines["SecurityLabelDisable=true"] {
+		out = append(out, "labelOff")
+	}
+	if slices.ContainsFunc(hardening, func(h string) bool { return !lines[h] }) {
+		out = append(out, "unhardened")
+	}
+	return out
+}
+
+// lintNetwork (#1166): a container on the host network, with labelling off
+// or without the hardening lines says why in laib.yml exceptions: under its
+// file name, in at least three words; a reason for what no unit does any
+// more is stale, so the count falls with the unit.
+func lintNetwork(dir string) []string {
+	var c struct {
+		Exceptions map[string]map[string]string `yaml:"exceptions"`
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "laib.yml"))
+	if err := yaml.Unmarshal(b, &c); err != nil {
+		return []string{fmt.Sprintf("%s/laib.yml: exceptions: %v (#1166: file name → kind → reason)", dir, err)}
+	}
+	var errs []string
+	units, _ := filepath.Glob(filepath.Join(dir, "*.container"))
+	for _, u := range units {
+		f := filepath.Base(u)
+		text, _ := os.ReadFile(u)
+		kinds := unitExceptions(string(text))
+		for _, k := range kinds {
+			if len(strings.Fields(c.Exceptions[f][k])) < 3 {
+				errs = append(errs, fmt.Sprintf("%s: %s without a reason in laib.yml exceptions: {%s: {%s: \"why\"}} (#1166) — %s", u, k, f, k, exceptionHints[k]))
+			}
+		}
+		for _, k := range slices.Sorted(maps.Keys(c.Exceptions[f])) {
+			if _, known := exceptionHints[k]; !known {
+				errs = append(errs, fmt.Sprintf("%s/laib.yml: exceptions: %s: %s is no exception (hostNetwork, labelOff, unhardened)", dir, f, k))
+			} else if !slices.Contains(kinds, k) {
+				errs = append(errs, fmt.Sprintf("%s/laib.yml: exceptions: %s: %s, but the unit does not: drop the reason, and lower scripts/ratchet/exceptions.txt (scripts/ratchet.py --update exceptions)", dir, f, k))
+			}
+		}
+	}
+	for _, f := range slices.Sorted(maps.Keys(c.Exceptions)) {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil || !strings.HasSuffix(f, ".container") {
+			errs = append(errs, fmt.Sprintf("%s/laib.yml: exceptions: %s is no .container of the template", dir, f))
 		}
 	}
 	return errs

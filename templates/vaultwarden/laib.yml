@@ -36,3 +36,6 @@ status:                            # the Box page's line (#785): "3 Konten, 2 mi
   stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 8222, lan: false}
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  vaultwarden.container:
+    unhardened: "unknown, kept until measured: Vaultwarden runs as root and writes only /data, likely tolerates all three"

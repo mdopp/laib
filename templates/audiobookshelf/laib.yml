@@ -49,3 +49,7 @@ status:                            # the care (#646): "Hörbücher: 140 abgeglic
   stale: 1h                        # the timer runs every 30 min
 ports:
   - {port: 13378, lan: true}       # the apps at home talk to it directly
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  audiobookshelf.container:
+    labelOff: "the shared file-share tree is mounted without :z, which needs labelling off (#230)"
+    unhardened: "unknown, kept until measured: ABS writes metadata.json beside each book and its own /config, /metadata"

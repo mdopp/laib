@@ -25,3 +25,8 @@ status:                            # the Box page's line (#785): "Websuche antwo
   stale: 90m
 ports:
   - {port: 8710, lan: false}       # on every address for pods (host.containers.internal), never the LAN (#490)
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  frage-searx.container:
+    unhardened: "unknown, kept until measured: SearXNG writes its settings into /etc/searxng on first start"
+  frage.container:
+    unhardened: "unknown, kept until measured: laib's own image, likely tolerates all three"

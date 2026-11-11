@@ -54,3 +54,8 @@ status:                              # bereit | scannt | wartet-auf-rest | trenn
   busy: {field: zustand, values: [scannt, trennt, legt-ab], grace: 30m}   # mid-stack (#908): a restart there fails the stack (wartet-auf-rest survives one); a hand's restart waits up to 30 min after the file last spoke, a person's does not
 ports:
   - {port: 8720, lan: false}         # Paperless' webhook (ADR 0028): from its pod at host.containers.internal, as Homes's 8650; nftables drops it on the LAN, no route through Caddy
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  scan.container:
+    hostNetwork: "scanners on the LAN (SANE network backends, eSCL/AirScan discovery by mDNS), and the model's lease and bote-notify on the box's 127.0.0.1"
+    labelOff: "the shared file-share tree is mounted without :z, which needs labelling off (#230); and the USB scanner: a container_t process may not open it (#417)"
+    unhardened: "unknown, kept until measured: libusb and SANE open the scanner's device nodes"

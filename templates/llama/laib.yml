@@ -36,3 +36,14 @@ ports:
   - {port: 11436, lan: false}    # embeddings
   # 11435 is deliberately reachable from the LAN (operator decision in
   # solarisbay #1420): the house may use its models without a login.
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  llama-embed.container:
+    hostNetwork: "laib-lease reaches it at 127.0.0.1 (it binds loopback only); nothing else needs the box's network, unknown, kept until measured with the GPU"
+    labelOff: "the GPU (AddDevice=nvidia.com/gpu=all): under SELinux a container_t process may not open the /dev/nvidia* nodes; NVIDIA's CDI guide disables the label"
+    unhardened: "unknown, kept until measured: llama.cpp with CUDA, likely tolerates all three"
+  llama-lease.container:
+    hostNetwork: "it reaches laib's MCP (pause, resume, status) and the router on the box's 127.0.0.1, and serves host services there and pods on host.containers.internal"
+  llama.container:
+    hostNetwork: "laib-lease reaches the router at 127.0.0.1 (it binds loopback only); nothing else needs the box's network, unknown, kept until measured with the GPU"
+    labelOff: "the GPU (AddDevice=nvidia.com/gpu=all): under SELinux a container_t process may not open the /dev/nvidia* nodes; NVIDIA's CDI guide disables the label"
+    unhardened: "unknown, kept until measured: llama.cpp with CUDA, likely tolerates all three"

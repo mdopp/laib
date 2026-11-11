@@ -22,3 +22,7 @@ status:                            # the Box page's line (#785): "14 Adressen ·
   check: caddy-check.service
   stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports: []
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  caddy.container:
+    hostNetwork: "ports 80 and 443 for the LAN and the internet, and every upstream it proxies listens on the box's 127.0.0.1"
+    unhardened: "Caddy autosaves its config under /config, the image's own layer (only /data is mounted): ReadOnly breaks it; unknown, kept until measured for the other two"

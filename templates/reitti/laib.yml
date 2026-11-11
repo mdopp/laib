@@ -43,3 +43,12 @@ health:
   http: http://127.0.0.1:8730/actuator/health
 ports:
   - {port: 8730, lan: false}
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  reitti-db.container:
+    unhardened: "PostGIS' entrypoint starts as root, chowns its data folder and drops to its own user (gosu/su-exec): needs CHOWN, SETUID and SETGID"
+  reitti-redis.container:
+    unhardened: "Redis' entrypoint starts as root, chowns its data folder and drops to its own user (gosu/su-exec): needs CHOWN, SETUID and SETGID"
+  reitti-tiles.container:
+    unhardened: "unknown, kept until measured: a tile cache that writes its cache folder"
+  reitti.container:
+    unhardened: "unknown, kept until measured: a JVM application, writes its temp files"

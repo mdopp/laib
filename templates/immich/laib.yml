@@ -50,3 +50,14 @@ status:                            # the Box page's line (#785): "18.300 Fotos, 
 ports:
   - {port: 2283, lan: true}        # the apps at home
 gpu: true
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  immich-db.container:
+    unhardened: "Postgres' entrypoint starts as root, chowns its data folder and drops to its own user (gosu/su-exec): needs CHOWN, SETUID and SETGID"
+  immich-ml.container:
+    labelOff: "the GPU (AddDevice=nvidia.com/gpu=all): under SELinux a container_t process may not open the /dev/nvidia* nodes; NVIDIA's CDI guide disables the label"
+    unhardened: "unknown, kept until measured: it downloads models into /cache and may write the image's own folders"
+  immich-redis.container:
+    unhardened: "Redis' entrypoint starts as root, chowns its data folder and drops to its own user (gosu/su-exec): needs CHOWN, SETUID and SETGID"
+  immich.container:
+    labelOff: "it reads the photos in the shared file-share tree, mounted without :z, which needs labelling off (#230)"
+    unhardened: "unknown, kept until measured: Immich runs as root and writes beyond its upload folder (its tmp, its build cache)"
