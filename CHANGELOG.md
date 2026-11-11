@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.22.0](https://github.com/mdopp/laib/compare/v2.21.0...v2.22.0) (2026-11-11)
+
+
+### Features
+
+* **diag:** a check that knows who is missing raises that person's Aufgabe ([#1173](https://github.com/mdopp/laib/issues/1173)) ([16a4d5b](https://github.com/mdopp/laib/commit/16a4d5bbe6e186bc8fc406be580f400c671e8d84)), closes [#1168](https://github.com/mdopp/laib/issues/1168)
+
 ## [2.21.0](https://github.com/mdopp/laib/compare/v2.20.0...v2.21.0) (2026-11-11)
 
 
