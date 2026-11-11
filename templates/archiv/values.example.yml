@@ -1,4 +1,4 @@
-ARCHIV_IMAGE: ghcr.io/mdopp/archiv:2ec8b462a9e6abd6e3d60b61bfbec6dd9fcd4160   # mdopp/archiv main with #23 (Range on /intern/whatsapp/medien), CI green 2026-11-03; pinned (a database inside)
+ARCHIV_IMAGE: ghcr.io/mdopp/archiv:e795ae8e050062e4c3d6864abd8d2d3430e80052@sha256:15b840e6b15a2234f135dbd81ed4a3b35288e8f4b03d3abc274c3ada504f4653   # mdopp/archiv main with #34 (document mail, several mailboxes), CI green and signed 2026-11-11; pinned by digest (ADR 0034)
 PROXY: !secret ARCHIV_PROXY_SECRET
 HOMES_SECRET: !secret ARCHIV_HOMES_SECRET
 RADICALE_PASSWORD: !secret ARCHIV_RADICALE_PASSWORD
