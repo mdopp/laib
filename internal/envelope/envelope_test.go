@@ -3,6 +3,7 @@ package envelope
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mdopp/laib/internal/journal"
@@ -41,6 +42,16 @@ func TestJailKeepsReadsInsideTheServiceData(t *testing.T) {
 	} {
 		if err := read(svc, bad); err == nil {
 			t.Fatalf("%s allowed", bad)
+		}
+	}
+	// the jail refuses a path outside by itself, not only through the root's
+	// refusal to climb out of it (#1167: the negated prefix check lived)
+	for _, out := range []string{filepath.Join(data, "immich", "secret.env"), "/etc/passwd"} {
+		if r, rel, err := jail(st, svc, out); err == nil || !strings.Contains(err.Error(), "outside") {
+			if r != nil {
+				r.Close()
+			}
+			t.Fatalf("%s: jail gave %q, %v", out, rel, err)
 		}
 	}
 	// no data declared: the service's own folder under DATA_DIR
