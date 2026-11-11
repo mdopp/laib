@@ -127,6 +127,9 @@ sessions() {
 boxcheck() {
   su dev -c "env -i HOME=/home/dev USER=dev LOGNAME=dev SHELL=/bin/bash PATH=/usr/local/bin:/usr/bin:/bin LAIB_SESSION=boxcheck bash -lc werkstatt-boxcheck" \
     || echo "werkstatt: WARNING: werkstatt-boxcheck did not finish, the next hour tries again" >&2
+  # #1169: the docs' box probes, one pass a week (the script keeps the date)
+  su dev -c "env -i HOME=/home/dev USER=dev LOGNAME=dev SHELL=/bin/bash PATH=/usr/local/bin:/usr/bin:/bin LAIB_SESSION=boxcheck bash -lc werkstatt-docprobe" \
+    || echo "werkstatt: WARNING: werkstatt-docprobe did not finish, the next hour tries again" >&2
 }
 sessions
 every="${WERKSTATT_SESSIONS_EVERY:-300}"

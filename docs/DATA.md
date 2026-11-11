@@ -9,7 +9,10 @@ someone else; and before you answer "who can see this?" from memory.
 Verified 2026-11-10 against laib `73b7003`, homes `9cf6f69`, archiv
 `368ccf2` and homes-android `5197f1b`; gap 6 (who owns a new document)
 against laib, homes and dokumente as changed by the PRs that closed it. Every claim names the file it was
-read from; a claim marked **unverified** says what would verify it. The
+read from. What only the box can answer carries its read-only probe and
+the date the box last answered it (`werkstatt-docprobe`, #1169); what only
+a person can answer in an app's settings names its Box-Aufgabe (section
+"What a person answers" at the end). The
 design is what the code says; what runs on the box today is in its own
 section at the end ("On the box, 2026-11-10"), from `laib status`.
 
@@ -99,9 +102,8 @@ laib.yml) belong to whichever account the owner made them in; the
   sharing (shared albums, partner sharing), which the person sets up.
   The file share's `photos/` folder is mounted read-only into Immich
   (`PHOTOS_RO`, templates/immich/immich.container); which Immich user
-  sees it depends on the external library an admin creates in Immich —
-  **unverified** (no template code creates one; verify in Immich's
-  Administration → External libraries). The Immich admin manages users
+  sees it depends on the external library an admin creates in Immich (no
+  template code creates one): Box-Aufgabe <!-- aufgabe: In Immich nachsehen: Admin-Konto und Ordner photos/ -->. The Immich admin manages users
   but does not see their photos in the app; root reads
   `${DATA_DIR}/immich/upload` directly.
 - **Keys held to it:**
@@ -246,8 +248,11 @@ subscriptions). Its data folder holds only the status and the last run.
   templates/reitti/reitti.container `OIDC_SIGN_UP_ENABLED`,
   `DISABLE_LOCAL_LOGIN`).
 - **Separation:** each person sees only their own timeline (README).
-  Whether Reitti's own features can share a timeline with another user
-  is **unverified** (verify in Reitti's settings or upstream docs).
+  Upstream Reitti lets a person share their live position, and with a
+  magic link optionally their recent track, with other users of the
+  instance or with anyone holding the link — by that person's own choice
+  (github.com/dedicatedcode/reitti README, read 2026-11-11); it names no
+  way to share the past timeline.
 - **Keys held to it:** Homes forwards the app's location points to the
   person's Reitti — see Homes. Each person's Immich key lives in their
   Reitti settings, in Reitti's database.
@@ -267,8 +272,8 @@ subscriptions). Its data folder holds only the status and the last run.
   tree, `read only=no; force user=root` for every member
   (file-share-samba.container); File Browser is given no per-user scope
   by the template, so every account sees the whole tree (upstream's
-  default scope; **unverified** on the box: verify a family member's
-  scope in File Browser's user settings). Notes, documents, photos,
+  default scope; a family member's scope on the box: Box-Aufgabe
+  <!-- aufgabe: In File Browser nachsehen: was ein Familienmitglied sieht -->). Notes, documents, photos,
   music and the Paperless inbox all live there. Only the `werkstatt`
   share is limited, to `@admins`.
 - **Shares out:** a File Browser share link works from anywhere
@@ -378,8 +383,11 @@ subscriptions). Its data folder holds only the status and the last run.
   (`umfeld/hinweise.json`), so nothing is sent twice. The archive logs
   only counts (apps/archiv/hinweise.go). laib-lease does not log bodies,
   and llama-server runs without `--verbose` (templates/llama), so the
-  prompt is not kept. **Unverified on the box:** that no layer between
-  them keeps it. The model process is the household's, so root reads its
+  prompt is not kept. On the box the running llama-server has no flag
+  that writes prompts (`--verbose`, `--log-file`, `--slot-save-path`,
+  `--log-verbosity`)
+  <!-- box: laib look llama --container systemd-llama -- ps -eo args ~ /app/llama-server --host !~ \s(--verbose|-v|--log-file|--slot-save-path|--log-verbosity|-lv)(\s|$) --> *(box 2026-11-11: yes)*;
+  what laib-lease keeps is the code's claim above. The model process is the household's, so root reads its
   memory while it answers, as it reads an open vault (flow 22).
 - **Inbox `archiv-eingang/<person>/`:** Homes writes it as the device's
   person; each instance mounts only its own folder. Signal and WhatsApp
@@ -553,8 +561,8 @@ No `private:` (templates/home-assistant/laib.yml).
   household's calendars (copied by `kalender`). Who switched what goes
   into HA's logbook under the consumer's user, never a person's
   (post-deploy, #591). Location of the family's phones in HA through the
-  companion app is per person's choice in that app — **unverified** which
-  persons' locations other users see (verify in HA's person/zone view).
+  companion app is per person's choice in that app; which persons'
+  locations other users see: Box-Aufgabe <!-- aufgabe: In Home Assistant und Music Assistant nachsehen: Standorte und Verlauf -->.
 
 ### media
 
@@ -578,8 +586,8 @@ an administrator (podcast subscriptions); `ABS_MA_TOKEN` is
 No `private:`. The family signs in through Home Assistant; MA reads HA's
 users with an administrator token (`MUSIC_ASSISTANT_HA_TOKEN`). Plays
 what Jellyfin and ABS hold; keeps no per-person data the template
-declares beyond its own `data/` (**unverified** whether MA keeps
-per-user history).
+declares beyond its own `data/`; whether MA keeps a history per user:
+Box-Aufgabe <!-- aufgabe: In Home Assistant und Music Assistant nachsehen: Standorte und Verlauf -->.
 
 ### usage-metrics
 
@@ -654,8 +662,8 @@ listed again.
 3. **„Nur für mich“ promises the admins see every document**
    (homes internal/pages/scannen.go `saysScanFuer`). In Paperless an
    owned document is seen by its owner, the users it is shared with and
-   superusers. Whether the OIDC `admins` group's members are superusers
-   is **unverified** (Paperless → Benutzer, „Superuser“ per person); the
+   superusers. Whether the OIDC `admins` group's members are superusers:
+   Box-Aufgabe <!-- aufgabe: In Paperless nachsehen: Admins und Haushaltsdokumente -->; the
    break-glass admin and `dokumente` see them either way.
 4. **The file share has no per-person space.** Samba's `data` and File
    Browser show every member the whole tree; a person's files there are
@@ -692,7 +700,7 @@ green. This is state, not design: it changes as people log in.
 
 | Service | What the status line said |
 |---|---|
-| immich | 1 Konto — one Immich user exists; every other family member gets their own at their first login. Whether that one user is also the admin account (Immich links an OIDC login to an existing user by e-mail) is **unverified**: Immich → Administration → Benutzer |
+| immich | 1 Konto — one Immich user exists; every other family member gets their own at their first login. Whether that one user is also the admin account (Immich links an OIDC login to an existing user by e-mail): Box-Aufgabe <!-- aufgabe: In Immich nachsehen: Admin-Konto und Ordner photos/ --> |
 | vaultwarden | 1 Konto, 0 mit zweitem Faktor |
 | media | 3 Konten der Familie |
 | radicale | 2 Kalender, 2 Listen, 2 Adressbücher |
@@ -705,23 +713,29 @@ green. This is state, not design: it changes as people log in.
 The last change before this was proposal 453, „Claude in der Werkstatt
 darf eine Stunde lang in Immich hineinsehen“ — an ADR 0032 Einblick.
 
-## Unverified, and what would verify it
+## What a person answers
 
-- Whether Paperless' `admins` members are superusers (gap 3): Paperless
-  → Benutzer.
-- Who is in LLDAP's `admins` (they get „Wem gehört dieser Scan?“, gap 6;
-  only a human invites an admin): Homes → Box → Personen, or LLDAP.
-- Whether Paperless' workflow „Für den Haushalt“ (Document Updated) fires
-  on Dokumente's API change on the box's Paperless version: a document
-  tagged Haushalt by Dokumente has no owner afterwards (Paperless →
-  Dokument → Berechtigungen).
-- Which Immich user owns the file share's `photos/` as an external
-  library: Immich → Administration → External libraries.
-- File Browser's scope for a family member: File Browser → Benutzer.
-- Whether Reitti can share a timeline with another user, and whether
-  Music Assistant keeps per-user history: their settings or upstream docs.
-- Which persons' phone locations other Home Assistant users see: HA's
-  map and person settings.
+What the box cannot read — a setting inside an app — is a Box-Aufgabe for
+the admins; the answer comes back into this document and the number goes.
+`werkstatt-docprobe` adds each task once and writes its number here.
+
+- Paperless: whether the `admins` members are superusers (gap 3), and
+  whether the workflow „Für den Haushalt“ (Document Updated) fires on
+  Dokumente's API change on the box's Paperless version, so a document
+  tagged Haushalt by Dokumente has no owner afterwards:
+  <!-- aufgabe: In Paperless nachsehen: Admins und Haushaltsdokumente | Paperless → Benutzer: ist bei jedem Admin „Superuser“ angehakt? Und bei einem Dokument mit dem Tag Haushalt → Berechtigungen: ist kein Besitzer eingetragen? Die Antwort bitte Claude in der Werkstatt sagen, sie kommt in die Beschreibung der Box. -->
+- Immich: whether its one user is the admin account, and which user owns
+  the file share's `photos/` as an external library:
+  <!-- aufgabe: In Immich nachsehen: Admin-Konto und Ordner photos/ | Immich → Administration → Benutzer: ist das eine Konto das Admin-Konto? Administration → Externe Bibliotheken: wem gehört die Bibliothek des Ordners photos/, oder gibt es keine? Die Antwort bitte Claude in der Werkstatt sagen, sie kommt in die Beschreibung der Box. -->
+- File Browser: a family member's scope:
+  <!-- aufgabe: In File Browser nachsehen: was ein Familienmitglied sieht | File Browser → Einstellungen → Benutzer → ein Familienmitglied: welcher Bereich steht dort, „/“ (alles) oder ein eigener Ordner? Die Antwort bitte Claude in der Werkstatt sagen, sie kommt in die Beschreibung der Box. -->
+- Home Assistant and Music Assistant: which persons' phone locations
+  other HA users see, and whether MA keeps a history per user:
+  <!-- aufgabe: In Home Assistant und Music Assistant nachsehen: Standorte und Verlauf | Home Assistant → Karte und Einstellungen → Personen: sieht jedes Konto die Handys aller? Music Assistant → Einstellungen: gibt es einen Verlauf pro Person? Die Antwort bitte Claude in der Werkstatt sagen, sie kommt in die Beschreibung der Box. -->
+
+Who is in LLDAP's `admins` (they get „Wem gehört dieser Scan?“, gap 6) is
+state, not design: Homes → Box → Personen, or LLDAP. Whether Reitti can
+share a timeline is answered in its section from upstream.
 
 ## Keeping this true
 

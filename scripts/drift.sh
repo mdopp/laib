@@ -95,5 +95,28 @@ for f in $extra; do grep -q 'x-release-please-version' "$f" 2>/dev/null || off="
 off="$off$(grep -rn 'x-release-please-version' README.md docs/*.md 2>/dev/null | grep -v "$ver" | sed "s/\$/ (version.txt: $ver)/" || true)"
 found "docs version" "$(printf %s "$off")"
 
+# 10. what only the box can answer carries its probe or its Box-Aufgabe
+# (#1169): a paragraph, list item or table row of a current doc (README.md,
+# docs/*.md without **History.**) that says „auf der Box zu prüfen“ or
+# „unverified“ has a probe <!-- box: laib … ~ … -->, a new task
+# <!-- aufgabe: … --> or a Box-Aufgabe #N. werkstatt-docprobe writes the
+# answers and dates and turns a new task into its number; its --check
+# parses every probe (a read verb, a ~).
+found "box question" "$(for f in README.md docs/*.md; do [ -f "$f" ] && ! awk 'NR<=6 && index($0, "**History.**") {f=1} END {exit !f}' "$f" && echo "$f"; done | xargs -r awk '
+  function flush() {
+    if (p != "") {
+      q = tolower(p); gsub(/ostree-unverified-registry/, "", q)
+      if (q ~ /auf der box zu +prüfen|unverified/ && p !~ /<!-- box: laib [a-z]+.* ~ |<!-- aufgabe: |Box-Aufgabe #[0-9]/) print f ":" s ": " substr(first, 1, 90)
+    }
+    p = ""
+  }
+  FNR == 1 { flush(); f = FILENAME }
+  /^[ \t]*$/ { flush(); next }
+  /^(#|[-*] |\||[0-9]+\. )/ { flush() }
+  { if (p == "") { s = FNR; first = $0 } p = p " " $0 }
+  END { flush() }
+')"
+[ -f werkstatt/docprobe.py ] && found "box probe" "$(python3 werkstatt/docprobe.py --check . || true)"
+
 [ "$bad" -eq 0 ] && echo "drift: none"
 exit $bad
