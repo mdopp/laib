@@ -24,7 +24,7 @@ history.
   (#368). The previous proven deployment stays as the rollback.
   firewalld, which uCore turns on, is masked: Laib's nftables table is the
   one firewall (#445).
-- **Laib:** release v2.23.0 <!-- x-release-please-version --> in this repo
+- **Laib:** release v2.24.0 <!-- x-release-please-version --> in this repo
   (`version.txt`, bumped by release-please). Which release the box runs, `laib
   version` answers (the version shown is the box's):
   <!-- box: laib version ~ "version": "(v\d+\.\d+\.\d+)" --> *(box 2026-11-11: yes, v2.20.0)*

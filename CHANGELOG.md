@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.24.0](https://github.com/mdopp/laib/compare/v2.23.0...v2.24.0) (2026-11-11)
+
+
+### Features
+
+* **archiv,paperless:** a person's document mail in their archive, and the link to it on the document ([#1163](https://github.com/mdopp/laib/issues/1163)) ([3fac194](https://github.com/mdopp/laib/commit/3fac194cde6ecc07ec51fcea0c8d3cf7800e64ad))
+* **ratchet:** mutation testing over the trust kernel's packages ([#1190](https://github.com/mdopp/laib/issues/1190)) ([aca4ffb](https://github.com/mdopp/laib/commit/aca4ffb4baa3c4dd88709f1997ded4613d4c55fd))
+* **werkstatt:** the gates have one source, and a new repo starts with them ([#1177](https://github.com/mdopp/laib/issues/1177)) ([dab8227](https://github.com/mdopp/laib/commit/dab8227af6fcef3c83a3759ddfa7cc851c2516bc))
+
+
+### Bug Fixes
+
+* **templates:** loginProbe for auth and caldav (laib-app check) ([#974](https://github.com/mdopp/laib/issues/974)) ([5465ec5](https://github.com/mdopp/laib/commit/5465ec5ce26af2623d01aee896927562c70e9355))
+
 ## [2.23.0](https://github.com/mdopp/laib/compare/v2.22.2...v2.23.0) (2026-11-11)
 
 
