@@ -11,8 +11,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
       - run: scripts/ratchet.py
@@ -23,10 +23,10 @@ jobs:
       packages: read # ghcr.io/mdopp/laib-caddy for the Caddyfile check
       issues: write # the Kern-Diät issue (scripts/kern-diaet.sh, #309)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # scripts/drift.sh compares against main's merge base (#687)
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
       - name: lines as gofmt writes them, the count scripts/loc.sh caps (#866)
@@ -103,4 +103,5 @@ jobs:
       - name: README's architecture section is current (a warning only; the daily architektur workflow opens the PR)
         run: scripts/architektur.sh --check || echo "::warning title=README architecture section::stale; the daily architektur workflow opens its PR, or run scripts/architektur.sh"
       - run: scripts/workflow-syntax.sh
+      - run: scripts/pins.sh
       - run: scripts/e2e.sh

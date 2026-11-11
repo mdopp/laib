@@ -131,3 +131,27 @@ verified own (the recommendation); (c) everything human. The owner chose
 - The kernel grew by the signature check, `--notes`, `--note`, the
   grouped `sets` and the card's lines — within its cap (21,994 of 22,000);
   laib-haushalt by the changelog read (1,318 of 1,320).
+
+## Amendment 2026-11-11 (#1165): the build is pinned too
+
+The signature of point 3 vouches for whatever the workflow built. A moved
+action tag (`actions/checkout@v4`) or base image (`golang:1.27-alpine`)
+changes that, and the signature then vouches for it. So the rule now
+covers what builds our images, in every repo of the owner's (laib, homes,
+homes-android, archiv, dokumente, 2ndbrain, and each repo `laib-app new`
+makes):
+
+- Every `uses:` names a 40-hex commit, its tag kept as a comment
+  (`uses: actions/checkout@<sha> # v4.4.0`); every `FROM` names its image
+  with `@sha256:` (`scratch` and a stage of the same file are exempt).
+  `scripts/pins.sh`, the same file in each repo, fails CI otherwise.
+- The pins move by pull request, as the box's do by proposal: one
+  `.github/dependabot.yml` per repo opens a grouped weekly PR for the
+  actions and one for the base images, the change named in it. A new
+  major of a base image is left to a change of its own.
+- The scaffold (`werkstatt/scaffold`) carries the check, its CI job and
+  pinned bases, so a new repo starts pinned (`test_apps262`).
+
+Not covered: images a workflow `run:` step pulls by name (the vm-install
+test pulls upstream images to test them), and the tools a script installs
+(`go install …@version` pins by module version, not by hash).

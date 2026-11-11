@@ -2,7 +2,7 @@
 # the standard library, bcrypt for AdGuard's first user, bash, curl and
 # openssl, psql for the one-shot Immich library move (#263) — nothing of this
 # lives on the host; Fedora CoreOS has no Python.
-FROM python:3.13-alpine
+FROM python:3.13-alpine@sha256:1e1f6334529d1fb26a2ef619d7cffb30a7c7d7cc1cc7338ebee283a58d1aeaca
 RUN apk add --no-cache bash curl openssl ca-certificates postgresql17-client && pip install --no-cache-dir bcrypt==4.3.0
 WORKDIR /laib/service
 ENTRYPOINT ["/bin/sh", "-c", "exec \"$@\"", "--"]
