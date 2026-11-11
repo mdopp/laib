@@ -69,6 +69,14 @@ after: [auth]                  # started and verified after these services
 - **Ports:** publish on `127.0.0.1:<port>:<container port>` and declare
   `lan: false`, unless a device on the LAN must reach it directly (MQTT,
   a media client): then `lan: true`. A port two templates use is refused.
+- **The default container** (#1166): its own network (a pod when it has
+  siblings), `ReadOnly=true`, `NoNewPrivileges=true`,
+  `DropCapability=all`. `Network=host`, `SecurityLabelDisable=true` or a
+  missing hardening line is an exception: lint wants its reason in
+  `laib.yml` `exceptions:` under the unit's file name (`docs/STATE.md`),
+  and `scripts/ratchet.py exceptions` keeps their number from rising. Say
+  what you know (mDNS, SANE, a device, the shared tree); otherwise
+  „unknown, kept until measured".
 - **Volumes:** only declared data paths or rendered files; anything else
   is refused by lint. `:z` (shared label) for data; never relabel a tree
   another service shares (#230).

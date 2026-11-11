@@ -28,6 +28,7 @@ func TestLintRefusesARelabelledShare(t *testing.T) {
 			t.Errorf("%s on the share passed lint", why)
 		}
 	}
+	c += "exceptions:\n  t.container:\n    labelOff: \"the shared tree, never relabelled (#230)\"\n"
 	dir := writeTemplate(t, root, "t", c, map[string]string{"t.container": "[Container]\nImage=img\nSecurityLabelDisable=true\nVolume=${DATA_DIR}/file-share/data/music:/music:ro\nVolume=${DATA_DIR}/file-share/data/notes:/notes\nVolume=${DATA_DIR}/t/data:/data:z\n"})
 	if registry.LintTemplate(&cliEnv{}, dir) != cli.ExitOK {
 		t.Fatal("the share without a relabel and labelling off, the service's own data with :z, is fine")

@@ -80,3 +80,11 @@ status:                             # the mail inbox (#521): whether Paperless g
   stale: 30m                        # the timer runs hourly; a look starts a check when it is older
 ports:
   - {port: 8000, lan: false}
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  paperless-db.container:
+    unhardened: "Postgres' entrypoint starts as root, chowns its data folder and drops to its own user (gosu/su-exec): needs CHOWN, SETUID and SETGID"
+  paperless-redis.container:
+    unhardened: "Redis' entrypoint starts as root, chowns its data folder and drops to its own user (gosu/su-exec): needs CHOWN, SETUID and SETGID"
+  paperless.container:
+    labelOff: "it consumes from the consume folder in the shared file-share tree, mounted without :z, which needs labelling off (#230)"
+    unhardened: "an s6-overlay image that maps USERMAP_UID and drops to paperless: needs a writable root, CHOWN, SETUID, SETGID"

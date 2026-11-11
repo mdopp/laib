@@ -65,3 +65,7 @@ status:                            # the Box page's line (#785): "412 Filme, 38 
 ports:
   - {port: 8096, lan: true}        # LAN clients (TV, Symfonium at home) talk to it directly
 gpu: true
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  media.container:
+    labelOff: "the GPU (AddDevice=nvidia.com/gpu=all): under SELinux a container_t process may not open the /dev/nvidia* nodes; NVIDIA's CDI guide disables the label; and the media in the shared file-share tree, mounted without :z, which needs labelling off (#230)"
+    unhardened: "unknown, kept until measured: Jellyfin runs as root and writes its transcodes and fonts beyond /config and /cache"

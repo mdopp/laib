@@ -122,5 +122,24 @@ class WhatTheRepoIs(unittest.TestCase):
             ratchet.ruff_findings = saved
 
 
+class Exceptions(unittest.TestCase):
+    """#1166: the template containers' exceptions, counted per kind."""
+
+    def test_each_kind_is_one_finding_of_its_unit(self):
+        with tempfile.TemporaryDirectory() as d:
+            t = Path(d, "templates", "x")
+            t.mkdir(parents=True)
+            (t / "host.container").write_text("[Container]\nNetwork=host\nSecurityLabelDisable=true\n")
+            (t / "hard.container").write_text("[Container]\nReadOnly=true\nNoNewPrivileges=true\nDropCapability=ALL\n")
+            (t / "pod.pod").write_text("[Pod]\nNetwork=host\n")
+            root, ratchet.ROOT = ratchet.ROOT, Path(d)
+            try:
+                got = ratchet.exceptions()
+            finally:
+                ratchet.ROOT = root
+        self.assertEqual(got, Counter({"hostNetwork templates/x/host.container": 1, "labelOff templates/x/host.container": 1,
+                                       "unhardened templates/x/host.container": 1}))
+
+
 if __name__ == "__main__":
     unittest.main()

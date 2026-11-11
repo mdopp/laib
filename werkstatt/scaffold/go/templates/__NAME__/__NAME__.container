@@ -5,6 +5,10 @@ Description=__NAME__ (a Werkstatt app)
 Image=${IMAGE}
 PublishPort=127.0.0.1:__PORT__:8080
 Environment=PROXY_SECRET=${PROXY_SECRET}
+# the default for a template container (#1166): distroless nonroot, writes nothing
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
 AutoUpdate=registry
 
 [Service]

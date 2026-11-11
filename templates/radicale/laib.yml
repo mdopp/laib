@@ -32,3 +32,6 @@ status:                            # the Box page's line (#785): "2 Kalender, 2 
   stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 5232, lan: true}        # DAVx⁵ at home
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  radicale.container:
+    unhardened: "the entrypoint chowns /data and drops to radicale with su-exec: upstream's own compose keeps CHOWN, SETUID, SETGID and KILL; ReadOnly unknown here"

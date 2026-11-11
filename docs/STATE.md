@@ -340,7 +340,26 @@ perPerson: false                 # true: installed once per person (#986), below
 private: approval                # the family's data (ADR 0032): sealed = no look/read/exec/write for anyone; approval = an agent only for an hour after a human's Einblick; the journal keeps no output
 instances:                       # every person's instance of a per-person template, in one container (laib#1016), below
   - {template: archiv, unit: homes.container, url: HOMES_ARCHIV_INTERN, secret: ARCHIV_HOMES_SECRET, env: HOMES_ARCHIV_SECRET}
+exceptions:                      # where a container departs from the default, and why (#1166), below
+  paperless.container:
+    labelOff: "the shared file-share tree is mounted without :z (#230)"
+    unhardened: "unknown, kept until measured"
 ```
+
+`exceptions` names a `.container` of the template by its file name and, for
+each way it departs from the default, why: `hostNetwork` (`Network=host`:
+the container reaches every loopback listener of the box), `labelOff`
+(`SecurityLabelDisable=true`) and `unhardened` (one of `ReadOnly=true`,
+`NoNewPrivileges=true`, `DropCapability=all` missing — the lines laib's own
+units carry). `laib template lint` refuses an exception without a reason
+of at least three words, a reason for what the unit does not do, and an
+unknown kind or file; `scripts/ratchet.py exceptions` counts the three
+kinds over `templates/`, so their number only falls. The reasons change
+nothing that runs: a template update that only changes this block (or
+`title`/`beschreibung`) is taken over without a card, and needs no `news`
+line (`scripts/drift.sh`). The container a template moves off the host
+network goes into a pod with its port published on `127.0.0.1`
+(`templates/stimme/stimme-openwakeword.pod`).
 
 `status` is a file the template keeps about itself. laib reads it fresh on
 every `laib status`, `/ready` and `laib diag` (a file read, no watcher) and

@@ -53,3 +53,20 @@ service's own containers — nothing else, and never with a secret on its
 argv (#214). `laib template lint` refuses a
 hook whose interpreter the image lacks and a `Volume=` source that is not a
 declared data path or a rendered file.
+
+## Amendment 2026-11-11 (#1166): exceptions carry their reason in `laib.yml`
+
+A template container's default is its own network and the hardening laib's
+own units have (`ReadOnly=true`, `NoNewPrivileges=true`,
+`DropCapability=all`). Where one departs — `Network=host`,
+`SecurityLabelDisable=true`, a missing hardening line — the reason stands in
+`laib.yml` `exceptions:`, keyed by the unit's file name, one key per kind
+(`hostNetwork`, `labelOff`, `unhardened`; `docs/STATE.md`). One form, a key
+rather than a comment above the line: `when:` already names units by file
+name, a YAML key is checked structurally (kind, file, stale reason) where a
+comment form would need its own grammar, and the block can be told apart
+from what runs, so reasons alone change no unit and raise no card. Lint
+holds each reason (`lintNetwork`); `scripts/ratchet.py exceptions` holds
+the count per kind, which only falls. „Unknown, kept until measured" is an
+honest reason; a guess is not.
+

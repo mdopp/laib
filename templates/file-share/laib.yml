@@ -79,3 +79,19 @@ ports:
   - {port: 139, lan: true}
   - {port: 445, lan: true}
   - {port: 22000, lan: true}
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  file-share-filebrowser.container:
+    hostNetwork: "none known: it listens on 127.0.0.1 for Caddy only; a pod with its port on 127.0.0.1 would do, unknown, kept until measured"
+    labelOff: "the shared file-share tree is mounted without :z, which needs labelling off (#230)"
+    unhardened: "unknown, kept until measured: it runs as User=0 (core on the host) and writes its database folder"
+  file-share-samba-members.container:
+    hostNetwork: "it reads LLDAP's API, which the auth pod publishes on the box's 127.0.0.1 only: a pod's own network cannot reach it"
+    unhardened: "unknown, kept until measured: stock Python, the standard library; likely tolerates all three"
+  file-share-samba.container:
+    hostNetwork: "SMB for the LAN with the clients' own addresses (the failed-login counter reads them, #703), and the image's discovery (avahi mDNS, wsdd2 WS-Discovery multicast)"
+    labelOff: "the shared file-share tree is mounted without :z, which needs labelling off (#230)"
+    unhardened: "the image's runit starts smbd as root, which changes to each user's uid (SETUID, SETGID) and writes its passdb; the Exec edits the image's runit files (ReadOnly breaks it)"
+  file-share-syncthing.container:
+    hostNetwork: "Syncthing's local discovery (UDP 21027 broadcast and multicast) and direct LAN connections on 22000 (laib.yml)"
+    labelOff: "the shared file-share tree is mounted without :z, which needs labelling off (#230)"
+    unhardened: "the image's entrypoint drops from root to its PUID with su-exec (SETUID, SETGID, CHOWN); unknown, kept until measured"

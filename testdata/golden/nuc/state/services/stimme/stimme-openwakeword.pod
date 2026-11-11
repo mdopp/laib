@@ -1,0 +1,5 @@
+[Pod]
+PodName=stimme-openwakeword
+# Home Assistant, on the host network, is its only client: the box's loopback, never the LAN, and
+# no loopback listener of the box is in its reach (#1166)
+PublishPort=127.0.0.1:10400:10400

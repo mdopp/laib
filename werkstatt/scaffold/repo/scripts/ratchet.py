@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""The ratchet: dead code, lint findings, duplicates and complexity only go
-down (owner, 2026-11-03: "Code sollte immer möglichst sauber sein").
+"""The ratchet: dead code, lint findings, duplicates, complexity and the
+templates' exceptions only go down (owner, 2026-11-03: "Code sollte immer
+möglichst sauber sein"; #1166).
 
 Each tool's findings of today are written down in scripts/ratchet/<tool>.txt,
 one line per finding: a number, then the finding without its line number
@@ -51,6 +52,13 @@ and ruff's version are pinned here). ruff runs from a venv of its own
 Production means: not a _test.go or test_*.py file, not testdata/ or tests/,
 not a fake package. Neither a go.mod nor a ruff.toml: an error, never a
 green run that checked nothing.
+
+Templates — a repo with template containers (templates/*/*.container) also
+counts their exceptions (#1166): units on the host network (Network=host),
+with SELinux labelling off (SecurityLabelDisable=true), or without the
+hardening lines laib's own units carry (ReadOnly=true, NoNewPrivileges=true,
+DropCapability=all). `laib template lint` wants each one's reason in the
+template's laib.yml exceptions:; this keeps their number from rising.
 """
 import json
 import os
@@ -212,11 +220,34 @@ def complexity():
     return found
 
 
+HARDENING = ("ReadOnly=true", "NoNewPrivileges=true", "DropCapability=all")
+
+
+def exceptions():
+    """#1166, as laib's internal/registry/lint.go unitExceptions reads a unit."""
+    found = Counter()
+    for f in sorted(ROOT.glob("templates/*/*.container")):
+        lines = set()
+        for line in f.read_text().splitlines():
+            k, _, v = line.strip().partition("=")
+            lines.add(f"{k}={v.lower()}")
+        rel = f.relative_to(ROOT)
+        if "Network=host" in lines:
+            found[f"hostNetwork {rel}"] += 1
+        if "SecurityLabelDisable=true" in lines:
+            found[f"labelOff {rel}"] += 1
+        if any(h not in lines for h in HARDENING):
+            found[f"unhardened {rel}"] += 1
+    return found
+
+
 GO = {"deadcode": deadcode, "staticcheck": staticcheck, "dupl": dupl, "gocognit": gocognit}
 PYTHON = {"ruff": ruff, "complexity": complexity}
+TEMPLATES = {"exceptions": exceptions}
 TOOLS = None  # what the repo is (found()); the tests set their own
 UNIT = {"gocognit": "functions over %d, the number is the score" % COGNIT_OVER,
         "complexity": "functions over %d, the number is the McCabe score" % MCCABE_OVER,
+        "exceptions": "template containers by kind (#1166), each with its reason in its laib.yml",
         "dupl": "file pairs, the number is the cloned fragments of %d tokens or more" % DUPL_TOKENS}
 
 
@@ -226,6 +257,8 @@ def found():
         tools.update(GO)
     if (ROOT / "ruff.toml").exists():
         tools.update(PYTHON)
+    if tools and any(ROOT.glob("templates/*/*.container")):
+        tools.update(TEMPLATES)
     if not tools:
         sys.exit("ratchet: neither a go.mod nor a ruff.toml at the root, nothing to check")
     return tools
@@ -246,6 +279,9 @@ def write(tool, now):
     head = [f"# scripts/ratchet.py {tool}: {UNIT.get(tool, 'the number is how often')}",
             "# written by `scripts/ratchet.py --update`; lowered in the PR that fixes one, raised only with --accept",
             f"# total {len(now)}"]
+    if tool == "exceptions":
+        kinds = Counter(k.split(" ", 1)[0] for k in now)
+        head.append("# by kind: " + ", ".join(f"{k} {kinds[k]}" for k in sorted(kinds)))
     body = [f"{now[k]} {k}" for k in sorted(now)]
     BASELINE.mkdir(parents=True, exist_ok=True)
     (BASELINE / f"{tool}.txt").write_text("\n".join(head + body) + "\n")

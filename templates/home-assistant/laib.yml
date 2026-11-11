@@ -91,3 +91,14 @@ ports:
   - {port: 5580, lan: false}       # matter server websocket
   - {port: 3000, lan: false}       # Z-Wave JS server websocket, no login (#231); HA reaches it on loopback
   - {port: 3001, lan: false}       # the same on a box migrated from ServiceBay, which moved it off 3000
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  home-assistant-matter.container:
+    hostNetwork: "Matter needs IPv6 link-local multicast and mDNS on the LAN interface itself; upstream supports only the host network"
+    unhardened: "unknown, kept until measured: it uses Bluetooth over D-Bus for commissioning"
+  home-assistant-zwave.container:
+    hostNetwork: "none known for itself: Home Assistant reaches its server at 127.0.0.1:3000 and Caddy its UI; unknown, kept until measured (it holds the house's Z-Wave network)"
+    labelOff: "the Z-Wave stick: a container_t process may not open a USB serial device, EACCES (#417)"
+    unhardened: "unknown, kept until measured: it opens the serial stick and writes its store"
+  home-assistant.container:
+    hostNetwork: "discovery (mDNS/zeroconf, SSDP, DHCP), Matter, the Voice PE, and Stimme, Z-Wave and Music Assistant on 127.0.0.1 (laib.yml)"
+    unhardened: "an s6-overlay image that installs integration requirements at runtime: needs a writable root; unknown, kept until measured for the capabilities"

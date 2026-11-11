@@ -20,7 +20,7 @@ func writeTemplate46(t *testing.T, root, name, contract string, files map[string
 		if f == "pre-start" || f == "post-deploy" {
 			mode = 0o755
 		}
-		os.WriteFile(filepath.Join(dir, f), []byte(body), mode)
+		os.WriteFile(filepath.Join(dir, f), []byte(hardened(f, body)), mode)
 	}
 	return dir
 }

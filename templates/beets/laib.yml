@@ -35,3 +35,7 @@ status:                            # the Musik-Eingang: what the last run import
   check: beets-eingang.service
 ports:
   - {port: 8337, lan: false}
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  beets.container:
+    labelOff: "the shared file-share tree is mounted without :z, which needs labelling off (#230)"
+    unhardened: "a linuxserver image: s6-overlay starts as root, writes /run and /etc, chowns /config and drops to its user abc: needs a writable root, CHOWN, SETUID and SETGID"

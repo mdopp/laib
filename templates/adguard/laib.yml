@@ -36,3 +36,7 @@ status:                            # the Box page's line (#785): "in den letzten
   stale: 20m                       # the timer runs every 15 minutes; a look starts a check when it is older
 ports:
   - {port: 8083, lan: false}     # the web UI only through Caddy
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  adguard.container:
+    hostNetwork: "DNS on port 53 (udp+tcp) for the whole LAN, answering with the client's own address in its log and rules, and mDNS (laib.yml)"
+    unhardened: "unknown, kept until measured: it binds port 53 and rewrites AdGuardHome.yaml in its conf folder through its API"

@@ -86,3 +86,15 @@ ports:
   - {port: 8643, lan: false}         # Automat MCP, loopback only
   - {port: 8644, lan: false}         # the directory's MCP, loopback only
   - {port: 8645, lan: false}         # bote-notify: POST /mitteilung with the bearer; on loopback for Home Assistant (host network), laib-notify and laib-haushalt, and the host's units (beets, auth)
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  bote-automat.container:
+    unhardened: "unknown, kept until measured: laib's own image, likely tolerates all three"
+  bote-directory.container:
+    unhardened: "unknown, kept until measured: laib's own image, likely tolerates all three"
+  bote-hermes.container:
+    unhardened: "unknown, kept until measured: Hermes' entrypoint drops to its user 10000 and writes HERMES_HOME and its tools' caches"
+  bote-notify.container:
+    labelOff: "it writes into Paperless' consume folder in the shared file-share tree, mounted without :z, which needs labelling off (#230)"
+    unhardened: "unknown, kept until measured: the stock Hermes image, hermes send writes its caches"
+  bote-signal.container:
+    unhardened: "signal-cli-rest-api's entrypoint changes its user's uid and drops to it (gosu): needs SETUID, SETGID, CHOWN; signal-cli writes its JVM caches"

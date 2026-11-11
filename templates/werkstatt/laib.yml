@@ -42,3 +42,8 @@ status:                          # the sessions' permission mode (#898): "Claude
 ports:
   - {port: 2222, lan: true}      # the mobile app attaches over SSH; key or password
   - {port: 8791, lan: false}     # pi-web-ui, only through Caddy
+exceptions:                      # #1166: where a container departs from the default, and why (laib template lint)
+  werkstatt-autoloop.container:
+    unhardened: "the Werkstatt is a dev container: tools install and write everywhere, sudo needs SETUID"
+  werkstatt.container:
+    unhardened: "the Werkstatt is a dev container: tools install and write everywhere, sudo needs SETUID"
