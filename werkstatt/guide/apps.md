@@ -62,6 +62,13 @@ app:
 - the secret declared in `laib.yml` and referenced as `!secret` — generated
   on the box on first apply, never in the repo.
 
+A new repo also gets the gates (laib#1170), the same files as in every repo
+of the household: `scripts/loc.sh` (one cap on the production lines, in
+`scripts/loc.txt`), `scripts/ratchet.py` (dead code, lint, duplicates and
+complexity only go down), `scripts/pins.sh` and `scripts/copies.sh`, which
+fails CI when a copy differs from laib's scaffold. A fix to a gate goes
+to laib first.
+
 **Stack.** Go unless there is a reason: one static binary, a 10 MB image,
 no runtime to update. Python (FastAPI/uvicorn, `python3 -m venv`) or Node
 (Fastify) are fine when a library only exists there; keep the same

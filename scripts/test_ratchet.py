@@ -1,7 +1,9 @@
 """scripts/ratchet.py: a new finding is red, a fixed one asks for a lower
-baseline, --update lowers only, --accept writes a new one."""
+baseline, --update lowers only, --accept writes a new one; the tools are
+what the repo is (laib#1170)."""
 import importlib.util
 import io
+import subprocess
 import tempfile
 import unittest
 from collections import Counter
@@ -71,6 +73,53 @@ class Ratchet(unittest.TestCase):
     def test_a_line_the_ratchet_cannot_read_is_an_error(self):
         with self.assertRaises(SystemExit):
             ratchet.lines_of("internal/x.go:1:1: something new\n", ratchet.DEAD, "deadcode")
+
+
+class WhatTheRepoIs(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.dir.name)
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        self.saved = ratchet.ROOT
+        ratchet.ROOT = self.root
+
+    def tearDown(self):
+        ratchet.ROOT = self.saved
+        self.dir.cleanup()
+
+    def track(self, *files):
+        for f in files:
+            (self.root / f).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / f).write_text("")
+        subprocess.run(["git", "add", *files], cwd=self.root, check=True)
+
+    def test_the_outermost_go_modules(self):
+        self.track("apps/a/go.mod", "apps/b/go.mod", "apps/b/testdata/x/go.mod", "apps/a/scaffold/c/go.mod")
+        self.assertEqual(ratchet.modules(), [self.root / "apps/a", self.root / "apps/b"])
+        self.track("go.mod")
+        self.assertEqual(ratchet.modules(), [self.root])
+        self.assertEqual(set(ratchet.found()), set(ratchet.GO))
+
+    def test_a_ruff_toml_adds_the_python_tools(self):
+        self.track("ruff.toml")
+        self.assertEqual(set(ratchet.found()), set(ratchet.PYTHON))
+
+    def test_nothing_to_check_is_an_error(self):
+        self.track("README.md")
+        with self.assertRaises(SystemExit):
+            ratchet.found()
+
+    def test_complexity_is_the_score_of_production_functions(self):
+        saved = ratchet.ruff_findings
+        ratchet.ruff_findings = lambda *a: [("ordnen/ordnen.py", "C901", "`main` is too complex (14 > 10)"),
+                                            ("ordnen/tests/test_ordnen.py", "C901", "`test_x` is too complex (12 > 10)")]
+        try:
+            self.assertEqual(ratchet.complexity(), Counter({"ordnen/ordnen.py: main": 14}))
+            ratchet.ruff_findings = lambda *a: [("a.py", "C901", "`f` has grown too complex")]
+            with self.assertRaises(SystemExit):
+                ratchet.complexity()
+        finally:
+            ratchet.ruff_findings = saved
 
 
 if __name__ == "__main__":

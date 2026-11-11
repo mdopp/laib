@@ -87,7 +87,8 @@ def cmd_new(a) -> int:
     if fresh or not (repo / ".github" / "workflows" / "apps.yml").exists():
         written += fill(SCAFFOLD / "repo", repo, subs)
     written += fill(SCAFFOLD / "go", repo, subs)
-    left = [str(p) for p in written if re.search(r"__[A-Za-z]+__", p.read_text())]
+    # a placeholder starts with a capital (__NAME__, __Name__); __file__ in a script is Python's
+    left = [str(p) for p in written if re.search(r"__[A-Z][A-Za-z]*__", p.read_text())]
     if left:
         return die("placeholders left in " + ", ".join(left))
     print(f"{name}: app in apps/{name}, template in templates/{name} (port {port}, route {name}.<domain>, "
