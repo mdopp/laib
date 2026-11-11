@@ -81,7 +81,7 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 | [`lease/`](lease/) | laib-lease: the model role's policy proxy and the GPU lease (ADR 0011) | 1,238 / 1,430 |
 | [`mcpserver/`](mcpserver/) | The smallest MCP server, shared by the Bote's tools (frage, automat, directory) | 111 / 220 |
 | [`notify/`](notify/) | laib-notify: the outside watchdog ping and messages to the owner, the chat first, else mail | **659 / 660, at 95 % or more** |
-| [`operator/`](operator/) | The Operator, the admin agent: incidents, the morning report, the review (ADR 0013, 0027) | **3,261 / 3,300, at 95 % or more** |
+| [`operator/`](operator/) | The Operator, the admin agent: incidents, the morning report, the review (ADR 0013, 0027) | **3,289 / 3,300, at 95 % or more** |
 | [`stick/`](stick/) | laib-stick on the laptop: builds the install stick for a new box | 1,468 / 1,980 |
 
 ### The Operator's skills
@@ -104,21 +104,21 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 
 ### The Laib kernel
 
-The part the house trusts: it must work when everything else is broken. **21,994 / 22,000, at 95 % or more** lines (`cmd/`, `internal/`).
+The part the house trusts: it must work when everything else is broken. **21,999 / 22,000, at 95 % or more** lines (`cmd/`, `internal/`).
 
 | Part | What it does | Code | Lines |
 |---|---|---|---:|
 | State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,581 |
 | Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 4,069 |
-| Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 4,917 |
+| Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 4,921 |
 | Policy and hands | which hand may call which verb up to which tier; the hands' verbs on one service; the Operator's skills | [`policy`](internal/policy/), [`token`](internal/token/), [`envelope`](internal/envelope/), [`skill`](internal/skill/), [`token.go`](cmd/laib/token.go) | 1,444 |
-| Journal | append-only JSONL, everything that happened | [`journal`](internal/journal/), [`journal.go`](cmd/laib/journal.go) | 403 |
-| Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,992 |
+| Journal | append-only JSONL, everything that happened | [`journal`](internal/journal/), [`journal.go`](cmd/laib/journal.go) | 394 |
+| Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 2,004 |
 | Backup | the nightly restic backup, restore, the recovery sheet | [`backup`](internal/backup/) | 885 |
 | Self-update | Laib itself, the services' images and templates, with the previous one back on red | [`self.go`](cmd/laib/self.go), [`updates.go`](cmd/laib/updates.go), [`registry`](internal/registry/) | 1,229 |
 | Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 1,868 |
-| MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,190 |
-| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,416 |
+| MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,189 |
+| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,415 |
 
 ### Services from templates
 
