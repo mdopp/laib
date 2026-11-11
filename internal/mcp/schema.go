@@ -117,7 +117,6 @@ var mcpParams = map[string][]mcpParam{
 		{name: "warum", typ: "string", flag: "--warum", desc: "add: warum, ein Satz"},
 		{name: "erinnern", typ: "string", flag: "--erinnern", desc: "add, zurueckstellen: ab diesem Tag erinnert diag wieder, JJJJ-MM-TT"},
 		{name: "fertig_wenn", typ: "string", flag: "--fertig-wenn", desc: "add: der Befund aus laib diag, den die Aufgabe abdeckt: Probe, wahlweise Dienst oder Thema, z. B. raid, watchdog, backup offsite; Laib hakt sie ab, wenn er weg ist"},
-		{name: "befund", typ: "string", flag: "--befund", desc: "add: der alte Name von fertig_wenn"},
 		{name: "fuer", typ: "string", flag: "--fuer", desc: "add: für wen: admins (leer), alle oder person:<login>"},
 		{name: "weg", typ: "string", flag: "--weg", desc: "add: wie man sie erledigt: eine Seite von Homes (/stimme) oder gespraech (gemeinsam mit dem Boten)"},
 		{name: "von", typ: "string", flag: "--von", desc: "nur Homes und der Bote: der Login der Person, für die sie handeln; sie sehen nur deren eigene Aufgaben"},

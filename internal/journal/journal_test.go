@@ -22,7 +22,7 @@ func TestAppendReadLast(t *testing.T) {
 	if len(recent) != 1 || recent[0].Actor != "claude" {
 		t.Fatalf("%+v", recent)
 	}
-	if last, ok := Last(dir); !ok || last.Service != "media" {
-		t.Fatalf("%+v", last)
+	if all, _ := Read(dir, time.Time{}); all[len(all)-1].Service != "media" {
+		t.Fatalf("%+v", all)
 	}
 }

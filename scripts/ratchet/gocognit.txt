@@ -2,7 +2,7 @@
 # written by `scripts/ratchet.py --update`; lowered in the PR that fixes one, raised only with --accept
 # total 54
 83 automat/automat.go: automat.Server
-96 cmd/laib/aufgabe.go: main.cmdAufgabe
+94 cmd/laib/aufgabe.go: main.cmdAufgabe
 37 cmd/laib/calendar.go: main.cmdCalendar
 64 cmd/laib/operator.go: main.cmdOperator
 38 cmd/laib/pause.go: main.cmdPause

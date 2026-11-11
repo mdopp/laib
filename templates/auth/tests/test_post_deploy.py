@@ -18,7 +18,7 @@ from pathlib import Path
 HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
 STATE = {"users": [], "groups": [], "adds": [], "members": {}, "deleted": []}
 BASE_DN = "dc=vm,dc=test"
-SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw", "FILE_SHARE_LDAP_PASSWORD": "-fs_pw",
+SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw", "FILE_SHARE_LDAP_PASSWORD": "-fs_pw", "VAULTWARDEN_LDAP_PASSWORD": "-vw-ro-pw",
            "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HOMES_RADICALE_PASSWORD": "-haus-cal-pw",
            "KALENDER_RADICALE_PASSWORD": "-kal-pw", "HA_RADICALE_PASSWORD": "-ha-cal-pw", "AUDIOBOOKSHELF_LDAP_PASSWORD": "-abs-ro-pw"}   # #256: Jellyfin's LDAP plugin binds read-only, like radicale
 ADMIN_DN = "uid=admin,ou=people," + BASE_DN
@@ -183,7 +183,8 @@ class PostDeploy(unittest.TestCase):
         self.assertEqual(LDAP["pw"].get("uid=audiobookshelf,ou=people," + BASE_DN), SECRETS["AUDIOBOOKSHELF_LDAP_PASSWORD"], LDAP)
         self.assertIn("audiobookshelf", STATE["users"])
         # and each account binds with it afterwards: a set that did not take is red, not "seeded"
-        for uid in ("core", "radicale", "file-share", "jellyfin", "audiobookshelf"):
+        self.assertEqual(LDAP["pw"].get("uid=vaultwarden,ou=people," + BASE_DN), SECRETS["VAULTWARDEN_LDAP_PASSWORD"], LDAP)   # #1168
+        for uid in ("core", "radicale", "file-share", "vaultwarden", "jellyfin", "audiobookshelf"):
             self.assertIn(("uid=%s,ou=people,%s" % (uid, BASE_DN), True), LDAP["binds"], LDAP["binds"])
 
     def test_a_rotation_changes_the_admin_password_in_lldap_first(self):

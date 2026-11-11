@@ -44,7 +44,7 @@ Matter) is declared `lan: false` or listens on loopback.
 OIDC clients (immich, vaultwarden, audiobookshelf, paperless, reitti) fetch Authelia's
 discovery document over HTTPS: they need a certificate they trust — real
 certificates (#45, the trial domain at deSEC), never `tls: internal`.
-Radicale binds LDAP with LLDAP's read-only account `radicale`, file-share reads the family with `file-share` (`FILE_SHARE_LDAP_PASSWORD`),
+Radicale binds LDAP with LLDAP's read-only account `radicale`, file-share reads the family with `file-share` (`FILE_SHARE_LDAP_PASSWORD`), vaultwarden-check whose account it is with `vaultwarden` (`VAULTWARDEN_LDAP_PASSWORD`, #1168)
 (`lldap_strict_readonly`, secret `RADICALE_LDAP_PASSWORD` seeded by the
 auth template), never as the admin. Home Assistant's integrations (three
 Wyoming services, CalDAV, MQTT, the MCP Server) are set up

@@ -24,6 +24,12 @@ type finding struct {
 	Detail   string   `json:"detail"`
 	Repair   []string `json:"repair"`
 	Wartet   string   `json:"wartet"` // why diag expects this red now (#907, #908)
+	Topic    string   `json:"topic"`
+	// the task a template's status file asks for (#1168): diag stops asking once it is open
+	NeueAufgabe *struct {
+		Titel, Warum, Fuer string
+		Weg                *struct{ Seite string }
+	} `json:"neue_aufgabe"`
 }
 
 var digits = regexp.MustCompile(`[0-9]+`)
@@ -154,6 +160,27 @@ func news(fs []finding, raw []json.RawMessage, seen []string) string {
 		out += "\nSeit der letzten Sitzung nicht mehr da: " + strings.Join(gone, ", ") + "."
 	}
 	return out
+}
+
+// aufgaben adds, as ops, each task diag's findings ask for (#1168), once
+// per look: laib closes it when the finding is measured gone, and Laib
+// refuses one that is not a task (a bad person or way); that one is asked
+// no more until it changes.
+func (o *Operator) aufgaben(ctx context.Context, fs []finding, m *memory) {
+	for _, f := range fs {
+		a, id := f.NeueAufgabe, f.id()
+		if a == nil || f.Topic == "" || m.Repaired[id] != "" {
+			continue
+		}
+		args := map[string]any{"action": "add", "titel": a.Titel, "warum": a.Warum, "fuer": a.Fuer, "fertig_wenn": "status " + f.Topic, "weg": "gespraech"}
+		if a.Weg != nil && a.Weg.Seite != "" {
+			args["weg"] = a.Weg.Seite
+		}
+		if _, isErr, err := o.MCP.Call(ctx, "laib_aufgabe", args); err == nil && isErr {
+			m.Repaired[id] = "refused"
+			o.remember(m)
+		}
+	}
 }
 
 // repairs files laib repair for every finding that is not red and carries a

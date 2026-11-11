@@ -16,9 +16,15 @@ import (
 // cover marks the findings an open Box-Aufgabe covers: info, „zurückgestellt
 // → Box-Aufgabe #N“, until its erinnern day, then gelb with „erinnert“. A
 // red stays red: a deferral silences a nudge, never damage. An unmeasured
-// finding is never covered.
+// finding is never covered. A person's task says only that it exists; a status finding asks
+// for one (#1168) until one of its fertig_wenn is open or a person ticked it off.
 func cover(fs []Finding, tasks []aufgaben.Aufgabe, today string) []Finding {
 	for i, f := range fs {
+		if f.NeueAufgabe != nil && (f.Unmeasured || slices.ContainsFunc(tasks, func(a aufgaben.Aufgabe) bool {
+			return a.FertigWenn == "status "+f.Topic && (a.Open() || a.Erledigt.Von != "laib")
+		})) {
+			fs[i].NeueAufgabe = nil
+		}
 		j := slices.IndexFunc(tasks, func(a aufgaben.Aufgabe) bool {
 			return a.Open() && !f.Unmeasured && aufgaben.Match(a.FertigWenn, f.Probe, f.Service, f.Topic)
 		})
@@ -28,6 +34,8 @@ func cover(fs []Finding, tasks []aufgaben.Aufgabe, today string) []Finding {
 		a := tasks[j]
 		fs[i].Aufgabe = a.ID
 		switch {
+		case strings.HasPrefix(a.Fuer, "person:"):
+			fs[i].Detail += fmt.Sprintf(" (→ Aufgabe #%d für die Person; Laib hakt sie ab, wenn es gemessen ist)", a.ID)
 		case a.Due(today):
 			fs[i].Detail += fmt.Sprintf(" (erinnert: Box-Aufgabe #%d „%s“, zurückgestellt bis %s)", a.ID, a.Titel, a.Erinnern)
 			if f.Severity == "info" {

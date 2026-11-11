@@ -53,7 +53,7 @@ func TestBoxAufgabenOverMCP(t *testing.T) {
 	}
 	schema := tools[i]["inputSchema"].(map[string]any)
 	props := schema["properties"].(map[string]any)
-	for _, p := range []string{"action", "id", "titel", "warum", "erinnern", "befund", "von", "alle", "faellig"} {
+	for _, p := range []string{"action", "id", "titel", "warum", "erinnern", "fertig_wenn", "von", "alle", "faellig"} {
 		if props[p] == nil {
 			t.Errorf("laib_aufgabe lacks %s", p)
 		}
@@ -65,14 +65,14 @@ func TestBoxAufgabenOverMCP(t *testing.T) {
 		t.Errorf("required %v", schema["required"])
 	}
 
-	got, out, code := callAufgabe(t, env, "ops", map[string]any{"action": "add", "titel": "Wächter von außen", "warum": "fällt die Box aus, erfährt es niemand", "erinnern": "2026-12-01", "befund": "watchdog"})
+	got, out, code := callAufgabe(t, env, "ops", map[string]any{"action": "add", "titel": "Wächter von außen", "warum": "fällt die Box aus, erfährt es niemand", "erinnern": "2026-12-01", "fertig_wenn": "watchdog"})
 	if code != cli.ExitOK || got.Aufgabe.ID != 1 || got.Aufgabe.Von != "ops" || got.Aufgabe.FertigWenn != "watchdog" || !strings.Contains(got.Message, "#1") {
 		t.Fatalf("ops add: exit %d: %s", code, out)
 	}
 	if _, out, code := callAufgabe(t, env, "bote", map[string]any{"action": "add", "titel": "x"}); code == cli.ExitOK {
 		t.Fatalf("the bote added a task: %s", out)
 	}
-	for _, bad := range []map[string]any{{"action": "add"}, {"action": "add", "titel": "x", "erinnern": "1.12."}, {"action": "add", "titel": "x", "befund": "Watch Dog!"}} {
+	for _, bad := range []map[string]any{{"action": "add"}, {"action": "add", "titel": "x", "erinnern": "1.12."}, {"action": "add", "titel": "x", "fertig_wenn": "Watch Dog!"}} {
 		if _, out, code := callAufgabe(t, env, "claude", bad); code == cli.ExitOK {
 			t.Errorf("%v was accepted: %s", bad, out)
 		}
@@ -133,7 +133,7 @@ func TestBoxAufgabenOverMCP(t *testing.T) {
 		t.Fatalf("the watchdog finding is not deferred: %v", f)
 	}
 	// the raid probe cannot be measured here (no laib-disk): its task stays open
-	callAufgabe(t, env, "claude", map[string]any{"action": "add", "titel": "Zweite Datenplatte", "befund": "raid"})
+	callAufgabe(t, env, "claude", map[string]any{"action": "add", "titel": "Zweite Datenplatte", "fertig_wenn": "raid"})
 	// the owner sets the watchdog: diag no longer sees it and closes the task
 	box := filepath.Join(env.Paths.State, "box.yml")
 	b, _ := os.ReadFile(box)

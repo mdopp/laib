@@ -1,10 +1,12 @@
 # vaultwarden's detail line on the Box page (#785): vaultwarden-check.py in a
-# stock Python image, fed on stdin (as kalender-abgleich), in Vaultwarden's own
-# network namespace, so it asks Vaultwarden on 127.0.0.1:8222 (published on
-# loopback only). It logs in to the admin page with the admin token, reads the
-# accounts and writes the status file laib.yml declares. laib starts it when
-# someone looks and the file is older than its stale; the timer every 15
-# minutes. The token reaches podman through the environment, never on argv.
+# stock Python image, fed on stdin (as kalender-abgleich), on the host network:
+# Vaultwarden is published on the host's loopback (127.0.0.1:8222), and so is
+# LLDAP (17170), which it asks whose address an account has (#1168, the
+# read-only account vaultwarden, as file-share-check's neighbours do). It logs
+# in to the admin page with the admin token, reads the accounts and writes the
+# status file laib.yml declares. laib starts it when someone looks and the file
+# is older than its stale; the timer every 15 minutes. The token and the LDAP
+# password reach podman through the environment, never on argv.
 [Unit]
 Description=Vaultwarden: Konten für laibs Status
 After=vaultwarden.service
@@ -12,6 +14,7 @@ After=vaultwarden.service
 [Service]
 Type=oneshot
 Environment=ADMIN_TOKEN=${ADMIN_TOKEN}
+Environment=LDAP_PASSWORD=${LDAP_PASSWORD}
 StandardInput=file:%h/.config/containers/systemd/vaultwarden/vaultwarden-check.py
-ExecStart=/usr/bin/podman run --rm -i --name vaultwarden-check --network container:systemd-vaultwarden --security-opt label=disable -e ADMIN_TOKEN -e VAULTWARDEN_URL=http://127.0.0.1:8222 -e STATUS_DIR=/data -v ${DATA_DIR}/vaultwarden/check:/data ${CHECK_IMAGE} python3 -
+ExecStart=/usr/bin/podman run --rm -i --name vaultwarden-check --network host --security-opt label=disable -e ADMIN_TOKEN -e LDAP_PASSWORD -e LLDAP_URL=http://127.0.0.1:17170 -e VAULTWARDEN_URL=http://127.0.0.1:8222 -e STATUS_DIR=/data -v ${DATA_DIR}/vaultwarden/check:/data ${CHECK_IMAGE} python3 -
 TimeoutStartSec=2min

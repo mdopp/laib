@@ -38,6 +38,7 @@ secrets:
     dataBound: true                 # read only when the app makes its data: laib secret rotate refuses it (#353)
   - name: RADICALE_LDAP_PASSWORD      # the read-only LDAP account radicale binds with (#55): seeded here, used there
   - name: FILE_SHARE_LDAP_PASSWORD    # the read-only account file-share reads the family with (#296): seeded here, used there
+  - name: VAULTWARDEN_LDAP_PASSWORD   # the read-only account vaultwarden-check reads logins and addresses with (#1168): seeded here, used there
   - name: HOMES_RADICALE_PASSWORD      # the household's account `homes` (#418; `haus` until ADR 0031), which Homes writes with, owner of the household's calendar in Radicale: seeded here, used there
     was: HAUS_RADICALE_PASSWORD   # ADR 0031: the value moves along (#1021); goes once the box moved
   - name: KALENDER_RADICALE_PASSWORD  # the account `kalender` (#495) that writes the calendar mirrors in Radicale: seeded here, used by templates/kalender

@@ -55,9 +55,39 @@ class Fake:
         self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
 
 
-def run(url):
+LDAP_PW = "-vw-ro-pw"
+
+
+class FakeLLDAP:
+    """LLDAP's simple login and GraphQL as samba-members.py and this check use them"""
+    def __init__(self, users, refuse=False):
+        outer = self
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)))
+                if self.path == "/auth/simple/login" and not refuse and body == {"username": "vaultwarden", "password": LDAP_PW}:
+                    out, code = {"token": "jwt-l"}, 200
+                elif self.path == "/api/graphql" and self.headers.get("Authorization") == "Bearer jwt-l":
+                    out, code = {"data": {"users": users}}, 200
+                else:
+                    out, code = {"error": "no"}, 401
+                b = json.dumps(out).encode()
+                self.send_response(code); self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.srv.server_address[1]}"
+
+
+def run(url, lldap=None):
     d = tempfile.mkdtemp()
     env = {"PATH": os.environ["PATH"], "VAULTWARDEN_URL": url, "ADMIN_TOKEN": TOKEN, "STATUS_DIR": d}
+    if lldap:
+        env.update(LLDAP_URL=lldap, LDAP_PASSWORD=LDAP_PW)
     r = subprocess.run([sys.executable, "-"], input=SCRIPT.read_text(), text=True, capture_output=True, env=env, timeout=60)
     with open(os.path.join(d, "laib-status.json")) as f:
         return r, json.load(f)
@@ -84,6 +114,30 @@ class Check(unittest.TestCase):
         self.assertTrue(st["detail"].startswith("nicht gemessen: Vaultwarden nimmt das Admin-Token nicht an"), st["detail"])
         self.assertNotIn("Konten", st["detail"])
         self.assertTrue(st["findings"][0]["unmeasured"])
+
+    def test_an_account_without_second_factor_asks_for_its_persons_task(self):
+        # #1168: b@x is anna's address in LLDAP (case aside): her task, the way to Homes' vault page;
+        # d@x is disabled and c@x has one: nothing; the finding's words name nobody
+        lldap = FakeLLDAP([{"id": "anna", "email": "B@X"}, {"id": "carl", "email": "c@x"}, {"id": "dora", "email": "d@x"}]).url
+        r, st = run(Fake().url, lldap)
+        self.assertEqual(st["detail"], "3 Konten, 2 mit zweitem Faktor · 1 gesperrt")
+        self.assertEqual(len(st["findings"]), 1, st["findings"])
+        f = st["findings"][0]
+        self.assertEqual((f["severity"], f["topic"], f["neue_aufgabe"]["fuer"], f["neue_aufgabe"]["weg"]),
+                         ("info", "zweiter-faktor.anna", "person:anna", {"seite": "/einrichten/passwoerter"}))
+        self.assertNotIn("anna", f["detail"])
+        self.assertNotIn("b@x", json.dumps(st).lower())
+        self.assertNotIn(LDAP_PW, r.stdout + r.stderr + json.dumps(st))
+
+    def test_an_account_no_login_has_asks_for_nothing(self):
+        _, st = run(Fake().url, FakeLLDAP([{"id": "carl", "email": "c@x"}]).url)
+        self.assertEqual(st["findings"], [])
+
+    def test_lldap_refusing_is_not_measured_so_no_task_closes(self):
+        _, st = run(Fake().url, FakeLLDAP([], refuse=True).url)
+        self.assertEqual(st["detail"], "3 Konten, 2 mit zweitem Faktor · 1 gesperrt")
+        self.assertTrue(st["findings"][0]["unmeasured"], st["findings"])
+        self.assertNotIn("neue_aufgabe", st["findings"][0])
 
     def test_down_is_not_measured(self):
         _, st = run("http://127.0.0.1:9")
