@@ -193,7 +193,7 @@ tier) is how the Operator and, later, Haus's Box page see the registry.
 
 | Skill | Trigger | Tools | Output | Today |
 |---|---|---|---|---|
-| `routineblick` | `every: ${TICK}` | status, diag, repair, note (#543) | note | the tick |
+| `routineblick` | `every: ${TICK}` | status, diag, repair, aufgabe, note (#543, #1181: aufgabe is the runner's, not on the model's menu) | note | the tick |
 | `morgenbericht` | `daily: ${REPORT_AT}` | status, diag, journal, note | report | the report hour |
 | `vorfall` | `event: red` | diag, logs, inspect, restart, propose, escalate, note | note | the red event |
 | `nutzung` (new, #270) | `weekly: "Mo 08:00"` | wish, note | propose | — |

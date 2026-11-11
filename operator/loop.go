@@ -183,7 +183,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		text, isErr, err := mcp.Call(ctx, "laib_diag", map[string]any{})
 		if fs, raw, ok := parseDiag(text); ok && err == nil && !isErr {
 			fs, raw = forLook(fs, raw)
-			o.aufgaben(ctx, fs, mem)
+			human = strings.TrimSpace(human + " " + o.aufgaben(ctx, &mcp, sk, fs, mem, now()))
 			// nothing new (#550): every finding the last look saw too; one
 			// that went away is remembered, so its return is news again
 			last, had := mem.Seen[sk.Name]
@@ -216,7 +216,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 				return s, nil
 			}
 			if slices.Contains(sk.Granted, "repair") {
-				human = o.repairs(ctx, &mcp, fs, mem)
+				human = strings.TrimSpace(human + " " + o.repairs(ctx, &mcp, fs, mem))
 			}
 		}
 	}
@@ -295,6 +295,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 		return s, fmt.Errorf("tools: %w", err)
 	}
 	granted := sk.menu(o.Typed)
+	delete(granted, "laib_aufgabe") // the look's own step (#1181), not the model's
 	if ok, _ := o.applyGate(); granted["laib_apply"] && !slices.Contains(sk.Tools, "apply") && !ok {
 		delete(granted, "laib_apply") // measured, and wrong (#860)
 	}
