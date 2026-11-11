@@ -17,10 +17,13 @@ only in the Inbox, so there is no poll and no vote to count. laib-notify sends
 it with "freigabe": N, and this keeps which message it was in
 /gesendet/freigaben.json (#1113): on Signal sent straight through
 signal-cli's daemon, whose send answers the timestamp (`hermes send` does not
-say it), on Telegram the message_id of `hermes send --json`. Once the proposal
-is decided, POST /loeschen {"freigabe": N} deletes it for everyone, within
-Signal's day or Telegram's 48 hours; past them, or on any failure, one log
-line and nothing else.
+say it), on Telegram the message_id of `hermes send --json`, with its text.
+Once the proposal is decided and its run has ended, POST /entschieden
+{"freigabe": N, "status", "outcome", "neu"} marks it (#1183, was a delete in
+#1113): the text without the Inbox link and how it ended, and a reaction for
+a yes that was applied (✅) or a no (❌); a failed run gets no mark, its text
+says so. Signal lets its sender edit for a day, past it only the reaction
+goes; on any failure one log line and a 200.
 POST /ablage (#521) is the Bote's filing: the laib-ablage plugin in Hermes
 sends a photo or PDF someone sent with "ablegen", with the same bearer, and
 this writes it into Paperless' consume folder as Bote/von-<login>/<title>.<ext>
@@ -51,15 +54,25 @@ class Config:
     consume: str = "/consume"              # Paperless' consume folder (#521); missing: /ablage answers 503
     max_file: int = 25 << 20               # one document, as Homes' upload (haus#10)
     owner: tuple = (1000, 1000)            # Paperless' user (paperless.container USERMAP_UID): it removes what it filed
-    sent: str = "/gesendet/freigaben.json" # a proposal's notice, by its number: which message, to delete once decided (#1113)
+    sent: str = "/gesendet/freigaben.json" # a proposal's notice, by its number: which message and its text, to mark once decided (#1113, #1183)
     telegram_api: str = "https://api.telegram.org"
 
 
-# how long after sending a message can still be deleted for everyone (#1113): Signal's own
-# rule for the sender, a day (Signal-Android MessageConstraintsUtil, remote config
-# global.normalDeleteMaxAgeInSeconds, default 1 day; signal-cli itself checks nothing);
-# a Telegram bot's own message, 48 hours (Bot API deleteMessage)
-KEEP = {"signal": 24 * 3600, "telegram": 48 * 3600}
+# how long a notice is kept to be marked (#1183): a reaction has no limit on either platform
+KEEP = 30 * 24 * 3600
+# how long after sending a message can still be edited: Signal's rule for the sender, a day
+# (Signal-Android MessageConstraintsUtil.isValidEditMessageSend: the delete threshold, remote
+# config global.normalDeleteMaxAgeInSeconds, default 1 day; signal-cli itself checks nothing);
+# a Telegram bot edits its own messages without a limit (Bot API editMessageText: 48 hours
+# only for business messages)
+EDIT = {"signal": 24 * 3600}
+# how a decided proposal ended (laib's status and outcome, #1183): the line its notice gets
+# instead of the link, and its mark. Telegram lets a bot react only with its fixed set, which
+# has no ✅ or ❌ (Bot API ReactionTypeEmoji): the nearest there are.
+ENDE = {"approved": ("Freigegeben und umgesetzt.", "✅"), "rejected": ("Abgelehnt.", "❌"),
+        "rolled-back": ("Freigegeben, aber es hat nicht geklappt: die Box ist wieder wie vorher, was schiefging, steht in der Inbox.", None),
+        "stale": ("Veraltet, nicht umgesetzt.", None), "": ("Nicht mehr offen.", None)}
+TELEGRAM_MARK = {"✅": "👍", "❌": "👎"}
 
 
 class Limiter:
@@ -157,7 +170,7 @@ _sent_lock = threading.Lock()
 
 
 def sent(cfg, change):
-    """reads freigaben.json without what can no longer be deleted, lets change edit it, writes it
+    """reads freigaben.json without what is past KEEP, lets change edit it, writes it
     back atomically (0600: it names the target); what change returned"""
     with _sent_lock:
         try:
@@ -166,7 +179,7 @@ def sent(cfg, change):
         except (OSError, ValueError):
             book = {}
         now = time.time()
-        book = {k: v for k, v in book.items() if isinstance(v, dict) and now - v.get("at", 0) < KEEP.get(v.get("kanal", "").split(":")[0], 0)}
+        book = {k: v for k, v in book.items() if isinstance(v, dict) and now - v.get("at", 0) < KEEP}
         got = change(book)
         tmp = cfg.sent + ".tmp"
         with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
@@ -175,18 +188,54 @@ def sent(cfg, change):
         return got
 
 
-def unsend(cfg, rec):
-    """deletes one sent message for everyone; raises on failure"""
+def ende(status, outcome, neu):
+    """(the line, the mark or None) for how a proposal ended"""
+    line, mark = ENDE["rolled-back" if outcome == "rolled-back" else status if status in ENDE else ""]
+    if status == "stale" and type(neu) is int and neu > 0:
+        line = "Veraltet, nicht umgesetzt: neu vorgeschlagen als #%d." % neu
+    return line, mark
+
+
+def unlinked(text):
+    """the notice without its Inbox link: laib-notify ends it with " · <Inbox>#N" (notify.go proposals),
+    cut or not"""
+    return re.sub(r" · \S*$", "", text.rstrip())
+
+
+def mark(cfg, rec, line, emoji):
+    """marks one sent notice: its text without the link plus line, while the platform lets the sender
+    edit (EDIT), and the reaction emoji, if any. Each step on its own: ({geaendert, markiert}, the
+    first failure's name or None)"""
     platform, target = rec["kanal"].split(":")[0], rec["kanal"].split(":")[1]
-    if platform == "signal":
-        signal_rpc(cfg, "remoteDelete", {"targetTimestamp": int(rec["id"]), **signal_to(rec["kanal"])}, cfg.channel_timeout)
-        return
+    mid, text, to = int(rec["id"]), rec.get("text"), signal_to(rec["kanal"])
+    signal, steps = platform == "signal", {}
+    if text and time.time() - rec.get("at", 0) < EDIT.get(platform, KEEP):
+        new = unlinked(text) + "\n" + line
+        steps["geaendert"] = (lambda: signal_rpc(cfg, "send", {"message": new, "editTimestamp": mid, **to}, cfg.channel_timeout)) if signal else \
+            (lambda: telegram(cfg, "editMessageText", {"chat_id": target, "message_id": mid, "text": new}))
+    if emoji:  # the own message's author is the Bote's own number
+        steps["markiert"] = (lambda: signal_rpc(cfg, "sendReaction", {"emoji": emoji, "targetAuthor": signal_env(cfg)[1], "targetTimestamp": mid, **to},
+                                                cfg.channel_timeout)) if signal else \
+            (lambda: telegram(cfg, "setMessageReaction", {"chat_id": target, "message_id": mid,
+                                                          "reaction": [{"type": "emoji", "emoji": TELEGRAM_MARK.get(emoji, emoji)}]}))
+    done, why = {"geaendert": False, "markiert": False}, None
+    for k, step in steps.items():
+        try:
+            step()
+            done[k] = True
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            why = why or type(e).__name__
+    return done, why
+
+
+def telegram(cfg, method, body):
+    """one Bot API call; raises unless it answers ok"""
     token = platform_env(cfg).get("TELEGRAM_BOT_TOKEN", "")
-    body = json.dumps({"chat_id": target, "message_id": int(rec["id"])}).encode()
-    req = urllib.request.Request(f"{cfg.telegram_api}/bot{token}/deleteMessage", data=body, headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(f"{cfg.telegram_api}/bot{token}/{method}", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=cfg.channel_timeout) as r:  # an HTTPError's text carries no URL, so no token
         if not json.loads(r.read()).get("ok"):
-            raise ValueError("telegram: nicht gelöscht")
+            raise ValueError("telegram: %s nicht angenommen" % method)
 
 
 def platform_env(cfg):
@@ -307,15 +356,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         cfg = self.server.cfg
-        if self.path not in ("/mitteilung", "/ablage", "/loeschen"):
+        if self.path not in ("/mitteilung", "/ablage", "/entschieden"):
             return self.reply(404, {"fehler": "unbekannter Pfad"})
         got = self.headers.get("Authorization", "")
         if not cfg.token or not hmac.compare_digest(got.encode(), ("Bearer " + cfg.token).encode()):
             return self.reply(401, {"fehler": "kein gültiger Token"})
         if self.path == "/ablage":
             return self.ablage(cfg)
-        if self.path == "/loeschen":
-            return self.loeschen(cfg)
+        if self.path == "/entschieden":
+            return self.entschieden(cfg)
         try:
             n = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -354,37 +403,39 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(502, {"fehler": "kein Kanal hat die Mitteilung angenommen"})
         if mid:
             try:
-                sent(cfg, lambda book: book.update({str(n): {"kanal": ch, "id": mid, "at": time.time()}}))
+                sent(cfg, lambda book: book.update({str(n): {"kanal": ch, "id": mid, "at": time.time(), "text": text}}))
             except OSError as e:
                 cfg.log(f"mitteilung: #{n} nicht vorgemerkt: {type(e).__name__}")
         return self.reply(200, {"ok": True, "kanal": kanal})
 
-    def loeschen(self, cfg):
-        """{freigabe: N} → {ok, geloescht}: the notice of a decided proposal goes for everyone
-        (#1113). Best effort: anything that fails is one log line and a 200, never a retry."""
+    def entschieden(self, cfg):
+        """{freigabe: N, status, outcome, neu} → {ok, geaendert, markiert}: the notice of a decided
+        proposal says how it ended (#1183). Best effort: anything that fails is one log line and a
+        200, never a retry."""
         try:
             n = int(self.headers.get("Content-Length", "0"))
-            got = json.loads(self.rfile.read(n) if 0 < n <= cfg.max_body else b"null")["freigabe"]
+            msg = json.loads(self.rfile.read(n) if 0 < n <= cfg.max_body else b"null")
+            got = msg["freigabe"]
             if type(got) is not int:
                 raise TypeError
         except (ValueError, TypeError, KeyError):
-            return self.reply(400, {"fehler": "erwartet: {freigabe: <Nummer>}"})
+            return self.reply(400, {"fehler": "erwartet: {freigabe: <Nummer>, status, outcome, neu}"})
         try:
             rec = sent(cfg, lambda book: book.pop(str(got), None))
         except OSError as e:
-            cfg.log(f"loeschen: #{got} kein Vermerk lesbar: {type(e).__name__}")
-            return self.reply(200, {"ok": True, "geloescht": False})
-        if not rec:  # never sent with an id, or past its time (sent() dropped it)
-            cfg.log(f"loeschen: #{got} nichts zu löschen")
-            return self.reply(200, {"ok": True, "geloescht": False})
-        platform = rec["kanal"].split(":")[0]
+            cfg.log(f"entschieden: #{got} kein Vermerk lesbar: {type(e).__name__}")
+            return self.reply(200, {"ok": True, "geaendert": False, "markiert": False})
+        if not rec:  # never sent with an id, or past KEEP (sent() dropped it)
+            cfg.log(f"entschieden: #{got} nichts zu markieren")
+            return self.reply(200, {"ok": True, "geaendert": False, "markiert": False})
+        line, emoji = ende(msg.get("status", ""), msg.get("outcome", ""), msg.get("neu"))
         try:
-            unsend(cfg, rec)
-        except (OSError, ValueError, KeyError, TypeError, IndexError) as e:
-            cfg.log(f"loeschen: #{got} {platform} fehlgeschlagen: {type(e).__name__}")
-            return self.reply(200, {"ok": True, "geloescht": False})
-        cfg.log(f"loeschen: #{got} {platform} ok")
-        return self.reply(200, {"ok": True, "geloescht": True})
+            done, why = mark(cfg, rec, line, emoji)
+        except (ValueError, KeyError, TypeError, IndexError) as e:  # a note it cannot read
+            done, why = {"geaendert": False, "markiert": False}, type(e).__name__
+        said = " ".join(k for k, v in done.items() if v) or "nichts"
+        cfg.log(f"entschieden: #{got} {rec.get('kanal', '').split(':')[0]} {said}" + (f", fehlgeschlagen: {why}" if why else ""))
+        return self.reply(200, {"ok": True, **done})
 
     def ablage(self, cfg):
         """{titel, plattform, absender, name, daten: base64} → {ok, titel} (#521)"""

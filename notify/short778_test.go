@@ -18,9 +18,9 @@ func TestANewProposalIsOneLineWithTheInboxLink(t *testing.T) {
 	f := newFakeLaib(t)
 	b := newFakeBote(t)
 	c := chatConfig(t, f, b, "127.0.0.1:1")
-	f.inbox = `[{"id":17,"actor":"ops","reason":"whoami auf v1.12","tier":"apply","class":"template-update","card":{"summary":"whoami bekommt ein neues Image","impact":["kurzer Neustart"],"reversible":"laib rollback"}},
-	            {"id":18,"actor":"ops","reason":"paperless entfernen","tier":"apply","class":"remove","card":{"summary":"Paperless wird entfernt","impact":["Dokumente bleiben im Backup"]}},
-	            {"id":19,"actor":"ops","reason":"Daten löschen","tier":"destroy","class":"human","card":{}}]`
+	f.inbox = `[{"id":17,"status":"open","actor":"ops","reason":"whoami auf v1.12","tier":"apply","class":"template-update","card":{"summary":"whoami bekommt ein neues Image","impact":["kurzer Neustart"],"reversible":"laib rollback"}},
+	            {"id":18,"status":"open","actor":"ops","reason":"paperless entfernen","tier":"apply","class":"remove","card":{"summary":"Paperless wird entfernt","impact":["Dokumente bleiben im Backup"]}},
+	            {"id":19,"status":"open","actor":"ops","reason":"Daten löschen","tier":"destroy","class":"human","card":{}}]`
 	now := time.Now()
 	if err := Sweep(context.Background(), c, now); err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ func TestTheMailFallbackIsTheSameLine(t *testing.T) {
 	g := newGmailSMTP(t)
 	c := f.config(t, g.addr)
 	c.InboxURL = "https://laib.e2e.home/inbox"
-	f.inbox = `[{"id":123,"reason":"x","tier":"apply","class":"human","card":{"summary":"Homes kennt jetzt alle Namen deiner Geräte","impact":["a","b"],"reversible":"laib rollback"}}]`
+	f.inbox = `[{"id":123,"status":"open","reason":"x","tier":"apply","class":"human","card":{"summary":"Homes kennt jetzt alle Namen deiner Geräte","impact":["a","b"],"reversible":"laib rollback"}}]`
 	if err := Sweep(context.Background(), c, time.Now()); err != nil {
 		t.Fatal(err)
 	}

@@ -255,14 +255,33 @@ no app.
    `"freigabe": N` (#1113): on Signal bote-notify sends it straight through
    signal-cli's daemon (`send` answers the timestamp, `hermes send` does
    not say it), on Telegram with `hermes send --json` (its `message_id`),
-   and notes channel, id and time in `bote/gesendet/freigaben.json` (0600).
-   When the proposal leaves the Inbox (approved, rejected, stale, refiled),
-   laib-notify posts `POST /loeschen {"freigabe": N}` and the message goes for
-   everyone: Signal's `remoteDelete`, Telegram's `deleteMessage`. Signal lets
-   a sender do that for a day (Signal-Android's
-   `global.normalDeleteMaxAgeInSeconds`), Telegram a bot for 48 hours; past
-   that the note is dropped and nothing is sent. Any failure is one log line
-   (`loeschen: #N …`) and a 200: the decision never waits on it. Known limit: Hermes mirrors a sent
+   and notes channel, id, time and text in `bote/gesendet/freigaben.json`
+   (0600). When the proposal has left the Inbox and, approved, its run has
+   ended (laib-notify reads `laib inbox --all --limit 50`: an approved one
+   with outcome `waiting` or a run step still waits), laib-notify posts
+   `POST /entschieden {"freigabe": N, "status", "outcome", "neu"}` and the
+   notice stays but is marked (#1183; #1113 deleted it): its text loses the
+   Inbox link (the trailing ` · <Inbox>#N`, cut or not) and gets a line,
+   and a yes or a no gets a reaction:
+
+   | how it ended | the new line | reaction |
+   |---|---|---|
+   | approved, run green (also `effective`, `no-effect`, `applied`) | Freigegeben und umgesetzt. | ✅ |
+   | rejected (also „nicht jetzt“) | Abgelehnt. | ❌ |
+   | approved, run red and rolled back | Freigegeben, aber es hat nicht geklappt: … | none |
+   | stale (refiled as #M) | Veraltet, nicht umgesetzt(: neu vorgeschlagen als #M). | none |
+   | not among the newest 50 decided | Nicht mehr offen. | none |
+
+   Signal: the edit is signal-cli's `send` with `editTimestamp`, the
+   reaction `sendReaction` with the Bote's own number as `targetAuthor`.
+   Signal lets a sender edit for a day (Signal-Android
+   `MessageConstraintsUtil`, the delete threshold, default one day); past
+   it only the reaction goes, which has no limit. Telegram: `editMessageText`
+   (no limit for a bot's own message) and `setMessageReaction`; a bot may
+   react only with Telegram's fixed set, which has no ✅ or ❌, so it sets
+   👍 and 👎. A note is kept 30 days. Each step is tried on its own; any
+   failure is one log line (`entschieden: #N …`) and a 200: the decision
+   never waits on it. Known limit: Hermes mirrors a sent
    message into the private copy's sessions, not the gateway's, so when the
    person answers, the Bote does not see what it sent. Home
    Assistant's template renders `rest_command.mitteilung` against it, and

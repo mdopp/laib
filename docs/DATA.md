@@ -509,7 +509,9 @@ No `private:` (templates/bote/laib.yml).
   number“ memory is therefore not what runs.
 - **Data folders:** `${DATA_DIR}/bote/hermes` (config, memory, sessions),
   `bote/signal` (the linked Signal device: it can read every message to
-  the Bote's number).
+  the Bote's number), `bote/gesendet/freigaben.json` (0600, bote-notify:
+  the owner's chat target, the message id and the text of each proposal
+  notice, up to 30 days, to mark it once decided, #1183).
 - **Keys it holds:** `HOMES_HAUSHALT_TOKEN` (the Haushalt MCP — what that
   exposes is in the Homes section), `BOTE_HA_TOKEN` (HA user `bote`, no
   administrator), `BOTE_AUTOMAT_HA_TOKEN` (an HA administrator, the

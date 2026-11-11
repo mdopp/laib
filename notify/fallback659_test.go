@@ -148,8 +148,8 @@ func TestAProposalWithAHundredImpactsReachesTheChatAndBlocksNoOther(t *testing.T
 	for i := 0; i < 100; i++ {
 		impact = append(impact, fmt.Sprintf(`"Achtung: ändert x%d=E.get(\"X\") <&> in auth/anmeldungen.py, was Laib nicht einschätzen kann"`, i))
 	}
-	f.inbox = `[{"id":102,"reason":"template update auth","tier":"apply","class":"human","created":"2026-10-25T03:52:09Z","card":{"summary":"Auth: 5 Einstellungen ändern sich","impact":[` + strings.Join(impact, ",") + `],"reversible":"laib rollback"}},
-	            {"id":99,"reason":"template update media","tier":"apply","class":"template-update","created":"2026-10-24T16:35:05Z","card":{"summary":"Media: SPOKEN_WORD ändert sich"}}]`
+	f.inbox = `[{"id":102,"status":"open","reason":"template update auth","tier":"apply","class":"human","created":"2026-10-25T03:52:09Z","card":{"summary":"Auth: 5 Einstellungen ändern sich","impact":[` + strings.Join(impact, ",") + `],"reversible":"laib rollback"}},
+	            {"id":99,"status":"open","reason":"template update media","tier":"apply","class":"template-update","created":"2026-10-24T16:35:05Z","card":{"summary":"Media: SPOKEN_WORD ändert sich"}}]`
 	Sweep(context.Background(), c, time.Now())
 	got := b.messages()
 	if len(got) != 2 {
@@ -172,7 +172,7 @@ func TestAProposalReachesTheChatOnceTheBoteIsBack(t *testing.T) {
 	b := newFakeBote(t)
 	g := newGmailSMTP(t)
 	c := chatConfig(t, f, b, g.addr)
-	f.inbox = `[{"id":100,"reason":"template update music-assistant","tier":"apply","class":"human","created":"2026-10-24T16:35:05Z","card":{"summary":"Music Assistant: ABS_TOKEN wird ein Geheimnis"}}]`
+	f.inbox = `[{"id":100,"status":"open","reason":"template update music-assistant","tier":"apply","class":"human","created":"2026-10-24T16:35:05Z","card":{"summary":"Music Assistant: ABS_TOKEN wird ein Geheimnis"}}]`
 	b.down = true
 	now := time.Now()
 	Sweep(context.Background(), c, now)
@@ -203,7 +203,7 @@ func TestFailuresAreJournaledOnceAnHourAndTheMailGivesUp(t *testing.T) {
 	g.refuse = true
 	c := chatConfig(t, f, b, g.addr)
 	b.down = true
-	f.inbox = `[{"id":103,"reason":"template update audiobookshelf","tier":"apply","class":"human","created":"2026-10-25T04:15:43Z","card":{"summary":"Audiobookshelf: abs-pflege.py ändert sich"}}]`
+	f.inbox = `[{"id":103,"status":"open","reason":"template update audiobookshelf","tier":"apply","class":"human","created":"2026-10-25T04:15:43Z","card":{"summary":"Audiobookshelf: abs-pflege.py ändert sich"}}]`
 	now := time.Now()
 	Sweep(context.Background(), c, now)
 	notes := append([]string(nil), f.notes...)
