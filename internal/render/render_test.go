@@ -1,6 +1,7 @@
 package render
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -234,5 +235,33 @@ func TestFirewallRulesetReplacesTheTableInsteadOfAddingToIt(t *testing.T) {
 	decl, del, block := strings.Index(nft, "table inet laib\n"), strings.Index(nft, "delete table inet laib\n"), strings.Index(nft, "table inet laib {")
 	if decl < 0 || del < 0 || block < 0 || !(decl < del && del < block) {
 		t.Fatalf("the ruleset does not replace the table (want: table inet laib / delete table inet laib / table inet laib { … }):\n%s", nft)
+	}
+}
+
+// A secret one template seeds (auth) and another reads as external
+// (vaultwarden, laib#1168) is generated in the same apply: the seeding
+// declaration sorts before the external one, whatever the service order.
+func TestSecretNamesSeededBeforeExternal(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		many := func(p string, extra state.Secret) []state.Secret { // enough names that sort.Slice is not an insertion sort
+			out := []state.Secret{extra}
+			for k := 0; k < 40; k++ {
+				out = append(out, state.Secret{Name: fmt.Sprintf("%s%02d", p, (k*7+i)%40)})
+			}
+			return out
+		}
+		st := &state.State{Services: map[string]*state.Service{
+			"vaultwarden": {Contract: state.Contract{Secrets: many("V", state.Secret{Name: "X_LDAP", External: true})}},
+			"auth":        {Contract: state.Contract{Secrets: many("A", state.Secret{Name: "X_LDAP"})}},
+		}}
+		var got []state.Secret
+		for _, s := range SecretNames(st) {
+			if s.Name == "X_LDAP" {
+				got = append(got, s)
+			}
+		}
+		if len(got) != 2 || got[0].External || !got[1].External {
+			t.Fatalf("run %d: %+v", i, got)
+		}
 	}
 }

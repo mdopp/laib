@@ -244,19 +244,19 @@ func SecretNames(st *state.State) []state.Secret {
 	if notifier(st) {
 		out = append(out, state.Secret{Name: NotifyToken, External: true, Mint: "notify"}) // minted on apply
 	}
-	// laib-haushalt's call back (minted on apply) and the door's key (generated), ADR 0027
-	out = append(out, state.Secret{Name: HaushaltToken, External: true, Mint: "haushalt"}, state.Secret{Name: HaushaltKey})
+	out = append(out, state.Secret{Name: HaushaltToken, External: true, Mint: "haushalt"}, state.Secret{Name: HaushaltKey}) // laib-haushalt's call back (minted on apply), the door's key (generated), ADR 0027
 	if st.Box.Intake.Repo != "" {
 		out = append(out, state.Secret{Name: IntakeToken, External: true, Optional: true}) // laib wish's, laib-haushalt's (#797): laib secret set
 	}
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
-		out = append(out, svc.Contract.Secrets...)
+		out = append(out, svc.Contract.Secrets...) // a name seeded here and read elsewhere as external sorts first (#1168)
 		if svc.Contract.OIDC != nil {
 			out = append(out, state.Secret{Name: state.OIDCSecretName(svc.Contract.OIDC.ClientID)})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	sort.SliceStable(out, func(i, j int) bool { return !out[i].External && out[j].External }) // a name seeded by one template and read as external by another: the seeding first (#1168)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
 
