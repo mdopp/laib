@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.22.1](https://github.com/mdopp/laib/compare/v2.22.0...v2.22.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* **apply:** a secret one template seeds and another reads as external is generated in the same run ([#1179](https://github.com/mdopp/laib/issues/1179)) ([edd100d](https://github.com/mdopp/laib/commit/edd100d3c2b433de1ef8e3078e01674579586de5))
+
 ## [2.22.0](https://github.com/mdopp/laib/compare/v2.21.0...v2.22.0) (2026-11-11)
 
 
