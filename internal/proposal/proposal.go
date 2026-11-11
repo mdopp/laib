@@ -504,8 +504,8 @@ func nextID(inbox string) (int, error) {
 }
 
 // Save writes one inbox entry. A new one starts laib-notify at once (#968),
-// so the owner hears of it in seconds, and so does a decided one (#1113): its
-// chat line goes. The timer stays the fallback, so a red start fails nothing.
+// so the owner hears of it in seconds, and so does a decided one (#1113, #1183):
+// its chat line is marked; as is the run's end, the save that clears its step. The timer stays the fallback, so a red start fails nothing.
 func Save(inbox string, p *Proposal) error {
 	b, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {

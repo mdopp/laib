@@ -432,25 +432,24 @@ func (r *run) eingang() {
 // nothing to decide with: no impact lines, no decision words, no poll.
 func (r *run) proposals() error {
 	c, seen := r.c, r.seen.Proposals
-	text, err := call(r.ctx, c, "laib_inbox", map[string]any{})
+	text, err := call(r.ctx, c, "laib_inbox", map[string]any{"args": "--all --limit 50"}) // and how the newest decided ones ended (#1183)
+	var all []struct {
+		ID, Refiled                   int
+		Reason, Status, Outcome, Step string
+		Card                          struct{ Summary string }
+	}
+	if err == nil && json.Unmarshal([]byte(text), &all) != nil {
+		err = errors.New("laib_inbox: keine Liste")
+	}
 	if err != nil {
 		r.note("laib-notify", err)
 		return err
 	}
-	var open []struct {
-		ID     int
-		Reason string
-		Card   struct{ Summary string }
-	}
-	if err := json.Unmarshal([]byte(text), &open); err != nil {
-		err = fmt.Errorf("laib_inbox: %w", err)
-		r.note("laib-notify", err)
-		return err
-	}
-	isOpen := map[int]bool{}
-	for _, p := range open {
-		isOpen[p.ID] = true
-		if seen[p.ID] {
+	isOpen, ended := map[int]bool{}, map[int]string{}
+	for _, p := range all {
+		isOpen[p.ID] = p.Status == "open" || p.Outcome == "waiting" || p.Step != "" // an approved one's run has not ended
+		ended[p.ID] = fmt.Sprintf(`{"freigabe":%d,"status":%q,"outcome":%q,"neu":%d}`, p.ID, p.Status, p.Outcome, p.Refiled)
+		if p.Status != "open" || seen[p.ID] {
 			continue
 		}
 		headline := strings.Join(strings.Fields(cmp.Or(p.Card.Summary, p.Reason)), " ")
@@ -463,10 +462,10 @@ func (r *run) proposals() error {
 			err = e
 		}
 	}
-	for id := range seen { // decided ones are forgotten, so the file stays small, and their line in the chat goes (#1113)
+	for id := range seen { // a decided one, once its run ended, is forgotten and its line in the chat says how it ended (#1113, #1183)
 		if !isOpen[id] {
-			if c.chat() { // best effort: bote-notify logs how it went; one without /loeschen answers 404
-				bote(r.ctx, c, "/loeschen", strings.NewReader(fmt.Sprintf(`{"freigabe":%d}`, id)))
+			if c.chat() { // best effort: bote-notify logs how it went; one past the newest 50 decided gets no status
+				bote(r.ctx, c, "/entschieden", strings.NewReader(cmp.Or(ended[id], fmt.Sprintf(`{"freigabe":%d}`, id))))
 			}
 			delete(seen, id)
 		}

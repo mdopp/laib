@@ -98,7 +98,7 @@ func TestAProposalLinksToItsOwnCard(t *testing.T) {
 	f := newFakeLaib(t)
 	b := newFakeBote(t)
 	c := chatConfig(t, f, b, "127.0.0.1:1")
-	f.inbox = `[{"id":17,"reason":"x","card":{"summary":"whoami bekommt ein neues Image"}}]`
+	f.inbox = `[{"id":17,"status":"open","reason":"x","card":{"summary":"whoami bekommt ein neues Image"}}]`
 	sweepAt(t, c, time.Now())
 	if got := b.messages(); len(got) != 1 || !strings.HasSuffix(got[0]["text"], "https://laib.e2e.home/inbox#17") {
 		t.Fatalf("the message links to /inbox#17: %v", got)

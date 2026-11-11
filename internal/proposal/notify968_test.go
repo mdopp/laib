@@ -71,7 +71,7 @@ func TestFailingStartKeepsTheProposal(t *testing.T) {
 	}
 }
 
-// #1113: a rejection starts laib-notify too, so its chat line goes.
+// #1113: a rejection starts laib-notify too, so its chat line is marked (#1183).
 func TestRejectingStartsNotify(t *testing.T) {
 	ctx := context.Background()
 	got := starts(t, false)
