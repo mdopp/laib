@@ -183,7 +183,11 @@ jobs:
       - name: qemu + kvm
         run: |
           scripts/vm/qemu-debs.sh
-          sudo apt-get install -y -q --no-install-recommends ~/qemu-debs/*.deb
+          # from a copy apt's sandbox user can read (the 26.04 runner's home is
+          # not world-readable) and without '%3a' in a name (apt decodes it)
+          q=$(mktemp -d); for f in ~/qemu-debs/*.deb; do b=${f##*/}; cp "$f" "$q/${b//%3a/_}"; done
+          chmod -R a+rX "$q"
+          sudo apt-get install -y -q --no-install-recommends "$q"/*.deb
           test -e /dev/kvm && sudo chmod 666 /dev/kvm && echo "kvm ok"
       - name: this commit's build, served to the box; the stick
         run: |
