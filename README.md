@@ -204,7 +204,7 @@ on the box now: `laib status`, and `docs/ZIELBILD.md`):
 | Kernel: state repo, plan/apply, converge, operator verbs, MCP, pages | `cmd/laib`, `internal/` | unit + golden tests, e2e with shims, real Quadlet on a runner |
 | The stick: `laib-stick`, first boot, data disk (RAID1, one member) | `stick/`, `usb/` | CI `vm-install`: KVM guest installs CoreOS, reboots, `laib` ready, mirror joins, reinstall keeps data |
 | First services: Caddy (own CA on a trial box), backup + restore | `templates/caddy`, `cmd/laib backup.go` | the same VM run: HTTPS 200, restic round trip |
-| Operator (admin agent), lease, Frage | `operator/`, `lease/`, `frage/` | e2e with a scripted model; against the box's model: auf der Box zu prüfen |
+| Operator (admin agent), lease, Frage | `operator/`, `lease/`, `frage/` | e2e with a scripted model; against the box's model: the Operator runs and its last morning report is green <!-- box: laib status ~ "operator": "läuft" ~ "morgenbericht": \{[^}]*"outcome": "green" --> *(box 2026-11-11: yes)* |
 | Bote (Hermes on Signal, Matrix and/or Telegram) with the `ha` and `automat` tools; approvals only in the Inbox (#778) | `templates/bote`, `automat/` | config rendered and checked against Hermes' source; automat unit-tested against a fake HA |
 | Homes (the surface): Box page, pairing, companion API for the widgets | `mdopp/homes`, `templates/homes` | unit tests against a fake Laib; installed on the Kraftwerk by hand after migration day (#379) |
 | 28 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |

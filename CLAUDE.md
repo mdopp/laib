@@ -93,6 +93,7 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 | The Operator's duties run in code, not in a prompt (rule 1, #858) | `operator/duties858_test.go` |
 | A skill's prompt names only tools on its menu (#858) | `TestEveryToolAPromptNamesIsOnItsMenu` |
 | Docs match the code: layout, the Operator's tools, ports, counts | `scripts/drift.sh` |
+| What only the box answers carries a read-only probe (`<!-- box: laib … ~ … -->`), what only a person answers a Box-Aufgabe; the Werkstatt writes the answers and dates (#1169) | `scripts/drift.sh`, `werkstatt-docprobe` |
 | A template with `private:`, `oidc:` or `perPerson:` has its section in `docs/DATA.md`, naming its privacy class | `TestEveryTemplateWithFamilyDataIsInDataDoc` |
 | What builds an image is pinned: every `uses:` by commit, every `FROM` by digest (ADR 0034, #1165); the same file in each of the owner's repos and the scaffold | `scripts/pins.sh` |
 | Dead code, staticcheck findings, duplicates and complexity only go down (see below) | `scripts/ratchet.py`, CI job `ratchet` |

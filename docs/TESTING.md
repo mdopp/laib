@@ -73,6 +73,27 @@ login that may comment and reopen (gh's login in the kept home, else the
 Werkstatt's token with Issues: write). Write the probe so it can be red:
 `laib status beets` exits 0 whenever beets answers, whatever the line says.
 
+## A doc line the box answers (#1169)
+
+What a doc says about the box (README.md, `docs/*.md`) and only the box
+can answer carries its probe, an HTML comment after the claim:
+`<!-- box: laib backups ~ "LastGreen": "(\d{4}-\d\d-\d\d) -->`, one
+read-only `laib` command, `~ <re>` its output must hold (at least one, so
+an empty read is never green) and `!~ <re>` it must not. Once a week the
+Werkstatt's `werkstatt-docprobe` (`werkstatt/docprobe.py`, on boxcheck's
+hourly timer) clones main, runs every probe and writes the answer and its
+date after it, `*(box 2026-11-11: yes, 2026-11-10)*`: yes, no, or not
+measured when the command failed or said nothing; a group in a `~` is
+shown. It opens one pull request from `bot/boxfragen`, and a no or a not
+measured opens one issue or comments on the open one, without the
+probe's output. What only a person can answer (a setting inside an app)
+is a Box-Aufgabe: written once as `<!-- aufgabe: <Titel> | <warum> -->`,
+the pass adds it for the admins and puts `Box-Aufgabe #N` in its place; a
+Box-Aufgabe the docs still name once it is done opens an issue too.
+`scripts/drift.sh` fails on a paragraph that says „auf der Box zu prüfen“
+or „unverified“ without a probe or a task, and on a probe that does not
+parse.
+
 ## The Operator against a model (#43)
 
 `operator/` has three kinds of tests: the loop with scripted

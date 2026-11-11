@@ -122,7 +122,7 @@ within three minutes; that release is then skipped until a newer one. `laib upda
 manual run below once. To try it now: `systemctl --user start laib-images.service`.
 
 By hand: re-run the install script with `--version vX.Y.Z` or without for latest. "Latest" is the newest release that has its binaries: they are built after the release's VM test, so for about an hour a fresh release is skipped, and the script says so.
-The running services are restarted (`try-restart` of laib, operator, lease) and the installer checks that `/ready` reports the new version; the previous binaries stay as `*.prev` for `laib self rollback`. State and journal are untouched. `SHA256SUMS` is required: an unverified build is refused.
+The running services are restarted (`try-restart` of laib, operator, lease) and the installer checks that `/ready` reports the new version; the previous binaries stay as `*.prev` for `laib self rollback`. State and journal are untouched. `SHA256SUMS` is required: a build it cannot check against it is refused.
 
 
 ## The stick: Fedora CoreOS with Laib on first boot

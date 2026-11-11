@@ -4,7 +4,9 @@
 doc (README.md, docs/*.md; the ADRs are history by nature) only
 where the line, its section or its file says it is past.
 9: a line marked x-release-please-version carries version.txt's version,
-and every file release-please bumps (extra-files) has such a line."""
+and every file release-please bumps (extra-files) has such a line.
+10 (#1169): a paragraph that says „auf der Box zu prüfen“ or „unverified“
+carries a box probe, a new task or a Box-Aufgabe number."""
 import json
 import os
 import shutil
@@ -72,6 +74,22 @@ class Docs(unittest.TestCase):
         self.assertTrue(got and "0.49.0" in got[0], got)
         got = self.drift("docs version", {"docs/ZIELBILD.md": "- Laib: release v0.9.0\n"})
         self.assertTrue(got and "no x-release-please-version" in got[0], got)
+
+    def test_a_box_question_without_a_probe_or_a_task_is_drift(self):
+        got = self.drift("box question", {"docs/ZIELBILD.md": "# Z\n\nWhether it ran: auf der Box zu\npr\u00fcfen.\n"})
+        self.assertTrue(got and "docs/ZIELBILD.md:3" in got[0], got)
+        got = self.drift("box question", {"docs/DATA.md": "# D\n\n- one\n- the scope is **unverified**.\n"})
+        self.assertTrue(got and "docs/DATA.md:4" in got[0], got)
+
+    def test_a_box_question_with_a_probe_or_a_task_is_none(self):
+        self.assertEqual(self.drift("box question", {"docs/ZIELBILD.md": "# Z\n\nA snapshot exists, unverified\n<!-- box: laib backups ~ snapshot -->.\n",
+                                                      "docs/DATA.md": "# D\n\n- unverified: Box-Aufgabe #3.\n- unverified: <!-- aufgabe: Nachsehen -->\n",
+                                                      "docs/STATE.md": "# S\n\nostree-unverified-registry:ghcr.io/x\n",
+                                                      "docs/REVIEW.md": "# R\n\n**History.** Old.\n\nauf der Box zu pr\u00fcfen\n"}), [])
+
+    def test_a_probe_without_a_match_is_no_probe(self):
+        got = self.drift("box question", {"docs/ZIELBILD.md": "# Z\n\nunverified <!-- box: laib backups !~ red -->\n"})
+        self.assertTrue(got, got)
 
 
 if __name__ == "__main__":
