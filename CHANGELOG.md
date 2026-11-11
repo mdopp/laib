@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.21.0](https://github.com/mdopp/laib/compare/v2.20.0...v2.21.0) (2026-11-11)
+
+
+### Features
+
+* **archiv:** the box's model for Umfeld's relation hints ([#1161](https://github.com/mdopp/laib/issues/1161)) ([9c70df5](https://github.com/mdopp/laib/commit/9c70df5c21a5717e8c7750ea15da5d5883ebb186))
+
 ## [2.20.0](https://github.com/mdopp/laib/compare/v2.19.1...v2.20.0) (2026-11-10)
 
 
