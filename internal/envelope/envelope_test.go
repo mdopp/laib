@@ -75,4 +75,8 @@ func TestSpentCountsActionsNotRefusals(t *testing.T) {
 	if used, _ := spent(recent, "scan", "ops"); used != 1 {
 		t.Fatalf("scan used %d", used)
 	}
+	// only the asking hand's own applies count (#1167: the mutant != lived)
+	if used, _ := spent(recent, "paperless", "claude"); used != 2 {
+		t.Fatalf("claude used %d, want 2", used)
+	}
 }

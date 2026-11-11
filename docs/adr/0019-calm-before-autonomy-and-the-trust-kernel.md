@@ -65,6 +65,10 @@ wrong.
    holds `approve` (ops, claude) may approve any other proposal that is not
    its own. *(Amended 2026-10-26, #778, and 2026-10-28, #865: see the
    amendments below.)*
+   *Measured since #1167:* `scripts/ratchet.py mutation` mutates the five
+   packages that hold these (policy, envelope, token, proposal, inbox) and
+   fails when a mutant their own tests do not notice is new; the survivors
+   of today are the baseline in `scripts/ratchet/mutation.txt`.
 3. **Three guarantees the family can see** in plain words, on Haus's
    `/box` *(amended 2026-10-28, #865: Start shows one calm line, haus#35)*: "Alles läuft" (or what does not, and that someone is on it) ·
    "Letzte Sicherung: heute 03:12, an zwei Orten" · "Letzte Änderung: … —

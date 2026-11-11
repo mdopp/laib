@@ -1,0 +1,33 @@
+# Do the trust kernel's tests bite (laib#1167, ADR 0019 §2)? gremlins
+# changes one condition at a time in the packages scripts/ratchet/mutation.pkgs
+# lists and runs their tests; a mutant nobody notices is a survivor, and a
+# survivor that is not in scripts/ratchet/mutation.txt fails. It takes
+# minutes, so it runs when a pull request touches those packages or the
+# ratchet, and nightly on main.
+name: mutation
+on:
+  pull_request:
+    paths:
+      - internal/policy/**
+      - internal/envelope/**
+      - internal/token/**
+      - internal/proposal/**
+      - internal/inbox/**
+      - scripts/ratchet.py
+      - scripts/ratchet/mutation.*
+      - .github/workflows/mutation.yml
+  schedule:
+    - cron: "41 2 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: scripts/ratchet.py mutation

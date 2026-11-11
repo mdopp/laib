@@ -1,0 +1,536 @@
+# scripts/ratchet.py mutation: surviving mutants, the number is how many on that line's text
+# written by `scripts/ratchet.py --update`; lowered in the PR that fixes one, raised only with --accept
+# total 533
+3 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: Warum: "Der Bote kam bei " + svc.Name + " nicht weiter; was er wusste und der Stand liegen in " + p}, env.Actor, time.Now())
+2 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: bad = append(bad, c.What+" "+c.Detail)
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: case args[i] == "--container" && i+1 < len(args):
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "stop", Service: svc.Name, Reason: why, Result: "info", Detail: "gestoppt und pausiert bis " + until.Local().Format("02.01. 15:04")})
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Result: "info", Detail: waits + b})
+2 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Service: svc.Name, Result: "red", Detail: u + ": " + err.Error()})
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: client := &http.Client{Timeout: 5 * time.Second}
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: cmd = args[i+1:]
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: container = args[i+1]
+3 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: detail = p + " (Intake rot: " + err.Error() + ")"
+3 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: detail, out["aufgabe"] = p+" (Box-Aufgabe rot: "+err.Error()+")", nil
+3 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: detail, out["issue"] = url+" ("+p+")", url
+2 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: entry.Detail = err.Error() + "\n" + shown
+2 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: es, _ := journal.Read(env.Paths.Journal, time.Now().Add(-24*time.Hour))
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: for i := 0; i+1 < len(args); i++ {
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: func containerName(unit string) string { return "systemd-" + strings.TrimSuffix(unit, ".service") }
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: green, done := false, apply.Mark(st, env.Paths, verb, env.Actor, "", []string{svc.Name}, 5*time.Minute) // #978
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: id = strings.TrimPrefix(args[i+1], "#")
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: if err != nil || d > 24*time.Hour {
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: if err := atomicfile.WriteIn(root, rel+".laib-tmp", rel, content, 0o644); err != nil {
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: list, a = aufgaben.Add(list, aufgaben.Aufgabe{Titel: "Frage aus dem Boten: " + firstLine(strings.Join(args[1:], " "), 150),
+3 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: name := time.Now().UTC().Format("2006-01-02T15-04-05") + "-" + svc.Name + ".md"
+2 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: out["health"] = resp.Status + " " + strings.TrimSpace(string(b))
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: return cli.Refused(env, cmd[0]+" is not a read-only command; laib exec is the budgeted way to change something")
+2 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: return cli.Refused(env, env.Actor+" may not "+verb)
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: return cli.Refused(env, env.Actor+" may not exec")
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: return cli.Refused(env, env.Actor+" may not write")
+3 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: return cli.Refused(env, p+" trägt "+journal.Redacted+" aus laib read: so überschriebe es ein Geheimnis mit der Schwärzung. Ändere die Datei im Container (laib exec, z. B. sed -i), oder schreib sie mit dem echten Wert")
+2 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: return env.Fail(errors.New("usage: laib " + verb + " <service>"))
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: return string(r[:n]) + "…"
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: since := time.Now().Add(-time.Hour)
+1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: until, why := time.Now().Add(2*time.Hour), strings.Join(args[1:], " ")
+3 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: } else if url, ok, err := inbox.Issue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), "needs-claude"); err != nil {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: case args[i] == "--container" && i+1 < len(args):
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: for i := 0; i < len(args); i++ {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: for i := 0; i+1 < len(args); i++ {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: if err != nil || d > 24*time.Hour {
+3 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: if len(args) < 1 {
+3 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: if len(args) < 2 {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: if len(args) > 2 && args[1] == "--until" {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: if len(b) > 1<<20 {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: if len(r) <= n {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: if parts := strings.Split(f, "/"); len(parts) > 2 && parts[0] == "services" && !slices.Contains(svcs, parts[1]) {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: if skipped > 0 {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_BOUNDARY: if used >= budget {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: case args[i] == "--":
+2 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: case args[i] == "--container" && i+1 < len(args):
+2 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: case p.Actor != env.Actor || p.Status != "open":
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: for i := 0; i < len(args); i++ {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: for i := 0; i+1 < len(args); i++ {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if args[i] == "--proposal" {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if b := apply.Busy(ctx, st, svc, time.Now()); b != "" {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if c == want {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if code != cli.ExitOK {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if code := envelope(ctx, env, st, svc, "apply", fmt.Sprintf("#%d %s", n, p.Reason)); code != cli.ExitOK {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if code := envelope(ctx, env, st, svc, "exec", strings.Join(cmd, " ")); code != cli.ExitOK {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if code := envelope(ctx, env, st, svc, "write", p); code != cli.ExitOK {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if code := envelope(ctx, env, st, svc, verb, verb); code != cli.ExitOK {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if code := gate(ctx, env, st, svc, "exec", strings.Join(cmd, " ")); code != cli.ExitOK {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if code := gate(ctx, env, st, svc, "look", strings.Join(cmd, " ")); code != cli.ExitOK {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if code := gate(ctx, env, st, svc, "read", args[1]); code != cli.ExitOK {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if code := gate(ctx, env, st, svc, "write", args[1]); code != cli.ExitOK {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if detail, out["aufgabe"] = fmt.Sprintf("Box-Aufgabe #%d (%s)", a.ID, p), a.ID; err != nil {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if dir := filepath.Dir(rel); dir != "." {
+2 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if e.Service == svc.Name || e.Service == "" {
+20 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+2 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if err != nil || d > 24*time.Hour {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if err := apply.WritePause(env.Paths, apply.Pause{Service: svc.Name, By: env.Actor, Until: until.UTC(), Reason: why}); err != nil {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if err := atomicfile.WriteIn(root, rel+".laib-tmp", rel, content, 0o644); err != nil {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if err := os.WriteFile(p, []byte(b.String()), 0o644); err != nil {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if err := root.MkdirAll(dir, 0o755); err != nil {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if err := run(ctx, u); err != nil {
+3 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if h := proposal.Hand(env.Actor); verb != "start" && h != "human" && h != "homes" {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if h := svc.Contract.Health.HTTP; h != "" {
+3 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if len(args) < 1 {
+3 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if len(args) < 2 {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if len(args) == 0 {
+2 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if len(args) > 2 && args[1] == "--until" {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if len(b) > 1<<20 {
+2 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if len(cmd) == 0 {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if len(own) == 0 {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if len(r) <= n {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if len(svcs) == 0 {
+2 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if parts := strings.Split(f, "/"); len(parts) > 2 && parts[0] == "services" && !slices.Contains(svcs, parts[1]) {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if proposal.Hand(env.Actor) == "bote" {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if resp, err := client.Get(h); err != nil {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if skipped > 0 {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if svc.Contract.Private != "" { // the family's data stay out of the journal (ADR 0032)
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if used >= budget {
+2 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if verb == "start" {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if verb == "stop" {
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: if want == "" {
+2 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: return cli.Emit(env, map[string]any{"container": container, "output": out, "ok": err == nil})
+1 internal/envelope/envelope.go: not-covered CONDITIONALS_NEGATION: } else if url, ok, err := inbox.Issue(ctx, env, st, "Eskalation "+svc.Name+": "+cli.Tail(strings.Join(args[1:], " "), 80), b.String(), "needs-claude"); err != nil {
+1 internal/envelope/envelope.go: not-covered INCREMENT_DECREMENT: for i := 0; i < len(args); i++ {
+1 internal/envelope/envelope.go: not-covered INCREMENT_DECREMENT: for i := 0; i+1 < len(args); i++ {
+1 internal/envelope/envelope.go: not-covered INCREMENT_DECREMENT: i++
+1 internal/envelope/envelope.go: not-covered INVERT_NEGATIVES: es, _ := journal.Read(env.Paths.Journal, time.Now().Add(-24*time.Hour))
+1 internal/envelope/envelope.go: not-covered INVERT_NEGATIVES: since := time.Now().Add(-time.Hour)
+5 internal/envelope/private.go: not-covered ARITHMETIC_BASE: cmdline := "laib einblick " + verb + " " + svc.Name + " " + what
+3 internal/envelope/private.go: not-covered ARITHMETIC_BASE: does := proposal.HandName(hand, false) + " darf eine Stunde lang in " + proposal.Named(svc.Name) + " hineinsehen"
+2 internal/envelope/private.go: not-covered ARITHMETIC_BASE: name := "einblicke/" + time.Now().UTC().Format("2006-01-02T15-04-05.000000") + suffix
+3 internal/envelope/private.go: not-covered ARITHMETIC_BASE: p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, "Einblick: "+does+" — "+cmdline, proposal.Edit{Patch: patch}, inbox.JudgeFor(st, env.Actor))
+1 internal/envelope/private.go: not-covered ARITHMETIC_BASE: return cli.Refused(env, proposal.Named(svc.Name)+" ist versiegelt: dort sieht niemand hinein, kein Agent und kein Mensch über Laib (ADR 0032). Den Zustand zeigen laib status und laib logs")
+3 internal/envelope/private.go: not-covered ARITHMETIC_BASE: return cli.Refused(env, svc.Name+" ist privat: hineinsehen nur mit einer Freigabe, und "+env.Actor+" darf keine erbitten")
+1 internal/envelope/private.go: not-covered ARITHMETIC_BASE: return strings.Replace(fmt.Sprintf("%.1f KB Ausgabe", float64(len(out))/1024), ".", ",", 1)
+4 internal/envelope/private.go: not-covered ARITHMETIC_BASE: suffix := "-" + hand + "-" + svc.Name + ".md"
+1 internal/envelope/private.go: not-covered CONDITIONALS_BOUNDARY: case p.Status == "approved" && proposal.Hand(p.DecidedBy) == "human" && time.Since(p.Decided) < GrantFor:
+3 internal/envelope/private.go: not-covered CONDITIONALS_NEGATION: case p.Status == "approved" && proposal.Hand(p.DecidedBy) == "human" && time.Since(p.Decided) < GrantFor:
+1 internal/envelope/private.go: not-covered CONDITIONALS_NEGATION: case p.Status == "open":
+3 internal/envelope/private.go: not-covered CONDITIONALS_NEGATION: case svc.Contract.Private != "approval" || hand == "human" || verb == "write":
+1 internal/envelope/private.go: not-covered CONDITIONALS_NEGATION: case svc.Contract.Private == "sealed":
+1 internal/envelope/private.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+1 internal/envelope/private.go: not-covered CONDITIONALS_NEGATION: if err == nil {
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: add.Name = args[i+1]
+4 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: add.Person, add.Name = args[i+1], add.Name+"-"+args[i+1]
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: c.Pin = Runs != nil && strings.HasPrefix(c.New, c.Old+"@") && Runs(c.New)
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: case args[i] == "--limit" && i+1 < len(args):
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: case args[i] == "--name" && i+1 < len(args):
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: case args[i] == "--person" && i+1 < len(args):
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: edit.Add = &proposal.AddService{Name: args[i+1], Template: tpl, Values: map[string]string{}}
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: edit.Add.Name = args[i+1]
+4 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: edit.Add.Person, edit.Add.Name = args[i+1], edit.Add.Name+"-"+args[i+1]
+2 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: g, err := grantEdit(st, args[i+1], args[i+2])
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: if VerifyImage == nil || !strings.HasPrefix(c.New, "ghcr.io/mdopp/") || strings.HasSuffix(c.Old, "@"+d) || c.Pin {
+2 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: if edit.Add == nil || i+1 >= len(args) {
+4 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: if i+1 >= len(args) {
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: if i+2 >= len(args) {
+2 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: k, v, ok := strings.Cut(args[i+1], "=")
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: reason := defaultsReason + strings.Join(adds, ", ")
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: reason = "add " + add.Name
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: return ": " + strings.Join(p.Reasons, "; ")
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: return cli.Refused(env, env.Actor+" may not propose")
+3 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: return p.Status == "open" && strings.Contains(p.Reason, "Fähigkeit "+sk.Name+" braucht "+t)
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: text = string(r[:400]) + " …"
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: text, adds = b, append(adds, "ops "+strings.Join(why, " "))
+2 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: text, adds = b, append(adds, hand+" +"+strings.Join(miss[hand], " +"))
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: tpl, err := TemplateFS(env, args[i+1])
+1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: v := strings.TrimSpace(args[i+1])
+2 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: why = "Stufe " + p.Tier + " verlangt einen Menschen (policy.yml approvals)"
+4 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: why = append(why, "+"+t+" (Fähigkeit "+strings.Join(by[t], ", ")+")")
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: case args[i] == "--limit" && i+1 < len(args):
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: case args[i] == "--name" && i+1 < len(args):
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: case args[i] == "--person" && i+1 < len(args):
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: for i := 0; i < len(args); i++ {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: for i := 1; i < len(args); i++ {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if edit.Add == nil || i+1 >= len(args) {
+4 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if i+1 >= len(args) {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if i+2 >= len(args) {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if len(args) < 1 {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if len(args) < 1 || approve && len(args) > 1 {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if len(doc.Content) > 0 {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if len(regs) > 0 {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if need = slices.Compact(need); len(need) > 0 {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if policy.Index(st.Policy.Hands[h].Ceiling) > mine || h == "human" {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if r := []rune(strings.Join(strings.Fields(text), " ")); len(r) > 400 {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: return limit > 0 && decided > limit
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: c.Pin = Runs != nil && strings.HasPrefix(c.New, c.Old+"@") && Runs(c.New)
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: case args[i] == "--all":
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: case args[i] == "--limit" && i+1 < len(args):
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: case args[i] == "--name" && i+1 < len(args):
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: case args[i] == "--person" && i+1 < len(args):
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: case err == nil:
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: case len(h.Verbs) == 0:
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: for i := 0; i < len(args); i++ {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: for i := 1; i < len(args); i++ {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: full := func(p *proposal.Proposal) bool { return id != 0 || p.Status == "open" }
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if ImageVersion != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if VerifyImage == nil || !strings.HasPrefix(c.New, "ghcr.io/mdopp/") || strings.HasSuffix(c.Old, "@"+d) || c.Pin {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if _, err := fs.Stat(sub, "laib.yml"); err != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if _, err := render.Render(cst, nil); err != nil {
+6 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if a.Finding == "" && a.Evidence == "" && a.Undo == "" && a.Wish == "" && len(a.Sources) == 0 && len(a.Notes) == 0 {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if a.Notes == nil {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if anchor.Finding != "" && Present != nil && !Present(ctx, env, st, anchor.Finding) {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if b, err := policy.Grant(text, "ops", false, need...); err == nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if b, err := policy.Grant(text, hand, paths, miss[hand]...); err == nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if c.Decider != "" {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if c.Op != "~" || !strings.HasSuffix(c.Key, "IMAGE") || !strings.Contains(c.New, "@") {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if code := Decide(ctx, env, args, true); code != cli.ExitOK {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if edit.Add != nil && isValueArg(args[i]) {
+4 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if edit.Add == nil || i+1 >= len(args) {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if edit.At == nil {
+5 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if edit.Patch == "" && edit.Set == nil && edit.Add == nil && edit.Grant == nil && edit.At == nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if edit.Set == nil {
+19 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := Anchor(cli.InboxDir(env), p, anchor); err != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := MayPaths(st, env.Actor, at); err != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := MayPaths(st, env.Actor, edit.At); err != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := judgeImage(&r.Changes[i]); err != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, "laib", stateLoads, recomputeFor(env, st, p)); err != nil {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, stateLoads, recomputeFor(env, st, p)); err != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := proposal.Reject(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, why); err != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := yaml.Unmarshal([]byte(v), &doc); !ok || !strings.Contains(k, ":") || err != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if hand != "human" {
+4 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if i+1 >= len(args) {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if i+2 >= len(args) {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if id != 0 && len(ps) == 0 {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if id != 0 {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if id != 0 || p.Status == "open" {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if len(adds) == 0 || slices.ContainsFunc(all, func(p *proposal.Proposal) bool {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if len(args) < 1 {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if len(args) < 1 || approve && len(args) > 1 {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if len(doc.Content) > 0 {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if len(p.Reasons) == 0 {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if len(ps) == 0 {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if len(regs) > 0 {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if limit, err = strconv.Atoi(args[i]); err != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if need = slices.Compact(need); len(need) > 0 {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if p.Class == "human" {
+3 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" && env.Ceiling == "" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if policy.Index(st.Policy.Hands[h].Ceiling) > mine || h == "human" {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if proposal.Hand(env.Actor) != "human" {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if r := []rune(strings.Join(strings.Fields(text), " ")); len(r) > 400 {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if reason == "" {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if sk.Source == "builtin" && sk.Status == "active" && !asked && strings.HasPrefix(sk.Denied[t], "policy.yml beschränkt") {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if st, err := cli.LoadState(env); err == nil {
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if st, err = cli.LoadState(env); err != nil {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if svc, ok := st.Services[add.Name]; ok && svc.Contract.Template.Name == args[0] {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if why := VerifyImage(c.New); why != "" {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if why == "" {
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: ps, err := proposal.List(cli.InboxDir(env), openOnly && id == 0)
+3 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: return (p.Status == "open" && strings.HasPrefix(p.Reason, defaultsReason)) || (p.Status == "rejected" && p.Reason == reason)
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: return id != 0 && p.ID != id
+2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: return limit > 0 && decided > limit
+1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: return p.Status == "open" && strings.Contains(p.Reason, "Fähigkeit "+sk.Name+" braucht "+t)
+1 internal/inbox/inbox.go: not-covered INCREMENT_DECREMENT: decided++
+2 internal/inbox/inbox.go: not-covered INCREMENT_DECREMENT: for i := 0; i < len(args); i++ {
+1 internal/inbox/inbox.go: not-covered INCREMENT_DECREMENT: for i := 1; i < len(args); i++ {
+9 internal/inbox/inbox.go: not-covered INCREMENT_DECREMENT: i++
+1 internal/inbox/intake.go: not-covered ARITHMETIC_BASE: body = strings.TrimSpace(body) + fmt.Sprintf("\n\nFreigegeben von %s (#%d).", env.Actor, p.ID)
+1 internal/inbox/intake.go: not-covered ARITHMETIC_BASE: entry.Detail = "kein Intake in box.yml: der Wunsch bleibt in " + f
+3 internal/inbox/intake.go: not-covered ARITHMETIC_BASE: lines := strings.Split("# "+title+"\n\n"+body, "\n")
+2 internal/inbox/intake.go: not-covered ARITHMETIC_BASE: name := "wishes/" + time.Now().UTC().Format("2006-01-02T15-04-05.000000") + ".md"
+1 internal/inbox/intake.go: not-covered CONDITIONALS_NEGATION: case err != nil:
+1 internal/inbox/intake.go: not-covered CONDITIONALS_NEGATION: if !strings.HasPrefix(f, "wishes/") || err != nil {
+1 internal/inbox/intake.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+1 internal/inbox/intake.go: not-covered CONDITIONALS_NEGATION: if err == nil {
+1 internal/inbox/repair.go: not-covered ARITHMETIC_BASE: last := lines[len(lines)-1]
+1 internal/inbox/repair.go: not-covered ARITHMETIC_BASE: name := fmt.Sprintf("repairs/%s-%d.md", stamp, i+1)
+2 internal/inbox/repair.go: not-covered ARITHMETIC_BASE: p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), "laib", reason+" — "+cmdlines[0], proposal.Edit{Patch: patch.String()}, JudgeFor(st, "laib"))
+2 internal/inbox/repair.go: not-covered ARITHMETIC_BASE: p.Because = "Die neue Version ist wieder aufgespielt, läuft aber noch nicht richtig. " + onward(st, true) + " Die Sicherung liegt weiter bereit."
+1 internal/inbox/repair.go: not-covered ARITHMETIC_BASE: p.Because, code = "fehlgeschlagen: "+proposal.Plain(raw), c // the words on the card, the raw line in the journal (#855)
+1 internal/inbox/repair.go: not-covered ARITHMETIC_BASE: raw := cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("Code %d", c))
+1 internal/inbox/repair.go: not-covered CONDITIONALS_BOUNDARY: return hexID(argv[1]) && svc != nil && len(state.SnapshotPaths(st, svc)) > 0
+2 internal/inbox/repair.go: not-covered CONDITIONALS_BOUNDARY: return len(s) >= 7 && len(s) <= 64 && strings.Trim(s, "0123456789abcdef") == ""
+2 internal/inbox/repair.go: not-covered CONDITIONALS_NEGATION: if argv[0] == "rollback" && c == cli.ExitRed {              // #853: forward, and still red
+1 internal/inbox/repair.go: not-covered CONDITIONALS_NEGATION: if c := RunVerb(ctx, &run, argv); c != cli.ExitOK { // what failed, and why, in the journal and on the card (#753)
+1 internal/inbox/repair.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+2 internal/inbox/repair.go: not-covered CONDITIONALS_NEGATION: if len(argv) == 2 && argv[0] == "rollback" { // #853: a red run's revert taken back, its change on again
+2 internal/inbox/repair.go: not-covered CONDITIONALS_NEGATION: if len(argv) == 3 && argv[0] == "restore" { // #853: a red run's snapshot of a service with data back
+3 internal/inbox/repair.go: not-covered CONDITIONALS_NEGATION: if len(argv) == 3 && argv[0] == "secret" && argv[1] == "zurueck" { // #665: a device-held secret goes back
+1 internal/inbox/repair.go: not-covered CONDITIONALS_NEGATION: if s.Name == argv[2] && !s.External && !s.DataBound {
+2 internal/inbox/repair.go: not-covered CONDITIONALS_NEGATION: return hexID(argv[1]) && svc != nil && len(state.SnapshotPaths(st, svc)) > 0
+3 internal/inbox/repair.go: not-covered CONDITIONALS_NEGATION: return len(argv) == 2 && argv[0] == "restart" && st.Services[argv[1]] != nil
+3 internal/inbox/repair.go: not-covered CONDITIONALS_NEGATION: return len(s) >= 7 && len(s) <= 64 && strings.Trim(s, "0123456789abcdef") == ""
+1 internal/inbox/repair.go: not-covered INVERT_NEGATIVES: last := lines[len(lines)-1]
+1 internal/inbox/repair.go: not-covered INVERT_NEGATIVES: raw := cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("Code %d", c))
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: at, kept = "den Sicherungen von "+strings.Join(ats, ", "), "Die Sicherungen bleiben eine Woche lang bereit."
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: back := apply.ApplyHeld(ctx, env, st, "", "rollback "+run) == cli.ExitOK
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: because = "weil " + step
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: because = "weil die Sicherung von " + name + " nicht ging"
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "rollback", Result: "red", Detail: "revert failed: " + err.Error()})
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: code, ran = apply.ApplyHeld(ctx, env, st, "", "Freigaben "+run), true
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: detail += " Der Vorschlag, die Sicherung zurückzuspielen, ging nicht: " + rerr.Error()
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: detail := told + " Nichts wird von selbst zurückgespielt."
+3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: each = append(each, names[i]+" ("+ats[i]+")")
+3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: f, _ = fileRepair(ctx, env, st, who+": nach vorne reparieren, die neue Version wieder aufspielen", "Das Update von "+who+" lief nicht. Statt die Sicherung zurückzuspielen, kommt die neue Version wieder auf die Daten nach dem Update.",
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: files, err := sysd.Run(ctx, "git", "-C", repo, "diff", "--name-only", sha+"^1", sha)
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: forwards = append(forwards, "laib rollback "+sha)
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: from, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-parse", "--short", batch[0].Merge+"^1")
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: if _, err := RevertProposal(ctx, env, st, p.ID, ", mit dem ganzen Lauf "+run); err != nil {
+3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "rollback", Result: "info", Detail: subject + " (" + merge[:8] + ")"})
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: merge, err := g("log", "--format=%H", "--grep=^approve #"+strconv.Itoa(id)+" by ", "-n", "1", "main")
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: p.Because = strings.TrimSuffix(p.Because, ".") + ". " + told
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: p.Outcome, p.Settled, p.Because = "rolled-back", time.Now().UTC(), because+others(batch, p)
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: p.Step = prefix + step
+6 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: r, rerr := fileRepair(ctx, env, st, who+": Daten aus "+at+" zurückspielen", "Das Update von "+who+" lief nicht. "+told, "Die Daten von jetzt sichert Laib vorher; aus dieser Sicherung kommen sie zurück, nicht mit einem Tipp.", nil, restores)
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: ready := "die Sicherung von " + ats[0] + " liegt bereit"
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: ready = "die Sicherungen von " + strings.Join(each, ", ") + " liegen bereit"
+3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: restores = append(restores, "laib restore "+s.id+" "+s.svc)
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: return " – mit " + strings.Join(ids, ", ") + " im selben Durchgang"
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: return apply.ApplyHeld(ctx, env, st, "", "rollback "+subject)
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: return cli.Refused(env, env.Actor+" may not rollback")
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: say("sichert "+name, false)
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: sha, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "log", "--format=%H", "--grep=^rollback #"+strconv.Itoa(p.ID)+"$", "-n", "1", "main")
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: sha, err := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-parse", "--verify", "--quiet", "--end-of-options", arg+"^{commit}")
+3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: told := old + " Die Daten sind auf dem Stand nach dem Update; " + ready + "."
+3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: who, at, kept := strings.Join(names, ", "), "der Sicherung von "+ats[0], "Die Sicherung von "+ats[0]+" bleibt eine Woche lang bereit."
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if len(args) > 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if len(forwards) > 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if len(gone) > 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if len(snaps) > 1 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if parents, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-list", "--parents", "-n", "1", sha); len(strings.Fields(parents)) > 2 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if ran && len(snaps) > 0 { // the run touched services with data: their snapshots are there, nothing restores by itself (#853)
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: back := apply.ApplyHeld(ctx, env, st, "", "rollback "+run) == cli.ExitOK
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if _, err := RevertProposal(ctx, env, st, p.ID, ", mit dem ganzen Lauf "+run); err != nil {
+2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if code != cli.ExitOK {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if code == cli.ExitLocked {
+2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if code == cli.ExitOK {
+8 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err != nil || strings.TrimSpace(files) != "aufgaben.yml" {
+2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err != nil || strings.TrimSpace(merge) == "" {
+2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err != nil || strings.TrimSpace(sha) == "" {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err := secrets.Save(env.Paths.Secrets, env.Paths.Key, sec); err != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err == nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if f != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if id, code = backup.Pre(ctx, env, st, svc, "apply", "pre-update", true); code != cli.ExitOK {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(args) > 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(batch) == 0 { // carried meanwhile
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(forwards) > 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(gone) > 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(ids) == 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(p.Snapshot) == 0 {
+2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(proposal.Waiting(cli.InboxDir(env))) == 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(snaps) > 1 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if o != p {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if out, err := g("commit", "-q", "-m", fmt.Sprintf("rollback #%d", id)); err != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if out, err := g("revert", "--no-commit", "-m", "1", merge); err != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if out, err := sysd.Run(ctx, "git", append(revert, sha)...); err != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if p, err := proposal.Get(cli.InboxDir(env), id); err == nil { // what came of it (#544)
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if parents, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-list", "--parents", "-n", "1", sha); len(strings.Fields(parents)) > 2 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if ran && len(snaps) > 0 { // the run touched services with data: their snapshots are there, nothing restores by itself (#853)
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if red && prefix == "" {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if rerr != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if rerr == nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if sha = strings.TrimSpace(sha); sha != "" {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if st, err = cli.LoadState(env); err != nil {
+2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if svc := st.Services[name]; svc != nil && code == cli.ExitOK {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: } else if code != cli.ExitOK {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: } else if id != "" {
+1 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: body = strings.TrimRight(body, "\n") + fmt.Sprintf("%s%s\ngrund: %s\nam: %s\nvon: %s\n", statusMark, w.Status, w.Grund, w.Am.Format(time.RFC3339), w.Von)
+2 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "wish", Result: "info", Reason: w.Title, Detail: strings.TrimSuffix(status+": "+w.Grund, ": ")})
+1 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: fmt.Fprintf(env.W(), "%s  %-9s %s%s\n", w.ID, w.Status, w.Title, strings.TrimSuffix(" — "+w.Grund, " — "))
+1 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: for _, l := range strings.Split("status: "+trailer, "\n") {
+2 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: func WishFile(id string) string { return "wishes/" + id + ".md" }
+5 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: if err := proposal.CommitPath(ctx, st.Dir, WishFile(id), "wish "+status+" "+id+": "+w.Grund, env.Actor); err != nil {
+2 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: if regexp.MustCompile(`(^|[^a-z0-9])` + regexp.QuoteMeta(n) + `($|[^a-z0-9])`).MatchString(low) {
+1 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: return cli.Refused(env, env.Actor+" setzt keinen Wunsch auf erledigt oder verworfen")
+1 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: return w, errors.New(status + " braucht einen Grund")
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_BOUNDARY: if len(f) < 2 {
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: case err != nil:
+2 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: case status != "offen" && strings.TrimSpace(grund) == "":
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if args[0] == "list" {
+3 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if err := os.WriteFile(filepath.Join(st.Dir, WishFile(id)), []byte(body), 0o644); err != nil {
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if err := proposal.CommitPath(ctx, st.Dir, WishFile(id), "wish "+status+" "+id+": "+w.Grund, env.Actor); err != nil {
+3 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if h := proposal.Hand(env.Actor); h != "ops" && h != "claude" && h != "human" {
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if l := strings.TrimSpace(sc.Text()); l != "" {
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if len(args) == 1 {
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if len(f) < 2 {
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if m := wishSkill.FindStringSubmatch(body); m != nil {
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if status != "offen" {
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if trailer != "" {
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if w, err := ReadWish(st.Dir, strings.TrimSuffix(filepath.Base(f), ".md"), st.ServiceNames()); err == nil {
+1 internal/inbox/wishes.go: not-covered CONDITIONALS_NEGATION: if w.Status == "offen" || slices.Contains(args, "--alle") {
+1 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: if i := strings.LastIndex(image, ":"); i >= 0 && !strings.Contains(image[i:], "/") {
+1 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: if len(h.added) > 0 && len(self) == 0 && !propose {
+1 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: if len(h.added) > 0 {
+1 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: if len(h.kept) > 0 {
+2 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: if len(h.removed) > 0 {
+1 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: if len(p.News) > 0 && v.Op == "-" { // #696: a value whose secret the template retired
+1 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: if len(p.News) > 0 {
+1 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: if len(self) > 0 {
+1 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: if len(technical) > 0 {
+1 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: if n := len(p.Lines) - linesMax; n > 0 { // the diff has them all
+1 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: if n < len(numbers) {
+6 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: return !(r == '-' || r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
+1 internal/proposal/card.go: lived CONDITIONALS_BOUNDARY: } else if len(p.Lines) > 0 {
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: case slices.ContainsFunc(p.Changes, func(c Change) bool { return c.Service != "" }) && p.Kind != "template-update":
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if Technical(reason) || reason != p.Reason {
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if c.Hand != "" && !slices.Contains(hands, c.Hand) {
+2 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if c.Hand != "" && c.Op != "=" {
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if h, login, ok := strings.Cut(actor, ":"); ok && h == "human" {
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if h.ceiling != nil && h.ceiling.Op != "-" {
+2 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if len(h.added) > 0 && len(self) == 0 && !propose {
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if len(self) > 0 {
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if p.Boxless() && p.Does != "" {
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if p.Evidence != "" && Technical(p.Evidence) {
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if p.Undo != "" && !Technical(p.Undo) { // what the proposer says undoes it (#544), next to laib's own way back; a command stays in Details (#855)
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if p.Undo != "" && !strings.HasPrefix(p.Undo, "nichts zurückzunehmen") && !Technical(p.Undo) { // the finding's own way back (#759); a command stays in Details (#855)
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: if p.Undo != "" && Technical(p.Undo) {
+2 internal/proposal/card.go: lived CONDITIONALS_NEGATION: return !(r == '-' || r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9')
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: } else if len(p.Lines) > 0 {
+1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: } else if p.Evidence != "" {
+4 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Changes = append(d.Changes, Line{"→", upper(word(ruleWords, r.Key)) + ": " + word(ruleWords, orUnset(r.Old)) + " → " + word(ruleWords, orUnset(r.New))})
+5 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Changes = append(d.Changes, Line{"−", Named(v.Service) + ": " + v.Key + " (bisher " + valueWord(strings.Split(v.Old, "@")[0]) + ")"})
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Details += "; im Einzelnen: " + strings.Join(p.Lines, "; ")
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Summary += " — " + p.Facts[0]
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Summary = "Neue Regeln, wer was darf: " + strings.Join(ns, ", ")
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Summary = "Reparieren: " + p.Evidence
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Summary = strings.Join(adds, ", ") + " werden installiert"
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Why += " — gesehen: " + p.Evidence
+2 internal/proposal/card.go: not-covered ARITHMETIC_BASE: out = append(out, Line{"+", n + " kommt dazu und darf " + word(ceilingWords, h.ceiling.New)})
+4 internal/proposal/card.go: not-covered ARITHMETIC_BASE: out = append(out, Line{"→", n + " darf: " + was + " → " + will})
+4 internal/proposal/card.go: not-covered ARITHMETIC_BASE: out = append(out, Line{"→", n + ": " + word(ceilingWords, h.ceiling.Old) + " → " + word(ceilingWords, h.ceiling.New)})
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: out = append(out, Line{"−", n + " fällt weg"})
+3 internal/proposal/card.go: not-covered ARITHMETIC_BASE: out = append(out, n+" darf danach "+word(ceilingWords, h.ceiling.New)+".")
+3 internal/proposal/card.go: not-covered ARITHMETIC_BASE: out = append(out, n+" darf das selbst tun, ohne vorher zu fragen: "+strings.Join(self, ", ")+".")
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: out = append(out, n+" sieht dadurch mehr, ändert aber nichts.")
+2 internal/proposal/card.go: not-covered ARITHMETIC_BASE: return "Was " + HandName(hand, false) + " darf, wird neu festgelegt"
+2 internal/proposal/card.go: not-covered ARITHMETIC_BASE: return "ein Update auf " + v.NewVersion, "Update auf " + v.NewVersion
+2 internal/proposal/card.go: not-covered ARITHMETIC_BASE: return "eine neue Version: " + to, "Version " + to
+2 internal/proposal/card.go: not-covered ARITHMETIC_BASE: return grant{"den Wert " + c.Path + " ändern lassen", "propose"}
+2 internal/proposal/card.go: not-covered ARITHMETIC_BASE: return grant{"die Einstellung " + key + " eines Dienstes ändern lassen", "propose"}
+2 internal/proposal/card.go: not-covered ARITHMETIC_BASE: return n + " darf künftig " + h.added[0].text
+5 internal/proposal/card.go: not-covered ARITHMETIC_BASE: return n + " darf künftig " + things(len(h.added)) + " mehr und " + things(len(h.removed)) + " nicht mehr"
+3 internal/proposal/card.go: not-covered ARITHMETIC_BASE: return n + " darf künftig " + things(len(h.removed)) + " nicht mehr"
+5 internal/proposal/card.go: not-covered ARITHMETIC_BASE: return n + " darf künftig " + word(ceilingWords, h.ceiling.New) + " (bisher " + word(ceilingWords, h.ceiling.Old) + ")"
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: return n + " fällt weg"
+2 internal/proposal/card.go: not-covered ARITHMETIC_BASE: return n + " kommt dazu und darf " + word(ceilingWords, h.ceiling.New)
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: technical = append(technical, "gesehen: "+p.Evidence)
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: text += " " + upper(p.Undo)
+1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: text += " Laut Vorschlag: " + p.Undo
+1 internal/proposal/card.go: not-covered CONDITIONALS_BOUNDARY: case i >= 0 || policyChange && strings.Contains(r, "(policy.yml)"):
+1 internal/proposal/card.go: not-covered CONDITIONALS_BOUNDARY: case len(handOrder) > 1:
+3 internal/proposal/card.go: not-covered CONDITIONALS_BOUNDARY: case len(p.Adds) > 0:
+1 internal/proposal/card.go: not-covered CONDITIONALS_BOUNDARY: case len(p.Mints) > 0:
+1 internal/proposal/card.go: not-covered CONDITIONALS_BOUNDARY: case len(p.News) > 0: // what a template update brings the household, in its template's words (#687)
+1 internal/proposal/card.go: not-covered CONDITIONALS_BOUNDARY: case len(p.Removes) > 0: // a removal is the headline, whatever else the change carries along
+1 internal/proposal/card.go: not-covered CONDITIONALS_BOUNDARY: case len(p.Removes) > 0: // its data were never touched: the service comes back to them
+1 internal/proposal/card.go: not-covered CONDITIONALS_BOUNDARY: case len(p.Snapshot) > 0: // review.data: the program comes back, the data only from the snapshot (#528, #853)
+1 internal/proposal/card.go: not-covered CONDITIONALS_BOUNDARY: case len(rules) > 0:
+1 internal/proposal/card.go: not-covered CONDITIONALS_BOUNDARY: case len(values) > 1 && len(svcs) == 1:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case c.Hand != "":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case c.Key == "ceiling":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case c.Key == "verbs":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case c.Op == "+":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case c.Op == "-":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case c.Op == "=":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case c.Service != "":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case from != to:
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case h.ceiling != nil && h.ceiling.Op == "+":
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case h.ceiling != nil && h.ceiling.Op == "-":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case h.ceiling != nil:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case h.verbs != nil:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case i >= 0 || policyChange && strings.Contains(r, "(policy.yml)"):
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case images(values) != "":
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(h.added) == 0 && len(h.removed) == 1:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(h.added) == 0:
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(h.added) == 1 && len(h.removed) == 0:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(h.removed) == 0:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(handOrder) == 1:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(handOrder) > 1:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(hands) == 1:
+3 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(p.Adds) > 0:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(p.Mints) > 0:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(p.News) > 0: // what a template update brings the household, in its template's words (#687)
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(p.Removes) > 0: // a removal is the headline, whatever else the change carries along
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(p.Removes) > 0: // its data were never touched: the service comes back to them
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(p.Snapshot) > 0: // review.data: the program comes back, the data only from the snapshot (#528, #853)
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(rules) > 0:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(tiers) == 1 && tiers["read"]:
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(values) == 1 && strings.HasSuffix(values[0].Key, "IMAGE") && values[0].Op != "-": // the version, not the image (#855), never a digest (#959)
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(values) == 1:
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case len(values) > 1 && len(svcs) == 1:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case p.Boxless() && p.Does != "": // a repair: what it does (#746)
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case p.Boxless() && p.Evidence != "" && !Technical(p.Evidence): // a repair filed before #746: the finding it answers (#759)
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case p.Kind == "template-update" && who != "":
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case p.Kind == "values" && who != "":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case p.Tier == "destroy":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case p.Tier == "destroy": // #759: a deleted folder
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case slices.ContainsFunc(p.Changes, func(c Change) bool { return c.Service != "" }) && p.Kind != "template-update":
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case v.NewVersion != "":
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case v.Old == "":
+3 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case v.OldVersion != "" && v.NewVersion != "" && v.OldVersion != v.NewVersion:
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case v.OldVersion != "" && v.NewVersion != "":
+2 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case v.OldVersion != "" && v.OldVersion == v.NewVersion:
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case v.Op == "-":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: case who != "":
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: if h.verbs.New != "" {
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: if h.verbs.Old != "" {
+1 internal/proposal/card.go: not-covered CONDITIONALS_NEGATION: if s == "" {
+1 internal/proposal/content.go: lived CONDITIONALS_BOUNDARY: for i := 0; i+1 < len(cur.Content[0].Content); i += 2 {
+1 internal/proposal/content.go: lived CONDITIONALS_BOUNDARY: for i := 0; i+1 < len(m.Content); i += 2 {
+1 internal/proposal/content.go: lived CONDITIONALS_BOUNDARY: if f := strings.Fields(line); len(f) > 0 {
+1 internal/proposal/content.go: lived CONDITIONALS_BOUNDARY: if len(e.Grant) > 0 {
+1 internal/proposal/content.go: lived CONDITIONALS_BOUNDARY: if len(have) > 0 && have[len(have)-1] != '\n' && len(add) > 0 {
+1 internal/proposal/content.go: lived CONDITIONALS_NEGATION: if err != nil {
+1 internal/proposal/content.go: lived CONDITIONALS_NEGATION: if err := setValue(filepath.Join(dst, "values.yml"), k, v); err != nil {
+7 internal/proposal/content.go: lived CONDITIONALS_NEGATION: if ext := filepath.Ext(e.Name()); ext == ".container" || ext == ".pod" || ext == ".volume" || ext == ".network" || ext == ".kube" || ext == ".service" || ext == ".timer" || e.Name() == "post-deploy" {
+1 internal/proposal/content.go: lived CONDITIONALS_NEGATION: if len(e.Grant) > 0 {
+2 internal/proposal/content.go: not-covered CONDITIONALS_BOUNDARY: case len(e.Set) > 0 || len(e.At) > 0:
+1 internal/proposal/content.go: not-covered CONDITIONALS_BOUNDARY: case len(v.Added) > 0:
+1 internal/proposal/content.go: not-covered CONDITIONALS_BOUNDARY: case len(v.Human) > 0:
+1 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: case a.Person != "":
+1 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: case baseErr != nil: // a service from before #511: nothing says which lines were the owner's
+4 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: case curErr != nil || string(cur) == string(b) || baseErr == nil && string(cur) == string(base):
+1 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: case e.Add != nil:
+1 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: case e.Patch != "":
+1 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: case e.Update != nil:
+2 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: case len(e.Set) > 0 || len(e.At) > 0:
+1 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: case len(v.Added) > 0:
+1 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: case len(v.Human) > 0:
+2 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: case tpl.PerPerson != (a.Person != ""):
+1 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+1 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: if err := setAt(filepath.Join(wt, file), at, v); err != nil {
+1 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: if err := yaml.Unmarshal(text, &pol); err != nil {
+2 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: if err == nil {
+1 internal/proposal/content.go: not-covered CONDITIONALS_NEGATION: if verdict, err = judge(repo, wt); err != nil {
+1 internal/proposal/plain.go: not-covered ARITHMETIC_BASE: return strings.TrimSuffix(raw, ".") + ". Versuch es noch einmal; klappt es wieder nicht, steht mehr im Journal."
+1 internal/proposal/plain.go: not-covered CONDITIONALS_NEGATION: if raw == "" || Technical(raw) {
+1 internal/proposal/proposal.go: lived CONDITIONALS_BOUNDARY: if f := strings.Fields(line); len(f) > 0 {
+1 internal/proposal/proposal.go: lived CONDITIONALS_BOUNDARY: if open, _ := List(inbox, true); len(open) > 0 {
+1 internal/proposal/proposal.go: lived CONDITIONALS_BOUNDARY: sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
+1 internal/proposal/proposal.go: lived CONDITIONALS_NEGATION: if _, err := git(ctx, repo, "commit", "-q", "--allow-empty", "-m", "init: state repo"); err != nil {
+1 internal/proposal/proposal.go: lived CONDITIONALS_NEGATION: if actor != "" {
+1 internal/proposal/proposal.go: lived CONDITIONALS_NEGATION: if err != nil {
+1 internal/proposal/proposal.go: lived CONDITIONALS_NEGATION: sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
+1 internal/proposal/proposal.go: not-covered ARITHMETIC_BASE: const Window = 2 * time.Hour
+1 internal/proposal/proposal.go: not-covered ARITHMETIC_BASE: p.Reasons = append(p.Reasons, "stützt sich auf eine Quelle aus dem Netz: "+strings.Join(a.Sources, ", "))
+2 internal/proposal/proposal.go: not-covered ARITHMETIC_BASE: return exec.CommandContext(ctx, "git", "-C", repo, "show", h+"^:"+path).Output()
+4 internal/proposal/proposal.go: not-covered ARITHMETIC_BASE: return stale(conflict + "; neu berechnet: " + err.Error())
+1 internal/proposal/proposal.go: not-covered CONDITIONALS_BOUNDARY: case now.Sub(p.Decided) > Window:
+2 internal/proposal/proposal.go: not-covered CONDITIONALS_NEGATION: all = slices.DeleteFunc(all, func(p *Proposal) bool { return p.Status != "approved" || p.Outcome != "waiting" })
+1 internal/proposal/proposal.go: not-covered CONDITIONALS_NEGATION: case err != nil:
+1 internal/proposal/proposal.go: not-covered CONDITIONALS_NEGATION: case now.Sub(p.Decided) > Window:
+1 internal/proposal/proposal.go: not-covered CONDITIONALS_NEGATION: case np != nil:
+1 internal/proposal/proposal.go: not-covered CONDITIONALS_NEGATION: case p.Finding == "":
+1 internal/proposal/proposal.go: not-covered CONDITIONALS_NEGATION: if _, err := git(ctx, repo, "worktree", "add", "-q", "--detach", head, "HEAD"); err != nil {
+3 internal/proposal/proposal.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+1 internal/proposal/proposal.go: not-covered CONDITIONALS_NEGATION: if h, s, _ := strings.Cut(l, " "); s == subject { // the raw bytes: Run trims them
+2 internal/proposal/recompute.go: not-covered ARITHMETIC_BASE: case n.Kind == yaml.MappingNode && i%2 == 0 && c.Value == s && i+1 < len(n.Content):
+1 internal/proposal/recompute.go: not-covered ARITHMETIC_BASE: case n.Kind == yaml.SequenceNode && strings.HasPrefix(c.Value, s+":"):
+2 internal/proposal/recompute.go: not-covered ARITHMETIC_BASE: return strings.TrimPrefix(c.Value, s+":") + "\n"
+1 internal/proposal/recompute.go: not-covered CONDITIONALS_BOUNDARY: case n.Kind == yaml.MappingNode && i%2 == 0 && c.Value == s && i+1 < len(n.Content):
+1 internal/proposal/recompute.go: not-covered CONDITIONALS_BOUNDARY: if len(doc.Content) > 0 {
+4 internal/proposal/recompute.go: not-covered CONDITIONALS_NEGATION: case n.Kind == yaml.MappingNode && i%2 == 0 && c.Value == s && i+1 < len(n.Content):
+1 internal/proposal/recompute.go: not-covered CONDITIONALS_NEGATION: case n.Kind == yaml.SequenceNode && strings.HasPrefix(c.Value, s+":"):
+1 internal/proposal/recompute.go: not-covered CONDITIONALS_NEGATION: if e.At == nil {
+1 internal/proposal/recompute.go: not-covered CONDITIONALS_NEGATION: if err := yaml.Unmarshal([]byte(v), &doc); err != nil {
+1 internal/proposal/recompute.go: not-covered CONDITIONALS_NEGATION: if in.At == nil {
+1 internal/proposal/recompute.go: not-covered CONDITIONALS_NEGATION: if len(doc.Content) > 0 {
+1 internal/proposal/recompute.go: not-covered CONDITIONALS_NEGATION: return slices.DeleteFunc(slices.Clone(cs), func(c Change) bool { return c.Op == "=" })

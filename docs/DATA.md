@@ -462,6 +462,10 @@ and the app's API (`/napi/`); references below are to mdopp/homes.
   personal lists, Standort (internal/pages/standort.go), Gesehen
   (internal/pages/gesehen.go: the viewer's own Jellyfin and ABS history
   only).
+- **A person's archive status:** Homes reads each person's archive
+  status (`laib status archiv-<person>`: times and the archive's own
+  failure sentence only, never content) and shows it on „Meine Daten“
+  only to that person (homes#350).
 - **`${DATA_DIR}/homes` (`HOMES_DATA`, cmd/homes/main.go):**
 
 | File | What | Whose |
