@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 // What the runner remembers of diag (#543): 131 notes in 72 hours, every
@@ -162,25 +164,31 @@ func news(fs []finding, raw []json.RawMessage, seen []string) string {
 	return out
 }
 
-// aufgaben adds, as ops, each task diag's findings ask for (#1168), once
-// per look: laib closes it when the finding is measured gone, and Laib
-// refuses one that is not a task (a bad person or way); that one is asked
-// no more until it changes.
-func (o *Operator) aufgaben(ctx context.Context, fs []finding, m *memory) {
+// aufgaben adds, as the look's skill, each task diag's findings ask for
+// (#1168), once per look: laib closes it when the finding is measured gone.
+// One Laib refuses (a bad person, a policy without aufgabe) is logged, named
+// in the note and asked again a day later (#1181), not on every look. The
+// result is the note's line for the owner. A skill without aufgabe granted
+// asks nothing: the policy's no is diag's skill finding (#543).
+func (o *Operator) aufgaben(ctx context.Context, mcp *MCP, sk Skill, fs []finding, m *memory, now time.Time) string {
+	var h strings.Builder
 	for _, f := range fs {
-		a, id := f.NeueAufgabe, f.id()
-		if a == nil || f.Topic == "" || m.Repaired[id] != "" {
+		a, id, v := f.NeueAufgabe, f.id(), m.Repaired[f.id()]
+		if a == nil || f.Topic == "" || !slices.Contains(sk.Granted, "aufgabe") || v != "" && !(strings.HasPrefix(v, "aufgabe ") && v[8:] < now.UTC().Format(time.RFC3339)) {
 			continue
 		}
 		args := map[string]any{"action": "add", "titel": a.Titel, "warum": a.Warum, "fuer": a.Fuer, "fertig_wenn": "status " + f.Topic, "weg": "gespraech"}
 		if a.Weg != nil && a.Weg.Seite != "" {
 			args["weg"] = a.Weg.Seite
 		}
-		if _, isErr, err := o.MCP.Call(ctx, "laib_aufgabe", args); err == nil && isErr {
-			m.Repaired[id] = "refused"
+		if out, isErr, err := mcp.Call(ctx, "laib_aufgabe", args); err == nil && isErr {
+			m.Repaired[id] = "aufgabe " + now.Add(24*time.Hour).UTC().Format(time.RFC3339)
+			log.Printf("aufgabe %q für %s abgelehnt: %s", a.Titel, label(id), firstLine(out))
+			fmt.Fprintf(&h, " %s: Aufgabe „%s“ ließ sich nicht anlegen: %s.", label(id), a.Titel, firstLine(cmp.Or(out, "ohne Grund")))
 			o.remember(m)
 		}
 	}
+	return strings.TrimSpace(h.String())
 }
 
 // repairs files laib repair for every finding that is not red and carries a

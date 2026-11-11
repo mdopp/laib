@@ -52,8 +52,9 @@ func TestDiagSaysWhenThePolicyKeepsASkillFromItsJob(t *testing.T) {
 	if _, ok := got["nutzung"]; ok {
 		t.Error("a paused skill is the owner's answer already")
 	}
-	if _, ok := got["routineblick"]; ok {
-		t.Error("routineblick has all it needs")
+	// #1181: the look adds the tasks findings ask for; this list keeps it from them
+	if r := got["routineblick"]; !strings.Contains(r.Detail, "ohne aufgabe") || !strings.Contains(r.Fix, "laib propose --grant ops aufgabe") {
+		t.Errorf("routineblick without aufgabe: %+v", r)
 	}
 	// a box whose policy reaches everything: nothing to say
 	if f := skillFindings(skill.Grant(skill.Load(skills.FS, t.TempDir()), nil, func(string) string { return "" })); len(f) != 0 {

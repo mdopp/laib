@@ -78,7 +78,9 @@ func TestTheUpdateRunProposesTheGrantABuiltInSkillsNewToolNeeds(t *testing.T) {
 // #978: durchsicht now asks laib planned (vorfall's capable model may, an
 // extra the grant does not ask for, as diag does not); the Kraftwerk's ops
 // list (policy.yml, 2026-11-01) has no planned, so the update that brings
-// the skill proposes it, once, naming the skill that needs it.
+// the skill proposes it, once, naming the skill that needs it. #1181: so
+// does the look's aufgabe, which the box's ops list lacked and the
+// Operator's task asks were refused for, silently.
 func TestTheUpdateRunProposesPlannedForTheKraftwerksOps(t *testing.T) {
 	env, _ := testBox(t)
 	ctx := context.Background()
@@ -93,7 +95,7 @@ func TestTheUpdateRunProposesPlannedForTheKraftwerksOps(t *testing.T) {
 		t.Fatalf("updates --run: exit %d", code)
 	}
 	open, _ := proposal.List(cli.InboxDir(env), true)
-	if len(open) != 1 || !strings.Contains(open[0].Reason, "ops +planned") || !strings.Contains(open[0].Reason, "durchsicht") {
-		t.Fatalf("want one proposal granting ops planned for durchsicht: %+v", open)
+	if len(open) != 1 || !strings.Contains(open[0].Reason, "+planned (Fähigkeit durchsicht)") || !strings.Contains(open[0].Reason, "ops +aufgabe (Fähigkeit routineblick)") {
+		t.Fatalf("want one proposal granting ops planned for durchsicht and aufgabe for routineblick: %+v", open)
 	}
 }
