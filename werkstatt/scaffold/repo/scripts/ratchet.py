@@ -100,7 +100,7 @@ def modules():
     """The outermost Go modules: a go.mod inside another module's tree is
     the scaffold's or a testdata's, and `./...` of the outer one skips it."""
     dirs = sorted({Path(f).parent for f in run(["git", "ls-files", "go.mod", "*/go.mod"]).split()
-                   if "testdata" not in Path(f).parts}, key=lambda d: len(d.parts))
+                   if "testdata" not in Path(f).parts}, key=lambda d: (len(d.parts), str(d)))
     outer = []
     for d in dirs:
         if not any(o == Path(".") or o in d.parents for o in outer):
