@@ -458,7 +458,11 @@ and the app's API (`/napi/`); references below are to mdopp/homes.
   (internal/gesichter/gesichter.go `Merke`). Owner-only pages are gated by
   `privatEigen` (internal/pages/kontakte_privat.go): „Fotos“ on Meine
   Kontakte, „Dieselbe Person?“ (kontakte_dieselbe.go), kontakt_offen.go,
-  the contact net (kontakte_netz.go).
+  a contact's „Beziehungen“ (kontakte_beziehung.go). Who stands close to
+  whom is no longer computed in Homes (homes ADR 0002, 2026-11-11): Homes
+  does not read the photos for it; Kontakte and a contact's page link to
+  the person's own archive („Dein Netzwerk im Archiv ›“), shown only to
+  whom has an archive.
 - **Self-only:** Meine Kontakte (the viewer's own `handy-kontakte`),
   personal lists, Standort (internal/pages/standort.go), Gesehen
   (internal/pages/gesehen.go: the viewer's own Jellyfin and ABS history
@@ -476,7 +480,7 @@ and the app's API (`/napi/`); references below are to mdopp/homes.
 | `reitti-konten.json` (0600) | each person's own Reitti token | per person, a secret |
 | `discogs-konten.json` (0600) | each person's Discogs OAuth token | per person, a secret |
 | `sicherung/<person>/…`, `standort-import/<person>/…` | the ledger of a person's phone backups; a Takeout location file while it imports | per person |
-| `immich-gesichter.json`, `immich-netz*.json` | the owner's Immich persons, face JPEGs, the key's Immich e-mail and login, contact↔person links | the owner's Immich, about household contacts |
+| `immich-gesichter.json`, `immich-netz.json`, `immich-netz-antworten.json` | the owner's Immich persons, face JPEGs, the key's Immich e-mail and login, contact↔person links; the relations the phone books (household and the owner's `handy-kontakte`) write, and the owner's answers about them | the owner's Immich and phone, about household contacts |
 | `kontakt-antworten.json` (0600) | „Kontakt prüfen lassen“: link hashes, outside contacts' answers, pending phone corrections | the asking person; outside contacts |
 | `musikwuensche.json`, `podcasts.json` | wishes and subscriptions, each naming who | household, tagged by person |
 | `papierkorb/` | household items deleted, 30 days | household |
