@@ -32,6 +32,14 @@ Secret=${RADICALE_PASSWORD},type=mount,target=radicale-password
 # the person's own, entered on the archive's page into the open vault; the box never holds one for the archive
 Environment=IMMICH_URL=${IMMICH_URL}
 Environment=IMMICH_PUBLIC_URL=${IMMICH_PUBLIC_URL}
+# the box's own model for Umfeld's relation hints (archiv#27, owner 2026-11-11): only while the vault is open, a
+# message with a relation word goes, with who wrote it to whom, to the household model through laib-lease's proxy
+# (ADR 0007), and nowhere else; the lease says when the card is taken and the archive waits. Without a model on the
+# box URL and key render empty and no message is sent
+Environment=MODEL_URL=${MODEL_URL}
+Environment=MODEL_LEASE=${MODEL_LEASE}
+Environment=MODEL_KEY=${MODEL_KEY}
+Environment=MODEL_NAME=qwen3.6-35b-a3b
 
 [Service]
 Restart=always

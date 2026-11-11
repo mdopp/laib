@@ -282,3 +282,34 @@ moves from Homes into the person's archive.
 3. **The limit, as before:** the household's address book in Radicale is
    readable by the box's admin and by every family member; only the
    archive's derived data is in the vault.
+
+## Amendment 2026-11-11: message excerpts to the box's own model
+
+The owner decided on 2026-11-11 (archiv#27) that Umfeld's relation
+suggestions combine a keyword search with the box's model: „Sind Oma,
+Mama, Mutter, Onkel, Schatzi und ähnliches in den Nachrichten …, dann
+gehen Absender, Empfänger und Text zum LLM mit der Bitte den Grad zu
+bewerten. Dazu Hinweise die wir schon für die Personen haben.“
+
+1. **What leaves the vault, and where to.** While the vault is open, a
+   message with a relation word (the archive's `beziehungswoerter.yml`)
+   whose sender and recipients the phone books know goes, with their
+   names, at most 600 characters of its text and what the archive already
+   knows of them, to the household model through laib-lease's proxy
+   (`MODEL_URL`, `host.containers.internal`, ADR 0007), and nowhere else:
+   not to a cloud model, not to the Bote. The answer, a relation and a
+   sureness, is kept per message inside the vault; no message is sent
+   twice.
+2. **Nothing kept outside, nothing logged.** The archive logs counts
+   only. laib-lease forwards without logging bodies, and llama-server
+   runs without `--verbose` or a slot save path, so neither keeps the
+   prompt (templates/llama). The model process is the household's: while
+   it answers, root on the box could read its memory, as it can read an
+   open vault.
+3. **The box's model only, the household's window only.** The archive
+   asks the lease before it sends. While any window holds the card, or
+   the proxy refuses, it waits for a later round. It sends at most ten
+   messages a round, as background work (`X-Laib-Background`).
+4. **The person decides.** A reading is a suggestion on the pair's
+   question. Nothing is written without the person's tap, as in the
+   2026-11-10 amendment.
