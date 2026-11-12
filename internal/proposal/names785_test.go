@@ -25,7 +25,7 @@ func TestACardNamesTheServiceByItsTemplatesTitle(t *testing.T) {
 // #785, the shape of #698: a template update whose laib.yml differs only in
 // its title or beschreibung changes nothing that runs; the box takes it
 // over on main, files no proposal, and the Box page shows the new name.
-// Ablauf L-25
+// Ablauf L-23 @7fd2
 func TestANameOnlyTemplateUpdateIsTakenOverWithoutAProposal(t *testing.T) {
 	ctx := context.Background()
 	repo, inbox := goldenRepo(t)

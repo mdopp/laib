@@ -12,7 +12,7 @@ import (
 // #799: „Alle freigeben“ leaves what deletes and what the review flagged
 // for one-by-one approval, and says on the page which and why; a POST that
 // names them anyway does not approve them.
-// Ablauf L-6
+// Ablauf L-6 @1a88
 func TestAlleFreigebenLeavesDestroyAndFlaggedCards(t *testing.T) {
 	env, _ := testBox(t)
 	for _, name := range []string{"w1", "w2", "w3", "w4", "w5"} {

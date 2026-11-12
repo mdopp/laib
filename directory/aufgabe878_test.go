@@ -9,7 +9,6 @@ import (
 // dir erledigen“. The engine routes it to the model at the top, with every
 // tool and the task's number, whatever level the person was on, for the
 // admin and the family alike; the next message stays at the top.
-// Ablauf L-22
 func TestATaskConversationStartsAtTheTopWithItsNumber(t *testing.T) {
 	for _, sid := range []string{"p", "+4917099999999"} {
 		j := term()

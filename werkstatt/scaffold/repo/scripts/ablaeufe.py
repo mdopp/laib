@@ -5,12 +5,14 @@
 docs/ABLAEUFE.md holds the program's scenarios in plain German, each a
 heading that starts with its id (`### L-12 Titel`, one prefix per repo),
 then a few Wenn/Dann lines. A test names the scenario it proves with a
-marker in a comment or in its name:
+marker in a comment or in its name, each id with the fingerprint of the
+scenario's text the test was written against:
 
-    // Ablauf L-12          # Ablauf L-12, L-13          test("ablauf:L-12 …")
+    // Ablauf L-12 @3f9a     # Ablauf L-12 @3f9a, L-13 @c0de     test("ablauf:L-12 @3f9a …")
 
-The word, then a blank or a colon, then one id or several joined by commas.
-CI fails on
+The word, then a blank or a colon, then one id or several joined by commas,
+each followed by `@` and the first four hex digits of the sha256 of the
+scenario's title and lines, whitespace collapsed (fingerprint()). CI fails on
 
 - a scenario no test names, unless its id is in scripts/ablaeufe-baseline.txt;
 - a baselined id that a test names by now, or that is no scenario any more:
@@ -18,7 +20,13 @@ CI fails on
 - a baseline that grew against the merge base with origin/main (ABLAEUFE_BASE
   names another ref): the baseline only shrinks, a new scenario comes with
   its test. Where the base has no baseline yet, this one is the first;
-- a test that names an id docs/ABLAEUFE.md does not have, and an id twice.
+- a test that names an id docs/ABLAEUFE.md does not have, and an id twice;
+- a marker without the fingerprint, or with one that is not the scenario's
+  text any more: the scenario changed, so re-read that test against it.
+
+`--stempeln L-12` prints the fingerprint of L-12 and every marker naming it.
+It writes nothing, on purpose: whoever updates a marker re-reads that test
+against the new text first.
 
 The tests are the tracked and untracked (not ignored) files whose path
 matches a pattern of DEFAULT_TESTS, or of scripts/ablaeufe-tests.txt (one
@@ -28,9 +36,10 @@ without a slash matches the file name, one with a slash the whole path
 
 One source (laib#1170): laib's werkstatt/scaffold/repo/scripts/ablaeufe.py,
 copied unchanged into every repo of the household (scripts/copies.sh).
-Usage: scripts/ablaeufe.py [--list]
+Usage: scripts/ablaeufe.py [--list | --stempeln ID…]
 """
 import fnmatch
+import hashlib
 import os
 import re
 import subprocess
@@ -57,34 +66,51 @@ DEFAULT_TESTS = [
     "*/src/androidTest/*.kt",
 ]
 ID = r"[A-Z][A-Z0-9]{0,4}-[1-9][0-9]{0,3}"
+STAMP = r"(?:\s*@\w*)?"
 HEADING = re.compile(r"^#{2,6}\s+(" + ID + r")(?![\w-])\s*(.*)$")
-MARKER = re.compile(r"(?<![A-Za-z])[Aa]blauf[ :]\s*(" + ID + r"(?:\s*,\s*" + ID + r")*)(?![\w-])")
+MARKER = re.compile(r"(?<![A-Za-z])[Aa]blauf[ :]\s*(" + ID + STAMP + r"(?:\s*,\s*" + ID + STAMP + r")*)(?![\w-])")
+NAMED = re.compile("(" + ID + r")(?:\s*@(\w*))?")
+
+
+def fingerprint(text):
+    """The first four hex digits of the sha256 of the text, whitespace collapsed."""
+    return hashlib.sha256(" ".join(text.split()).encode("utf-8")).hexdigest()[:4]
 
 
 def scenarios(text):
-    """The ids of the doc's scenario headings, in order (fenced code skipped),
-    and the problems with them: an id twice, a heading without a title."""
-    ids, problems, fenced = [], [], False
+    """The doc's scenarios, id -> fingerprint of its title and lines, in
+    order (fenced code skipped), and the problems: an id twice, a heading
+    without a title."""
+    found, problems, fenced, current = {}, [], False, None
     for n, line in enumerate(text.splitlines(), 1):
         if line.lstrip().startswith("```"):
-            fenced = not fenced
+            fenced, current = not fenced, None
             continue
-        m = None if fenced else HEADING.match(line)
+        if fenced:
+            continue
+        m = HEADING.match(line)
+        if line.startswith("#"):
+            current = None
         if not m:
+            if current is not None:
+                current.append(line)
             continue
-        if m.group(1) in ids:
-            problems.append(f"{DOC}:{n}: {m.group(1)} is there twice: give the second one the next free number")
-        elif not m.group(2).strip():
-            problems.append(f"{DOC}:{n}: {m.group(1)} has no title: one sentence after the id")
-        ids.append(m.group(1))
-    return ids, problems
+        i, title = m.group(1), m.group(2).strip()
+        if i in found:
+            problems.append(f"{DOC}:{n}: {i} is there twice: give the second one the next free number")
+            continue
+        if not title:
+            problems.append(f"{DOC}:{n}: {i} has no title: one sentence after the id")
+        current = found[i] = [title]
+    return {i: fingerprint("\n".join(lines)) for i, lines in found.items()}, problems
 
 
 def markers(text):
-    """Every id a file names with the marker."""
-    found = set()
+    """Every id a file names with the marker: (id, fingerprint or None, line)."""
+    found = []
     for m in MARKER.finditer(text):
-        found.update(re.findall(ID, m.group(1)))
+        line = text.count("\n", 0, m.start()) + 1
+        found += [(i, stamp or None, line) for i, stamp in NAMED.findall(m.group(1))]
     return found
 
 
@@ -116,16 +142,33 @@ def test_files(patterns):
 
 
 def named(files):
-    """id -> the files that name it."""
+    """id -> the markers that name it: (file, line, fingerprint or None)."""
     where = {}
     for path in files:
         try:
             text = (ROOT / path).read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        for i in markers(text):
-            where.setdefault(i, []).append(path)
+        for i, stamp, line in markers(text):
+            where.setdefault(i, []).append((path, line, stamp))
     return where
+
+
+def places(found):
+    return ", ".join(sorted({path for path, _, _ in found}))
+
+
+def stale(prints, where):
+    """The markers whose fingerprint is missing or not the scenario's text."""
+    problems = []
+    for i, found in where.items():
+        want = prints.get(i)
+        for path, line, stamp in found if want else []:
+            if stamp is None:
+                problems.append(f"{path}:{line}: `Ablauf {i}` has no fingerprint: re-read the test against {i}, then write `Ablauf {i} @{want}`")
+            elif stamp != want:
+                problems.append(f"{path}:{line}: {i} changed since this test named it (@{stamp}, now @{want}): re-read the test against {i}, then write `@{want}`")
+    return problems
 
 
 def base_baseline():
@@ -147,21 +190,23 @@ def read(rel):
 
 
 def check(doc, base_text, where, before):
-    """The problems, given the doc, the baseline's text, the ids the tests
-    name (id -> files) and the baseline at the merge base (ids, None, or an
-    error string)."""
-    ids, problems = scenarios(doc)
+    """The problems, given the doc, the baseline's text, the markers the
+    tests hold (id -> (file, line, fingerprint)) and the baseline at the
+    merge base (ids, None, or an error string)."""
+    prints, problems = scenarios(doc)
+    ids = list(prints)
     base, twice = baseline_ids(base_text or "")
     problems += [f"{BASELINE}: {i} is there twice" for i in twice]
     problems += [
-        f"{i} has no test: write the test that proves it, with `Ablauf {i}` in a comment or its name"
+        f"{i} has no test: write the test that proves it, with `Ablauf {i} @{prints[i]}` in a comment or its name"
         for i in ids
         if i not in where and i not in base
     ]
     problems += [
-        f"{', '.join(where[i])}: names {i}, which {DOC} does not have: fix the id or write the scenario"
+        f"{places(where[i])}: names {i}, which {DOC} does not have: fix the id or write the scenario"
         for i in sorted(set(where) - set(ids))
     ]
+    problems += stale(prints, where)
     return ids, base, problems + shrinks(ids, base, where, before)
 
 
@@ -173,12 +218,28 @@ def shrinks(ids, base, where, before):
         if i not in ids:
             problems.append(f"{BASELINE}: {i} is no scenario in {DOC}: take it out of the baseline")
         elif i in where:
-            problems.append(f"{BASELINE}: {i} has a test now ({', '.join(where[i])}): take it out of the baseline")
+            problems.append(f"{BASELINE}: {i} has a test now ({places(where[i])}): take it out of the baseline")
     if isinstance(before, str):
         problems.append(before)
     elif before is not None:
         problems += [f"{BASELINE}: {i} is new in the baseline: it only shrinks; write the test instead" for i in base if i not in before]
     return problems
+
+
+def stempeln(doc, where, wanted):
+    """What --stempeln prints: each id's fingerprint and the markers naming
+    it, whether they match. It writes nothing."""
+    prints = scenarios(doc)[0]
+    out = []
+    for i in wanted:
+        if i not in prints:
+            out.append(f"{i}: no scenario in {DOC}")
+            continue
+        out.append(f"{i} @{prints[i]}")
+        for path, line, stamp in where.get(i, []):
+            state = "matches" if stamp == prints[i] else f"@{stamp}: re-read, then update" if stamp else "no fingerprint: re-read, then add it"
+            out.append(f"  {path}:{line}  {state}")
+    return out
 
 
 def main(argv):
@@ -191,10 +252,13 @@ def main(argv):
     if own is not None:
         patterns = [p.strip() for p in own.splitlines() if p.strip() and not p.lstrip().startswith("#")]
     where = named(test_files(patterns))
+    if argv[:1] == ["--stempeln"]:
+        print("\n".join(stempeln(doc, where, argv[1:] or list(scenarios(doc)[0]))))
+        return 0
     ids, base, problems = check(doc, read(BASELINE), where, base_baseline())
     if "--list" in argv:
         for i in ids:
-            print(f"{i}  {', '.join(where.get(i, [])) or ('baselined' if i in base else 'NO TEST')}")
+            print(f"{i}  {places(where.get(i, [])) or ('baselined' if i in base else 'NO TEST')}")
     covered = sum(1 for i in ids if i in where)
     for p in problems:
         print(f"::error title=ablaeufe::{p}" if os.environ.get("GITHUB_ACTIONS") else f"  {p}")

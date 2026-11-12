@@ -48,7 +48,7 @@ func TestFuerAndWeg(t *testing.T) {
 // Homes and the Bote act for one person: they see the admins' and
 // everyone's tasks, and of the personal ones only that person's. A hand
 // that sees the whole list (a human, claude, ops, laib) sees every one.
-// Ablauf L-19
+// Ablauf L-19 @9827
 func TestWhoSeesWhichTask(t *testing.T) {
 	anna, bert, all, adm := Aufgabe{Fuer: "person:anna"}, Aufgabe{Fuer: "person:bert"}, Aufgabe{Fuer: Alle}, Aufgabe{Fuer: Admins}
 	for _, c := range []struct {

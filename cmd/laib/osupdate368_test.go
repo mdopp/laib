@@ -86,7 +86,7 @@ func osJournal(t *testing.T, c *cbox) []journal.Entry {
 	return out
 }
 
-// Ablauf L-26
+// Ablauf L-26 @9747
 func TestTheRebootIsGrantedInTheWindowWhenAllIsGreen(t *testing.T) {
 	c := osBox(t)
 	if code := preReboot(t, c, at("06:00"), "127.0.0.1:41000"); code != http.StatusOK {
@@ -97,7 +97,7 @@ func TestTheRebootIsGrantedInTheWindowWhenAllIsGreen(t *testing.T) {
 	}
 }
 
-// Ablauf L-26
+// Ablauf L-26 @9747
 func TestTheRebootIsHeld(t *testing.T) {
 	cases := map[string]func(c *cbox) (func() time.Time, string){
 		"in the backup slot": func(c *cbox) (func() time.Time, string) { return at("03:20"), "127.0.0.1:1" },
@@ -167,7 +167,7 @@ func TestTheWindowFollowsTheBackupSchedule(t *testing.T) {
 	}
 }
 
-// Ablauf L-26
+// Ablauf L-26 @9747
 func TestDiagSaysAnOSUpdateWaits(t *testing.T) {
 	c := osBox(t)
 	st, _ := cli.LoadState(c.env)

@@ -14,10 +14,12 @@ Outside the Werkstatt, the same guide is `werkstatt/guide/` in github.com/mdopp/
   lets dead code, lint findings, duplicates and complexity only go down against
   `scripts/ratchet/` (a fixed finding: `--update`; a new one that must stay: `--update --accept`,
   the reason in the PR, the owner's yes). Both run in CI; run them before a PR.
-- Every behaviour has its Ablauf: `docs/ABLAEUFE.md` holds the apps' scenarios in plain German
-  (`<PREFIX>-<n>`, Wenn/Dann); a feature PR adds or changes its scenario and the test naming it
-  (`// Ablauf A-3`). `scripts/ablaeufe.py` fails CI on a scenario without a test, unless it is in
-  `scripts/ablaeufe-baseline.txt`, which only shrinks.
+- Every behaviour has its Ablauf: `docs/ABLAEUFE.md` holds the apps' promises in plain German
+  (`<PREFIX>-<n>`, at most three Wenn/Dann/Und lines, the rules at its top); a feature PR adds or
+  changes its scenario and the test naming it with the scenario's fingerprint (`// Ablauf A-3 @3f9a`).
+  `scripts/ablaeufe.py` fails CI on a scenario without a test (unless in `scripts/ablaeufe-baseline.txt`,
+  which only shrinks) and on a fingerprint that is missing or stale; `--stempeln A-3` prints the new
+  one and writes nothing: re-read the test, then update its marker.
 - `ratchet.py`, `test_ratchet.py`, `ablaeufe.py`, `test_ablaeufe.py`, `pins.sh`, `copies.sh` and `loc.sh` are laib's
   `werkstatt/scaffold/repo/scripts/`: `scripts/copies.sh` fails CI when a copy differs.
   Change them in laib, then copy them here; never edit them only here.

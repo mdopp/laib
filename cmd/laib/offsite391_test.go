@@ -23,7 +23,7 @@ import (
 // services stop once), with the backend's settings from box.yml and its
 // password from secrets.age as environment. The box page counts two places
 // only while the off-box copy is fresh; diag is red after 48 h without one.
-// Ablauf L-28
+// Ablauf L-28 @0101
 func TestTheOffsiteRepoGetsACopyOfEveryBackup(t *testing.T) {
 	b := newRbox(t)
 	primary := filepath.Join(b.env.Paths.Home, "restic")

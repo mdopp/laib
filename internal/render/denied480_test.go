@@ -17,7 +17,7 @@ import (
 // page) gets a page with "abmelden, anderes Konto" instead of Authelia's
 // plain "403 Forbidden". The status stays 403 and the LAN check still runs
 // before Authelia: only the words change, never who gets in.
-// Ablauf L-36
+// Ablauf L-36 @6ca2
 func TestNoBare403ReachesAPerson(t *testing.T) {
 	st, err := state.Load("../../testdata/golden/nuc/state")
 	if err != nil {

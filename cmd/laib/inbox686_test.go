@@ -148,7 +148,7 @@ func TestARedRunSaysZurückgenommenWeil(t *testing.T) {
 // #686: „Alle freigeben“ is one confirmation for every open card, then one
 // list: each is approved and applied in turn, each with its own outcome —
 // a red one is taken back alone, the others stay.
-// Ablauf L-6
+// Ablauf L-6 @1a88
 func TestAlleFreigebenConfirmsOnceAndListsEachOutcome(t *testing.T) {
 	env, _ := testBox(t)
 	ps := []*proposal.Proposal{proposeService(t, env, "w1"), proposeService(t, env, "w2"), proposeService(t, env, "w3")}

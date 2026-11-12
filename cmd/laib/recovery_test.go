@@ -171,7 +171,7 @@ func TestRestoreBoxRestoresStateThenEveryServiceWithDelete(t *testing.T) {
 
 // #40 (2, 3): the recovery sheet is the one page a human prints: key,
 // repo, password, four steps. Never for a hand, never over MCP.
-// Ablauf L-31
+// Ablauf L-31 @b305
 func TestRecoverySheetIsForHumansAndListsEverything(t *testing.T) {
 	c := newCbox(t)
 	resticRecorder(t, c)

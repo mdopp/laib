@@ -10,7 +10,7 @@ import (
 // WireGuard, whose clients have private addresses. fotos is Immich Public
 // Proxy alone: Caddy lets only its paths through. files is at home too
 // since 2026-11-09 (decision J, laib#1133), its share links excepted.
-// Ablauf L-42
+// Ablauf L-42 @6301
 func TestTheFamilysAppsAreLANOnlyAndFotosIsTheSharesAlone(t *testing.T) {
 	st := shippedBox(t)
 	out, err := Render(st, map[string]string{})

@@ -26,7 +26,7 @@ const legacyApprover = "  approver: {ceiling: apply, human: true, verbs: [approv
 // approve what only a human may (here a script on the host), and the Inbox
 // (human:<Remote-User>) can. The approved script runs once, in the hooks
 // image (#36).
-// Ablauf L-7
+// Ablauf L-7 @621f
 func TestApprovalsAreTheInboxsAlone(t *testing.T) {
 	ctx := context.Background()
 	env, data := testBox(t)

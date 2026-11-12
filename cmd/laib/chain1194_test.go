@@ -22,7 +22,7 @@ import (
 // says so with the key's form and applies once the key is set; a newer
 // card for the same value closes the older; a rejected link leaves the
 // cards after it open, saying why.
-// Ablauf L-11
+// Ablauf L-11 @5b33
 func TestApprovalsChainAndApplyInOrder(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)

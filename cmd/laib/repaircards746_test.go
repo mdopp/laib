@@ -19,7 +19,7 @@ import (
 
 // #746: a repair card's headline says what the repair does, in German,
 // from the finding and the verb, never „Einstellungen der Box ändern sich“.
-// Ablauf L-39
+// Ablauf L-39 @56e0
 func TestARepairCardSaysWhatTheRepairDoes(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
@@ -39,7 +39,7 @@ func TestARepairCardSaysWhatTheRepairDoes(t *testing.T) {
 
 // #771: the same repair for the same finding is filed once; a second
 // laib repair, by another hand, answers with the open one.
-// Ablauf L-39
+// Ablauf L-39 @56e0
 func TestTheSameRepairIsFiledOnce(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
