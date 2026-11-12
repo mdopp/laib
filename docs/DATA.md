@@ -501,7 +501,7 @@ and the app's API (`/napi/`); references below are to mdopp/homes.
 | `musikwuensche.json`, `podcasts.json` | wishes and subscriptions, each naming who | household, tagged by person |
 | `papierkorb/` | household items deleted, 30 days | household |
 | `kontakte-quelle/` | one-time copies of household firm cards | household |
-| `zugang.json` | public access requests: name, contact, message, salted address hash | outsiders |
+| `zugang.json` | access requests from the teaser, taken only from the home network (homes#365): name, contact, message, time, salted address hash; ticked off, never deleted by itself | visitors at home |
 
   Beside it: `homes-dokumente` (the Paperless mirror, below),
   `homes-qmd` (its index), the share's `notes` (the household's notes,
@@ -682,7 +682,7 @@ design and not listed again.
 | 14 | A shared Immich album or link, through immich-public-proxy | the person → outside, by their choice | templates/immich-public-proxy |
 | 15 | „Kontakt prüfen lassen“: the outside contact sees the card a person keeps of them, on a single-use link (14 days) | the person's card → that contact | homes internal/kontaktantwort/ |
 | 16 | Cameras and house controls reach every paired phone; who switched is noted | the house → every phone | homes internal/napi/home.go |
-| 17 | A public access request reaches `HOMES_TEASER_PERSON` | outsider → one person | homes internal/pages/teaser.go |
+| 17 | An access request from the teaser reaches `HOMES_TEASER_PERSON` and the admins; taken only from the home network (the address Caddy saw is private or link-local; owner 2026-11-12, after spam), from outside refused with 403 and nothing kept | visitor at home → one person, the admins | homes internal/pages/teaser.go `zuhause` |
 | 18 | Admin keys read every person's Jellyfin and ABS history; Homes shows each person only their own | each person → Homes (service) | homes internal/jellyfin/gesehen.go, internal/abs/gehoert.go, internal/pages/gesehen.go |
 | 19 | Planned, refused today: the archive's Umfeld reads the household address book | household → the person's archive | archiv apps/archiv/umfeld.go; `[archiv-sonst-nichts]` |
 | 20 | A relation the person answered in their archive („Wie steht X zu Y?“), at their one tap there (owner 2026-11-10: the tap in their own open archive is their consent; no second confirmation): both ends household contacts → both household cards by UID (the family sees it); otherwise → only the person's own phone, by name; a person only on photos → stays in the vault. A household card never gets a name from the person's phone or photos. The archive posts it server to server to Homes' own port on the box (`/intern/uebernahme`, not through Caddy), signed with that person's archive secret, valid two minutes, each nonce once; Rückgängig takes it back. | the person's archive → household book, or → the person's phone | archiv apps/archiv/uebernahme.go, fragen_seite.go; homes internal/uebernahme |
