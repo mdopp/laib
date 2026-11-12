@@ -198,11 +198,15 @@ if names := stations():
     lists["laib_sender"] = {"values": values}
 changed = write("custom_sentences/de/laib_medien.yaml", "# rendered by laib pre-start (templates/home-assistant, #933); do not edit by hand\n"
                 + json.dumps({"language": "de", "intents": intents, "lists": lists}, ensure_ascii=False, indent=2) + "\n")
-# the player: Music Assistant's in the satellite's area, else one named like the area (MA's players have no area of
-# their own: media_player.wohnzimmer_2 is the Wohnzimmer's), else none, and the answer says so
+# the player: the area's standard speaker, Music Assistant's player in the satellite's area with HA's label
+# „Standard-Lautsprecher“ (set in Homes' Geräte or in HA, owner 2026-11-12), else Music Assistant's in the area, else
+# one named like the area (MA's players have no area of their own: media_player.wohnzimmer_2 is the Wohnzimmer's),
+# else none, and the answer says so. The satellite's own answer stays on the satellite: only the music goes there.
+STANDARD = "Standard-Lautsprecher"
 PLAYER = ("{% set ma = integration_entities('music_assistant') | select('match', 'media_player[.]') | list %}"
           "{% set a = preferred_area_id | default('', true) %}"
-          "{{ ((ma | select('in', area_entities(a)) | list) + (ma | select('search', a) | list) if a else []) | first | default('') }}")
+          "{% set std = (label_entities('" + STANDARD + "') | select('in', ma) | select('in', area_entities(a)) | list) if a else [] %}"
+          "{{ (std + (ma | select('in', area_entities(a)) | list) + (ma | select('search', a) | list) if a else []) | first | default('') }}")
 
 
 def play(slot, kind, said):

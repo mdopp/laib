@@ -194,6 +194,12 @@ class PreStart(unittest.TestCase):
         for want in ("intent_script:", "LaibRadio:", "LaibMusik:", "music_assistant.play_media", "media_type: radio", "media_type: artist",
                      "preferred_area_id", "integration_entities('music_assistant')"):
             self.assertIn(want, pkg)
+        # Ablauf L-45 @7904. Owner 2026-11-12: a room's standard speaker, HA's label „Standard-Lautsprecher“ on Music Assistant's player in
+        # the satellite's area, comes first; without one, the room's Music Assistant player as before
+        player = pkg.split('player: "', 1)[1].split('"\n', 1)[0]
+        self.assertIn("label_entities('Standard-Lautsprecher') | select('in', ma) | select('in', area_entities(a))", player)
+        self.assertLess(player.index("std +"), player.index("(ma | select('in', area_entities(a))"), "the standard speaker first")
+        self.assertNotIn('"', player, "a double quote would end the YAML string")
         # post-deploy reloads Home Assistant's sentences once, after they changed
         self.assertTrue((self.c / ".laib-sentences-changed").exists())
         (self.c / ".laib-sentences-changed").unlink()
