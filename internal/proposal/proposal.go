@@ -66,6 +66,10 @@ type Proposal struct {
 	// again with the data as they are („Nach vorne reparieren“)
 	Restore int `json:"restore,omitempty"`
 	Forward int `json:"forward,omitempty"`
+	// what it waits for (#1194): vorschlag:N, version:X.Y.Z, schluessel:NAME,
+	// aufgabe:N; Freigabe is who approved it while it waited (inbox.Release)
+	WartetAuf []string `json:"wartetAuf,omitempty"`
+	Freigabe  string   `json:"freigabe,omitempty"`
 }
 
 // Anchor is what a proposal answers (#544): the diag finding it should make
@@ -167,6 +171,11 @@ func LockRepo(repo string) func() {
 
 // ErrOwnProposal: a hand never approves its own proposal (ADR 0006).
 var ErrOwnProposal = errors.New("a hand cannot approve its own proposal")
+
+// Own: by would approve its own proposal, which only a human and the box may.
+func Own(p *Proposal, by string) bool {
+	return Hand(by) == Hand(p.Actor) && Hand(by) != "human" && by != "laib"
+}
 
 // Hand returns the hand part of an actor ("human:mdopp" → "human").
 func Hand(actor string) string { return strings.SplitN(actor, ":", 2)[0] }
@@ -361,7 +370,7 @@ func ApproveChecked(ctx context.Context, repo, inbox string, p *Proposal, by str
 	// … and the box itself (the template-sync timer, actor laib) is not a
 	// hand with a token: its proposals are approved by the box when the dial
 	// says so (#50), the policy check is the caller's.
-	if Hand(by) == Hand(p.Actor) && Hand(by) != "human" && by != "laib" {
+	if Own(p, by) {
 		return ErrOwnProposal
 	}
 	defer LockRepo(repo)()

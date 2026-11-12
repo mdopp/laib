@@ -27,6 +27,7 @@ func init() { apply.Carry = Carry }
 // it again, so N approvals during one apply give one more apply. A red run
 // is rolled back as a whole: each of its proposals says with which run.
 func Carry(ctx context.Context, env *cli.Env) int {
+	Release(ctx, env) // a held approval whose wait is over (#1194)
 	if len(proposal.Waiting(cli.InboxDir(env))) == 0 {
 		return cli.ExitOK
 	}

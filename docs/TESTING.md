@@ -34,7 +34,7 @@ triage, run nightly on the box, result in the journal. It lives in
 Rules:
 
 - Production lines are capped per program: the kernel (`cmd/`,
-  `internal/`, under 22,110), the Operator (`operator/`, under 3,300, ADR
+  `internal/`, under 22,370), the Operator (`operator/`, under 3,300, ADR
   0023) and each program that left the kernel (`stick/`, `frage/`,
   `automat/`, `directory/`, `mcpserver/`; #309). `scripts/loc.sh` measures
   each, warns at 95 %, and fails when a program imports the kernel, the

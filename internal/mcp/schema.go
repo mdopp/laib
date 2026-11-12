@@ -67,6 +67,7 @@ var mcpParams = map[string][]mcpParam{
 		{name: "sources", typ: "array", desc: "die Adressen aus dem Netz, auf die sich der Vorschlag stützt; dann gibt ihn nur ein Mensch frei"},
 		{name: "sets", typ: "array", desc: "statt service/key/value mehrere Werte in einem Vorschlag: dienst/SCHLÜSSEL=wert"},
 		{name: "notes", typ: "array", desc: "zu einem neuen Image, was sich geändert hat, für die Karte: dienst/SCHLÜSSEL=ein bis drei Sätze"},
+		{name: "wartet", typ: "array", desc: "worauf der Vorschlag wartet, bevor Laib ihn anwendet: vorschlag:<nr>, aufgabe:<nr>, version:<x.y.z>, schluessel:<NAME>; freigegeben wird er vorher, angewendet erst danach"},
 		{name: "hand", typ: "string", desc: "mit verb: die Hand in policy.yml, deren Verbliste ein Verb dazubekommt (#575); ein Mensch entscheidet"},
 		{name: "verb", typ: "string", desc: "mit hand: das Verb, z. B. scan"}},
 	"wish": {{name: "text", typ: "string", desc: "der Vorschlag, ein bis zwei Sätze; mit modul der Titel des Moduls; Pflicht, außer mit stand"},
@@ -316,6 +317,9 @@ func listsArgv(st *state.State, lists map[string][]string) ([]string, error) {
 	}
 	for _, n := range lists["notes"] {
 		argv = append(argv, "--note", n)
+	}
+	for _, w := range lists["wartet"] {
+		argv = append(argv, "--wartet", w)
 	}
 	return argv, nil
 }

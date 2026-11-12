@@ -255,6 +255,21 @@ itself:
 | human | what the content review marks (below) | — | never auto, whatever the dial says |
 | remove | delete a service | never auto | a human, always (ADR 0006) |
 
+**Chains (#1194).** A proposal may name what it waits for: another
+proposal, a Laib version, an owner's key, a Box-Aufgabe (`laib propose
+--wartet …`). Its card says so in German, with the page where that is
+done (the other card, the key's form). An approve before then — the
+owner's or the dial's — merges nothing: the card stays open, approved in
+advance, and the start of every run (`inbox.Release`, so after any apply
+and at least with the ten-minute converge) approves it as that person
+once nothing is missing, oldest first. A proposal it waits for counts
+once a run applied it, so a chain applies in its order, one run per
+link. A rejected, stale or rolled-back link leaves the cards after it
+open, saying why. A newer values proposal that sets every value of an
+older open one again closes the older (`stale`, „abgelöst durch #N“), so
+an old image is never approved after a new one; what waited for the old
+one waits for its successor.
+
 **The content decides, not the shape (#34).** Before the dial is asked,
 `internal/review` reads the change against main — files, contracts, the
 rendered units — and names, in plain German, what only a human may allow:
