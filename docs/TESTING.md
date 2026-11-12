@@ -59,16 +59,24 @@ Rules:
 
 `docs/ABLAEUFE.md` (owner, 2026-11-12) lists what the owner and the
 family see Laib do, as numbered scenarios in plain German: an id (`L-12`)
-and one sentence, then a few Wenn/Dann lines. Each is proven by a test
-that names its id in a comment or its name — `// Ablauf L-12`, `# Ablauf
-L-3, L-4`, `ablauf:L-12` in a test title. `scripts/ablaeufe.py` (CI, job
-`test`) fails on a scenario no test names, on a test naming an id the doc
-does not have, on an id twice, and on `scripts/ablaeufe-baseline.txt`
-(scenarios without a test yet) when it holds a covered or vanished id or
-grew against the merge base with `origin/main`: it only shrinks. A
-feature PR adds or changes its scenario and the test naming it.
-`scripts/ablaeufe.py --list` says which test proves which. The script is
-one of the gates every repo of the household copies (`scripts/copies.sh`);
+and one sentence, then at most three Wenn/Dann/Und lines. Only promises
+to a person or another program, privacy and data loss always,
+convenience only where it broke before (its rules at its top). Each is
+proven by a test that names its id with the scenario's fingerprint —
+`// Ablauf L-12 @3f9a`, `# Ablauf L-3 @ab12, L-4 @cd34`, `ablauf:L-12
+@3f9a` in a test title. `scripts/ablaeufe.py` (CI, job `test`) fails on a
+scenario no test names, on a test naming an id the doc does not have, on
+an id twice, on a marker whose fingerprint is missing or no longer the
+scenario's text (file:line and the new one), and on
+`scripts/ablaeufe-baseline.txt` (scenarios without a test yet) when it
+holds a covered or vanished id or grew against the merge base with
+`origin/main`: it only shrinks. A feature PR adds or changes its scenario
+and the test naming it. `scripts/ablaeufe.py --list` says which test
+proves which; `--stempeln L-12` prints the fingerprint and the markers
+naming it and writes nothing: whoever updates a marker re-reads that test
+first. That the test can fail is the mutation ratchet's job
+(`scripts/ratchet.py mutation`, `CLAUDE.md`), not this check's. The script
+is one of the gates every repo of the household copies (`scripts/copies.sh`);
 each repo has its own prefix. A cross-program run of the scenarios on the
 test box comes later.
 

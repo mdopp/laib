@@ -1,5 +1,6 @@
 """scripts/ablaeufe.py: a scenario without a test is red unless baselined,
-the baseline only shrinks, a test may name only a scenario that exists.
+the baseline only shrinks, a test may name only a scenario that exists, and
+a marker carries the fingerprint of the scenario's current text.
 
 The marker word is built at run time (M), so this file names no scenario
 itself: it is a test file the checker reads too."""
@@ -17,25 +18,42 @@ spec.loader.exec_module(ablaeufe)
 
 M = "Abl" + "auf"
 DOC = "# Abläufe\n\n```\n### X-9 Beispiel im Format\n```\n\n## Inbox\n\n### T-1 Eine Karte erscheint\nWenn …\nDann …\n\n### T-2 Freigeben\nDann …\n"
+P1 = ablaeufe.fingerprint("Eine Karte erscheint\nWenn …\nDann …")
+P2 = ablaeufe.fingerprint("Freigeben\nDann …")
+
+
+def at(path, stamp, line=1):
+    return [(path, line, stamp)]
+
+
+GOOD = {"T-1": at("a_test.go", P1), "T-2": at("b_test.go", P2)}
 
 
 class Parse(unittest.TestCase):
     def test_headings_are_the_scenarios_and_fenced_examples_are_not(self):
-        self.assertEqual(ablaeufe.scenarios(DOC), (["T-1", "T-2"], []))
+        self.assertEqual(ablaeufe.scenarios(DOC), ({"T-1": P1, "T-2": P2}, []))
 
     def test_an_id_twice_and_one_without_a_title(self):
-        ids, problems = ablaeufe.scenarios("### T-1 a\n### T-1 b\n### T-2\n")
-        self.assertEqual(ids, ["T-1", "T-1", "T-2"])
+        prints, problems = ablaeufe.scenarios("### T-1 a\n### T-1 b\n### T-2\n")
+        self.assertEqual(list(prints), ["T-1", "T-2"])
         self.assertIn("T-1 is there twice", problems[0])
         self.assertIn("T-2 has no title", problems[1])
 
+    def test_the_fingerprint_is_the_title_and_lines_whitespace_collapsed(self):
+        self.assertEqual(len(P1), 4)
+        self.assertEqual(ablaeufe.scenarios("### T-1   Eine Karte erscheint\n\nWenn  …\n   Dann …\n## Weiter\nnicht dabei\n")[0]["T-1"], P1)
+        self.assertNotEqual(ablaeufe.scenarios("### T-1 Eine Karte erscheint\nWenn …\nDann nicht …\n")[0]["T-1"], P1)
+
     def test_the_markers(self):
-        text = f"// {M} T-1\n# {M} T-2, T-3\ntest('{M.lower()}:T-4 shows', …)\n// {M}: T-5\n"
-        self.assertEqual(ablaeufe.markers(text), {"T-1", "T-2", "T-3", "T-4", "T-5"})
+        text = f"// {M} T-1 @ab12\n# {M} T-2 @cd34, T-3 @ef56\ntest('{M.lower()}:T-4 @0a0b shows', …)\n// {M}: T-5\n"
+        self.assertEqual(
+            ablaeufe.markers(text),
+            [("T-1", "ab12", 1), ("T-2", "cd34", 2), ("T-3", "ef56", 2), ("T-4", "0a0b", 3), ("T-5", None, 4)],
+        )
 
     def test_prose_is_no_marker(self):
         for text in [f"kein {M} „Homes“", f"Der {M} T-1x", f"Ab{M.lower()} T-1", f"{M} T-0", f"{M} t-1"]:
-            self.assertEqual(ablaeufe.markers(text), set(), text)
+            self.assertEqual(ablaeufe.markers(text), [], text)
 
     def test_the_baseline_takes_comments(self):
         self.assertEqual(ablaeufe.baseline_ids("# why\nT-1  # a VM proof\n\nT-2\nT-1\n"), (["T-1", "T-2"], ["T-1"]))
@@ -43,18 +61,18 @@ class Parse(unittest.TestCase):
 
 class Check(unittest.TestCase):
     def check(self, baseline="", where=None, before=None):
-        return ablaeufe.check(DOC, baseline, where if where is not None else {"T-1": ["a_test.go"], "T-2": ["b_test.go"]}, before)[2]
+        return ablaeufe.check(DOC, baseline, where if where is not None else GOOD, before)[2]
 
     def test_every_scenario_named_is_green(self):
         self.assertEqual(self.check(), [])
 
     def test_a_scenario_without_a_test_is_red(self):
-        problems = self.check(where={"T-1": ["a_test.go"]})
+        problems = self.check(where={"T-1": GOOD["T-1"]})
         self.assertEqual(len(problems), 1)
-        self.assertIn("T-2 has no test", problems[0])
+        self.assertIn(f"T-2 has no test: write the test that proves it, with `{M} T-2 @{P2}`", problems[0])
 
     def test_a_baselined_scenario_without_a_test_is_green(self):
-        self.assertEqual(self.check("T-2\n", {"T-1": ["a_test.go"]}, ["T-2"]), [])
+        self.assertEqual(self.check("T-2\n", {"T-1": GOOD["T-1"]}, ["T-2"]), [])
 
     def test_a_baselined_scenario_with_a_test_must_leave(self):
         problems = self.check("T-2\n", before=["T-2"])
@@ -65,20 +83,38 @@ class Check(unittest.TestCase):
         self.assertIn("T-7 is no scenario", self.check("T-7\n", before=["T-7"])[0])
 
     def test_the_baseline_only_shrinks(self):
-        problems = self.check("T-2\n", {"T-1": ["a_test.go"]}, ["T-1"])
+        problems = self.check("T-2\n", {"T-1": GOOD["T-1"]}, ["T-1"])
         self.assertEqual(len(problems), 1)
         self.assertIn("T-2 is new in the baseline", problems[0])
 
     def test_the_first_baseline_is_taken_as_it_is(self):
-        self.assertEqual(self.check("T-2\n", {"T-1": ["a_test.go"]}, None), [])
+        self.assertEqual(self.check("T-2\n", {"T-1": GOOD["T-1"]}, None), [])
 
     def test_no_base_is_red_not_skipped(self):
         self.assertEqual(self.check(before="no merge base with origin/main"), ["no merge base with origin/main"])
 
     def test_a_test_naming_an_unknown_id_is_red(self):
-        problems = self.check(where={"T-1": ["a_test.go"], "T-2": ["b_test.go"], "T-3": ["c_test.go"]})
+        problems = self.check(where={**GOOD, "T-3": at("c_test.go", "ab12")})
         self.assertEqual(len(problems), 1)
         self.assertIn("c_test.go: names T-3", problems[0])
+
+    def test_a_marker_without_its_fingerprint_is_red_and_says_the_one_to_write(self):
+        problems = self.check(where={**GOOD, "T-2": at("b_test.go", None, 7)})
+        self.assertEqual(problems, [f"b_test.go:7: `{M} T-2` has no fingerprint: re-read the test against T-2, then write `{M} T-2 @{P2}`"])
+
+    def test_a_fingerprint_of_an_older_text_is_red(self):
+        old = "0000" if P2 != "0000" else "ffff"
+        problems = self.check(where={**GOOD, "T-2": at("b_test.go", old, 3)})
+        self.assertEqual(len(problems), 1)
+        self.assertIn(f"b_test.go:3: T-2 changed since this test named it (@{old}, now @{P2})", problems[0])
+
+    def test_each_id_of_one_marker_carries_its_own_fingerprint(self):
+        found = ablaeufe.markers(f"// {M} T-1 @{P1}, T-2 @{P1}\n")
+        problems = self.check(where={i: [("m_test.go", line, stamp)] for i, stamp, line in found})
+        self.assertEqual(len(problems), 1)
+        self.assertIn(f"m_test.go:1: T-2 changed since this test named it (@{P1}, now @{P2})", problems[0])
+        found = ablaeufe.markers(f"// {M} T-1 @{P1}, T-2 @{P2}\n")
+        self.assertEqual(self.check(where={i: [("m_test.go", line, stamp)] for i, stamp, line in found}), [])
 
 
 class Repo(unittest.TestCase):
@@ -90,7 +126,7 @@ class Repo(unittest.TestCase):
         ablaeufe.ROOT = self.root
         self.git("init", "-q", "-b", "main")
         self.write("docs/ABLAEUFE.md", DOC)
-        self.write("x/a_test.go", f"// {M} T-1\n")
+        self.write("x/a_test.go", f"// {M} T-1 @{P1}\n")
         self.write("scripts/ablaeufe-baseline.txt", "T-2\n")
         self.write("x/notes.go", f"// {M} T-2 is not a test file\n")
         self.git("add", ".")
@@ -120,14 +156,14 @@ class Repo(unittest.TestCase):
         self.assertIn("2 scenarios, 1 named by a test, 1 baselined, 0 problems", out)
 
     def test_an_untracked_test_counts_and_the_baseline_must_shrink(self):
-        self.write("web/e2e/freigeben.spec.ts", f"test('{M.lower()}:T-2 freigeben', () => {{}})\n")
+        self.write("web/e2e/freigeben.spec.ts", f"test('{M.lower()}:T-2 @{P2} freigeben', () => {{}})\n")
         code, out = self.main()
         self.assertEqual(code, 1)
         self.assertIn("T-2 has a test now (web/e2e/freigeben.spec.ts)", out)
 
     def test_the_repos_own_patterns_replace_the_defaults(self):
         self.write("scripts/ablaeufe-tests.txt", "# only Kotlin\n*/src/test/*.kt\n")
-        self.write("app/src/test/java/FreigabeTest.kt", f"// {M} T-1\n")
+        self.write("app/src/test/java/FreigabeTest.kt", f"// {M} T-1 @{P1}\n")
         self.write("x/a_test.go", "// nothing\n")
         self.assertEqual(self.main()[0], 0)
         (self.root / "app/src/test/java/FreigabeTest.kt").unlink()
@@ -139,6 +175,17 @@ class Repo(unittest.TestCase):
         code, out = self.main()
         self.assertEqual(code, 1)
         self.assertIn("T-3 is new in the baseline", out)
+
+    def test_changing_a_scenario_turns_its_test_red_and_stempeln_writes_nothing(self):
+        self.write("docs/ABLAEUFE.md", DOC.replace("Wenn …", "Wenn jemand …"))
+        code, out = self.main()
+        self.assertEqual(code, 1)
+        self.assertIn(f"x/a_test.go:1: T-1 changed since this test named it (@{P1}, now @", out)
+        code, out = self.main("--stempeln", "T-1", "T-9")
+        self.assertEqual(code, 0)
+        now = ablaeufe.scenarios(DOC.replace("Wenn …", "Wenn jemand …"))[0]["T-1"]
+        self.assertEqual(out, f"T-1 @{now}\n  x/a_test.go:1  @{P1}: re-read, then update\nT-9: no scenario in docs/ABLAEUFE.md\n")
+        self.assertEqual((self.root / "x/a_test.go").read_text(), f"// {M} T-1 @{P1}\n")
 
     def test_without_the_doc_it_is_red(self):
         (self.root / "docs/ABLAEUFE.md").unlink()

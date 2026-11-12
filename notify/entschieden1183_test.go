@@ -12,7 +12,7 @@ import (
 // (POST /entschieden, once) and marks the chat line that announced it. An
 // approved one still waiting for its run, or in it, is not told yet; one
 // still open, or one the chat never took, is not asked about.
-// Ablauf L-14
+// Ablauf L-1 @4a17
 func TestADecidedProposalsChatLineIsMarkedOnceItsRunEnded(t *testing.T) {
 	f := newFakeLaib(t)
 	b := newFakeBote(t)
@@ -55,7 +55,7 @@ func TestADecidedProposalsChatLineIsMarkedOnceItsRunEnded(t *testing.T) {
 
 // #1183: a red run is told as rolled-back; one no longer in the newest
 // decided ones is told with its number alone (bote-notify: no mark).
-// Ablauf L-14
+// Ablauf L-1 @4a17
 func TestARolledBackOrUnknownEndIsToldAsSuch(t *testing.T) {
 	f := newFakeLaib(t)
 	b := newFakeBote(t)

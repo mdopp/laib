@@ -56,7 +56,7 @@ func podmanExecs(calls []string) (n int) {
 
 // A sealed service (the archive) refuses every verb that reaches inside, for
 // every hand, the human's included.
-// Ablauf L-32
+// Ablauf L-32 @811b
 func TestSealedRefusesEveryVerbForEveryHand(t *testing.T) {
 	env, data, calls := privateBox(t, "sealed")
 	ctx := context.Background()
@@ -89,7 +89,7 @@ func TestSealedRefusesEveryVerbForEveryHand(t *testing.T) {
 // second try reuses it); after a human's approval it looks for an hour,
 // then it is refused again. The human looks without a card. The journal
 // keeps the size of the output, never its text.
-// Ablauf L-33
+// Ablauf L-33 @31e2
 func TestApprovalNeedsAnEinblickForAnHour(t *testing.T) {
 	env, _, calls := privateBox(t, "approval")
 	ctx := context.Background()

@@ -16,7 +16,7 @@ import (
 // #852: „Zurücknehmen“ only on a finished card it undoes something for, the
 // same answer in /ready's lastChange.reversible, and „Freigeben“ without the
 // accent where „Später“ is the safe default.
-// Ablauf L-12
+// Ablauf L-12 @4f2a
 func TestZuruecknehmenOnlyWhereItUndoesSomething(t *testing.T) {
 	env, _ := testBox(t)
 	st, err := cli.LoadState(env)

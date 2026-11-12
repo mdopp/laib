@@ -30,7 +30,6 @@ func TestACardShowsThePlainNameBigAndTheIdSmall(t *testing.T) {
 // #785, the owner: „bitte oben einen Filter nach Status dazu“. Above the
 // cards: Alle · Rot · Gelb · Grün with their counts, links the server
 // answers (no script); problems first, a paused service counts green.
-// Ablauf L-34
 func TestTheStatusPageFiltersByStateAndShowsProblemsFirst(t *testing.T) {
 	rows := []ServiceStatus{
 		{Name: "a", State: "grün"}, {Name: "b", State: "gelb"}, {Name: "c", State: "pausiert"},

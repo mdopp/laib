@@ -85,7 +85,7 @@ func fixture856(t *testing.T) *cli.Env {
 // page, `laib status --json` (Homes reads it over laib_status) and the text
 // of `laib status` say the same about what is red, the backup and the last
 // change; and what laib diag mails as red is red on them.
-// Ablauf L-35
+// Ablauf L-35 @6fa3
 func TestOneFixtureGivesTheSameVerdictOnEverySurface(t *testing.T) {
 	env := fixture856(t)
 	// laib diag first, as the mail runs it: what it finds red is what the mail says

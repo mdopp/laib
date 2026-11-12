@@ -46,7 +46,7 @@ func started(calls []string) bool {
 // the images) without waiting for it, as an apply-tier step, and says where
 // its result shows. The night's guards hold before it starts: no backup
 // running, the lock free; and a second start while one runs is refused.
-// Ablauf L-24
+// Ablauf L-24 @4009
 func TestUpdatesNowStartsTheNightlyRun(t *testing.T) {
 	ctx := context.Background()
 	env, calls := nightBox(t, map[string]string{"laib-images.service": "inactive", "laib-backup.service": "inactive"})
@@ -74,7 +74,7 @@ func TestUpdatesNowStartsTheNightlyRun(t *testing.T) {
 	}
 }
 
-// Ablauf L-24
+// Ablauf L-24 @4009
 func TestUpdatesNowRefusesWhileTheNightCannotRun(t *testing.T) {
 	ctx := context.Background()
 	for name, c := range map[string]struct {

@@ -53,7 +53,7 @@ func applies(t *testing.T, env *cliEnv) []journal.Entry {
 // #609: approving while an apply holds the lock answers at once; the
 // proposal is approved and waits for the next run, which the holder's
 // release starts.
-// Ablauf L-8
+// Ablauf L-44 @e5d2
 func TestApproveDuringAnApplyAnswersAtOnce(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
@@ -114,7 +114,7 @@ func TestAShellApproveWaitsForTheLockAndApplies(t *testing.T) {
 
 // #609: three approvals during one apply give exactly one more apply,
 // which carries all three; journal and proposals name that run.
-// Ablauf L-8
+// Ablauf L-44 @e5d2
 func TestThreeApprovalsDuringOneApplyGiveOneMoreApply(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
@@ -149,7 +149,7 @@ func TestThreeApprovalsDuringOneApplyGiveOneMoreApply(t *testing.T) {
 
 // #609: a red run rolls back every proposal it carried, and each says
 // with which others it went.
-// Ablauf L-9
+// Ablauf L-9 @b25b
 func TestARedBatchRollsBackAllAndSaysSoForEach(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)

@@ -16,7 +16,7 @@ import (
 // #798: the admin page keeps what approving, keys and repair need. /net,
 // /bote/link and the morning report left it (`laib net` and Homes keep
 // them), family-card and adopt left the verb table.
-// Ablauf L-41
+// Ablauf L-41 @d485
 func TestTheAdminPageKeepsOnlyApproveKeysAndRepair(t *testing.T) {
 	c := newCbox(t)
 	os.MkdirAll(filepath.Join(c.env.Paths.Home, "reports"), 0o755)

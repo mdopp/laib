@@ -42,7 +42,7 @@ func callAufgabe(t *testing.T, env *cliEnv, hand string, args map[string]any) (a
 // #667: Box-Aufgaben over MCP. ops and claude may add, only a human,
 // claude or Homes checks off or defers; none of it is a proposal, every
 // change is one commit of aufgaben.yml on main and one journal line.
-// Ablauf L-20
+// Ablauf L-20 @dc40
 func TestBoxAufgabenOverMCP(t *testing.T) {
 	env, _ := testBox(t)
 	t.Setenv("LAIB_DISK", "/nonexistent")

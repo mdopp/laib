@@ -55,7 +55,7 @@ func personBox(t *testing.T, reply string) (*cliEnv, *[][]string) {
 // #360: the homes hand invites a resident through the MCP tool Homes calls
 // (laib_person_invite): typed arguments, resend a JSON boolean, the German
 // sentence and the link back, the journal line.
-// Ablauf L-43
+// Ablauf L-43 @fe0a
 func TestHomesInvitesAResidentAndGetsTheLinkWithoutSMTP(t *testing.T) {
 	env, calls := personBox(t, `{"user":"anna","name":"Anna Muster","email":"anna@box.test","mailed":false,"link":"https://auth.box.test/reset-password/step2?token=t","expires":"2026-10-19T10:00:00Z"}`)
 	st, err := cli.LoadState(env)
@@ -102,7 +102,7 @@ func TestHomesInvitesAResidentAndGetsTheLinkWithoutSMTP(t *testing.T) {
 }
 
 // Admins are a human's call: the homes hand gets a sentence, the tool never runs.
-// Ablauf L-43
+// Ablauf L-43 @fe0a
 func TestOnlyAHumanInvitesAnAdmin(t *testing.T) {
 	env, calls := personBox(t, `{"user":"bob","name":"Bob","email":"bob@box.test","mailed":true,"expires":"2026-10-19T10:00:00Z"}`)
 	st, _ := cli.LoadState(env)

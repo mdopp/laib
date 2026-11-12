@@ -64,8 +64,11 @@ them.
   Details, and a lint holds it there (#855).
 - **Every behaviour has its Ablauf** (owner, 2026-11-12). `docs/ABLAEUFE.md`
   holds what the owner and the family see Laib do, as numbered scenarios in
-  plain German (`L-1`…). A feature PR adds or changes its scenario and the
-  test that names it (`// Ablauf L-12` in the test); a scenario without a
+  plain German (`L-1`…), only promises (rules at its top). A feature PR
+  adds or changes its scenario and the test that names it with the
+  scenario's fingerprint (`// Ablauf L-12 @3f9a`); a changed scenario
+  turns its tests red until each is re-read and re-stamped (`scripts/ablaeufe.py
+  --stempeln L-12` prints the new one, writes nothing); a scenario without a
   test is red unless it is in `scripts/ablaeufe-baseline.txt`, which only
   shrinks.
 - **Regression ⇒ gate.** The second time a shape breaks, it gets a test or a
@@ -105,7 +108,7 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 | Dead code, staticcheck findings, duplicates and complexity only go down (see below) | `scripts/ratchet.py`, CI job `ratchet` |
 | The trust kernel's tests bite (ADR 0019 §2, #1167): in `internal/policy`, `envelope`, `token`, `proposal`, `inbox` no new mutant survives | `scripts/ratchet.py mutation`, workflow `mutation` (a PR touching those packages, and nightly) |
 | The gates have one source (#1170): `ratchet.py`, `test_ratchet.py`, `ablaeufe.py`, `test_ablaeufe.py`, `pins.sh`, `copies.sh` are `werkstatt/scaffold/repo/scripts/`'s, copied unchanged into every repo of the household (and `loc.sh` with one cap where a repo has `scripts/loc.txt`); a fix goes here first, then to the copies | `scripts/copies.sh`, in each repo's CI |
-| Every scenario of `docs/ABLAEUFE.md` is named by a test (`// Ablauf L-12`), no test names an unknown id, the baseline only shrinks | `scripts/ablaeufe.py` |
+| Every scenario of `docs/ABLAEUFE.md` is named by a test (`// Ablauf L-12 @3f9a`), with the fingerprint of its current text; no test names an unknown id, the baseline only shrinks | `scripts/ablaeufe.py` |
 | Every touch answers at once (#588): every POST route ends done, red with a next step, or waiting with a limit | `cmd/laib/taps854_test.go` |
 | No raw or technical text in front of people (#855) | `cmd/laib/plain855_test.go`, `notify/plain855_test.go`, `frage/plain855_test.go` |
 

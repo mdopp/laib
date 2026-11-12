@@ -39,7 +39,7 @@ var peopleFiles = []string{
 // keyEnd's third argument is its Details.
 var plainSinks = map[string]bool{"Plain": true, "failure": true, "details": true, "Entry": true, "Record": true, "keyEnd": true}
 
-// Ablauf L-40
+// Ablauf L-40 @2d56
 func TestNoRawErrorTextInWhatPeopleRead(t *testing.T) {
 	for _, f := range peopleFiles {
 		fset := token.NewFileSet()
@@ -163,7 +163,7 @@ func TestTheReadinessLockSpeaksPlainly(t *testing.T) {
 
 // #855: what diag finds reaches people (the red mail, a repair's card) as
 // one plain sentence, "say"; detail and fix stay for the admin.
-// Ablauf L-40
+// Ablauf L-40 @2d56
 func TestEveryDiagFindingCarriesAPlainSentence(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)

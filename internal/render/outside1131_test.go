@@ -13,7 +13,7 @@ import (
 // second factor from outside the LAN and its own factor at home. Authelia
 // takes the first rule that matches, so the LAN's rule comes first, and the
 // LAN is what Caddy's @lan means.
-// Ablauf L-42
+// Ablauf L-42 @6301
 func TestOutsideAsksTheSecondFactorBeyondTheLAN(t *testing.T) {
 	st, err := state.Load("../../testdata/golden/nuc/state")
 	if err != nil {

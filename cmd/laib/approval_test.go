@@ -211,7 +211,7 @@ func TestATokenStrongerThanItsProposerIsRefused(t *testing.T) {
 // human — and the run that applies it takes a pre-update snapshot of the service
 // before it touches the box (#609: no longer before the merge); a snapshot
 // that fails rolls the run back and the box stays as it was.
-// Ablauf L-15
+// Ablauf L-15 @cae5
 func TestANewImageOfAServiceWithDataWaitsAndIsSnapshottedFirst(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
