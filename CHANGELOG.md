@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.25.0](https://github.com/mdopp/laib/compare/v2.24.0...v2.25.0) (2026-11-12)
+
+
+### Features
+
+* **aufgabe:** the owner's keys the box waits for, and a task's way to a key ([#1195](https://github.com/mdopp/laib/issues/1195)) ([5678bb2](https://github.com/mdopp/laib/commit/5678bb2e6025cb37a362853b3ae91e2bc223731e))
+
 ## [2.24.0](https://github.com/mdopp/laib/compare/v2.23.0...v2.24.0) (2026-11-11)
 
 
