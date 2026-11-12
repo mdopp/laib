@@ -349,8 +349,9 @@ subscriptions). Its data folder holds only the status and the last run.
   outside the vault in plaintext:** the IMAP hosts, users and app
   passwords of each mailbox the person entered (root can read the
   person's mailboxes with them), the person's own number, the Briefkasten's
-  public key, its HMAC dedupe sets, the status files (ADR 0029
-  amendment 2026-11-01; apps/archiv/briefkasten.go). Briefkasten packets
+  public key, its HMAC dedupe sets, the status files, the last counts for
+  Homes (`aufgaben.json`, below) (ADR 0029 amendment 2026-11-01;
+  apps/archiv/briefkasten.go). Briefkasten packets
   are age-encrypted to the person's key.
 - **Umfeld (archiv#27):** the contact net, the answers to „Wie steht X
   zu Y?“ and who is hidden live only in the vault
@@ -420,6 +421,21 @@ subscriptions). Its data folder holds only the status and the last run.
   this alone uses `SELECT`, `\Deleted` + `UID EXPUNGE`, on Gmail a `MOVE`
   to its Trash (archiv apps/archiv/aufraeumen.go). Irreversible at the
   provider; the archive keeps the mail.
+- **Counts for Homes (homes#362, owner 2026-11-12: „nur eine Zahl“):**
+  how many things wait for the person in their archive, never what they
+  are. Homes asks `GET /intern/aufgaben` with that person's
+  `ARCHIV_HOMES_SECRET` and gets `{offen, am, fragen, aufraeumen,
+  schluessel_fehlt}`: the number of open questions and suggestions on the
+  workplace („Wie steht … zu …?“, „Kennen sich …?“, a group's name, what
+  was recognised), the number of the Datenpfleger's findings (archiv#58),
+  whether a key the archive waits for is missing (Signal, WhatsApp,
+  Immich), and when this was counted. No name, no kind, no text. Counted
+  only while the vault is open; the last count stays outside it in
+  `/data/aufgaben.json` (mode 0600, root can read it, as the status
+  files), so Homes can show it while the vault is closed (`offen: false`).
+  Not in `laib-status.json`, which reaches `laib_status` and the admins.
+  Homes shows it only to the archive's own person, on „Deine Aufgaben“
+  and Start (archiv apps/archiv/aufgaben.go, intern.go; flow 27).
 - **Keys it holds:** the person's Immich key (in the vault, read only),
   the box's model key (`MODEL_KEY`, the household's, for the model's
   proxy), `archiv-<person>` in Radicale (read only), the person's IMAP app
@@ -431,7 +447,7 @@ subscriptions). Its data folder holds only the status and the last run.
   address check keeps the others out, not the provider; a read-only login
   of the provider, where one exists, is the narrower key). **Keys others hold to
   it:** `ARCHIV_HOMES_SECRET` (Homes, per instance: `/intern/` for a new
-  phone's restore, WhatsApp media only while open; the archive also signs
+  phone's restore, WhatsApp media only while open, the counts above; the archive also signs
   with it the answers it posts to Homes' `/intern/uebernahme`, which Homes
   checks with the same secret); the msgvault key on
   `/p/<person>/` only where the person set `AGENT_PATH` (off by default,
@@ -676,6 +692,7 @@ design and not listed again.
 | 24 | The mail a person sends to their own document address (`<login>+doc@`) also goes into their archive, read from the household's document mailbox with its login, only mail whose recipient is exactly that address (owner 2026-11-11); Paperless keeps the link to it as a note on the document | the household's document mailbox → the person's archive; the Message-ID → a note on the person's document | archiv apps/archiv/dokumentenpost.go `Passt`, mail.go; templates/archiv (`DOKUMENTE_MAIL_*`); templates/paperless/paperless-quittung.py `notiz` |
 | 25 | The photo on each household contact card (Homes' own address books only; never a person's `handy-kontakte` or archive; firms and faces Homes wrote aside) goes into the owner's Immich, one upload per photo hash, archived (out of the timeline), in one album Homes keeps; Immich's own face detection runs on it, Homes runs no ML. When its one face lands in an unnamed Immich person, Homes' „Wer ist das?“ offers that contact's name, and only the owner's tap names the person. A changed photo replaces the upload, a photo on no card any more deletes it. **Owner-decided 2026-11-11**, accepting that faces of people outside the family then live in the owner's Immich. | household book → owner's Immich (and its face recognition) | homes internal/gesichter/kontaktfotos.go, internal/immich/immich.go `Album`, `InsAlbum`; internal/pages/kontakte_wer.go (homes#352) |
 | 26 | Which owner's keys are missing that something on the box waits for: the key's name, its service, the template's label, why and help text, and its form's link — never a value, never whether an optional key is set. Every hand with `aufgabe` reads it in `laib_aufgabe list` (homes#362); Homes shows it only to admins in „Deine Aufgaben“ | secrets.age's key names (set or not) → the admins' Homes view | laib cmd/laib/aufgabe.go `missingKeys`, internal/diag/keys.go `MissingKeys`; homes „Deine Aufgaben“ |
+| 27 | How many questions, suggestions and cleanup findings wait in a person's archive, and whether a key it waits for is missing: counts, a flag and the time they were counted, nothing else (owner 2026-11-12). Counted only while the vault is open, the last count kept outside it; Homes reads it with that person's archive secret and shows it only to that person | the person's archive → Homes (service) → that person; root on the box can read the file | archiv apps/archiv/aufgaben.go, intern.go `/intern/aufgaben`; homes „Deine Aufgaben“ (homes#362) |
 
 Not crossings, checked: location goes to the person's own Reitti with
 their own token (homes internal/napi/standort.go); phone backups go to
