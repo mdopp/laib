@@ -103,7 +103,7 @@ laib.yml) belong to whichever account the owner made them in; the
   The file share's `photos/` folder is mounted read-only into Immich
   (`PHOTOS_RO`, templates/immich/immich.container); which Immich user
   sees it depends on the external library an admin creates in Immich (no
-  template code creates one): Box-Aufgabe <!-- aufgabe: In Immich nachsehen: Admin-Konto und Ordner photos/ -->. The Immich admin manages users
+  template code creates one): Box-Aufgabe Box-Aufgabe #27. The Immich admin manages users
   but does not see their photos in the app; root reads
   `${DATA_DIR}/immich/upload` directly.
 - **Keys held to it:**
@@ -282,7 +282,7 @@ subscriptions). Its data folder holds only the status and the last run.
   (file-share-samba.container); File Browser is given no per-user scope
   by the template, so every account sees the whole tree (upstream's
   default scope; a family member's scope on the box: Box-Aufgabe
-  <!-- aufgabe: In File Browser nachsehen: was ein Familienmitglied sieht -->). Notes, documents, photos,
+  Box-Aufgabe #26). Notes, documents, photos,
   music and the Paperless inbox all live there. Only the `werkstatt`
   share is limited, to `@admins`.
 - **Shares out:** a File Browser share link works from anywhere
@@ -398,7 +398,7 @@ subscriptions). Its data folder holds only the status and the last run.
   prompt is not kept. On the box the running llama-server has no flag
   that writes prompts (`--verbose`, `--log-file`, `--slot-save-path`,
   `--log-verbosity`)
-  <!-- box: laib look llama --container systemd-llama -- ps -eo args ~ /app/llama-server --host !~ \s(--verbose|-v|--log-file|--slot-save-path|--log-verbosity|-lv)(\s|$) --> *(box 2026-11-11: yes)*;
+  <!-- box: laib look llama --container systemd-llama -- ps -eo args ~ /app/llama-server --host !~ \s(--verbose|-v|--log-file|--slot-save-path|--log-verbosity|-lv)(\s|$) --> *(box 2026-11-12: yes)*;
   what laib-lease keeps is the code's claim above. The model process is the household's, so root reads its
   memory while it answers, as it reads an open vault (flow 22).
 - **Inbox `archiv-eingang/<person>/`:** Homes writes it as the device's
@@ -619,7 +619,7 @@ No `private:` (templates/home-assistant/laib.yml).
   into HA's logbook under the consumer's user, never a person's
   (post-deploy, #591). Location of the family's phones in HA through the
   companion app is per person's choice in that app; which persons'
-  locations other users see: Box-Aufgabe <!-- aufgabe: In Home Assistant und Music Assistant nachsehen: Standorte und Verlauf -->.
+  locations other users see: Box-Aufgabe Box-Aufgabe #25.
 
 ### media
 
@@ -644,7 +644,7 @@ No `private:`. The family signs in through Home Assistant; MA reads HA's
 users with an administrator token (`MUSIC_ASSISTANT_HA_TOKEN`). Plays
 what Jellyfin and ABS hold; keeps no per-person data the template
 declares beyond its own `data/`; whether MA keeps a history per user:
-Box-Aufgabe <!-- aufgabe: In Home Assistant und Music Assistant nachsehen: Standorte und Verlauf -->.
+Box-Aufgabe Box-Aufgabe #25.
 
 ### usage-metrics
 
@@ -724,7 +724,7 @@ listed again.
    (homes internal/pages/scannen.go `saysScanFuer`). In Paperless an
    owned document is seen by its owner, the users it is shared with and
    superusers. Whether the OIDC `admins` group's members are superusers:
-   Box-Aufgabe <!-- aufgabe: In Paperless nachsehen: Admins und Haushaltsdokumente -->; the
+   Box-Aufgabe Box-Aufgabe #24; the
    break-glass admin and `dokumente` see them either way.
 4. **The file share has no per-person space.** Samba's `data` and File
    Browser show every member the whole tree; a person's files there are
@@ -761,7 +761,7 @@ green. This is state, not design: it changes as people log in.
 
 | Service | What the status line said |
 |---|---|
-| immich | 1 Konto — one Immich user exists; every other family member gets their own at their first login. Whether that one user is also the admin account (Immich links an OIDC login to an existing user by e-mail): Box-Aufgabe <!-- aufgabe: In Immich nachsehen: Admin-Konto und Ordner photos/ --> |
+| immich | 1 Konto — one Immich user exists; every other family member gets their own at their first login. Whether that one user is also the admin account (Immich links an OIDC login to an existing user by e-mail): Box-Aufgabe Box-Aufgabe #27 |
 | vaultwarden | 1 Konto, 0 mit zweitem Faktor |
 | media | 3 Konten der Familie |
 | radicale | 2 Kalender, 2 Listen, 2 Adressbücher |
@@ -784,15 +784,15 @@ the admins; the answer comes back into this document and the number goes.
   whether the workflow „Für den Haushalt“ (Document Updated) fires on
   Dokumente's API change on the box's Paperless version, so a document
   tagged Haushalt by Dokumente has no owner afterwards:
-  <!-- aufgabe: In Paperless nachsehen: Admins und Haushaltsdokumente | Paperless → Benutzer: ist bei jedem Admin „Superuser“ angehakt? Und bei einem Dokument mit dem Tag Haushalt → Berechtigungen: ist kein Besitzer eingetragen? Die Antwort bitte Claude in der Werkstatt sagen, sie kommt in die Beschreibung der Box. -->
+  Box-Aufgabe #24
 - Immich: whether its one user is the admin account, and which user owns
   the file share's `photos/` as an external library:
-  <!-- aufgabe: In Immich nachsehen: Admin-Konto und Ordner photos/ | Immich → Administration → Benutzer: ist das eine Konto das Admin-Konto? Administration → Externe Bibliotheken: wem gehört die Bibliothek des Ordners photos/, oder gibt es keine? Die Antwort bitte Claude in der Werkstatt sagen, sie kommt in die Beschreibung der Box. -->
+  Box-Aufgabe #27
 - File Browser: a family member's scope:
-  <!-- aufgabe: In File Browser nachsehen: was ein Familienmitglied sieht | File Browser → Einstellungen → Benutzer → ein Familienmitglied: welcher Bereich steht dort, „/“ (alles) oder ein eigener Ordner? Die Antwort bitte Claude in der Werkstatt sagen, sie kommt in die Beschreibung der Box. -->
+  Box-Aufgabe #26
 - Home Assistant and Music Assistant: which persons' phone locations
   other HA users see, and whether MA keeps a history per user:
-  <!-- aufgabe: In Home Assistant und Music Assistant nachsehen: Standorte und Verlauf | Home Assistant → Karte und Einstellungen → Personen: sieht jedes Konto die Handys aller? Music Assistant → Einstellungen: gibt es einen Verlauf pro Person? Die Antwort bitte Claude in der Werkstatt sagen, sie kommt in die Beschreibung der Box. -->
+  Box-Aufgabe #25
 
 Who is in LLDAP's `admins` (they get „Wem gehört dieser Scan?“, gap 6) is
 state, not design: Homes → Box → Personen, or LLDAP. Whether Reitti can
