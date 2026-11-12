@@ -85,6 +85,7 @@ func plannedOf(t *testing.T, env *cliEnv, svc string) diag.Planned {
 // depends on Home Assistant is expected red while it runs, to diag and to
 // laib planned alike, and a little after it, for the reconnect; its window
 // is what the log review drops lines by.
+// Ablauf L-38
 func TestARestartIsAnnouncedAndDiagAndPlannedAgree(t *testing.T) {
 	down := true
 	var during diag.Finding

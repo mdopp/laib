@@ -15,6 +15,7 @@ import (
 // who.box.test …", #58), but the verdict judgeFor hands to the proposal
 // left them out, so no real card ever showed one. Driven through the real
 // propose path, not a hand-built verdict.
+// Ablauf L-2
 func TestAProposedRouteShowsItsFactOnTheCard(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)

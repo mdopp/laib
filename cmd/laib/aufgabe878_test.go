@@ -57,6 +57,7 @@ func callTasks(t *testing.T, env *cliEnv, hand string, args map[string]any) (off
 // for one person; it names its guided way, a Homes page or a conversation
 // with the Bote. Homes and the Bote act for one person (von): the kernel
 // shows them that person's tasks and never another's, whatever Homes asks.
+// Ablauf L-19
 func TestATaskIsForSomeoneAndHausSeesOnlyItsPersonsOwn(t *testing.T) {
 	env, _ := testBox(t)
 	t.Setenv("LAIB_DISK", "/nonexistent")
@@ -174,6 +175,7 @@ func TestATaskIsForSomeoneAndHausSeesOnlyItsPersonsOwn(t *testing.T) {
 
 // A fertig_wenn on a probe whose silence is no measurement: the task is
 // kept, and the answer says a person ticks it off, not Laib.
+// Ablauf L-20
 func TestAFertigWennLaibCannotMeasureSaysSo(t *testing.T) {
 	env, _ := testBox(t)
 	t.Setenv("LAIB_DISK", "/nonexistent")

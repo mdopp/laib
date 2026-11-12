@@ -1,0 +1,3 @@
+# Scenarios of docs/ABLAEUFE.md that no test names yet, one id per line, the
+# reason after a #. scripts/ablaeufe.py: this list only shrinks; a new
+# scenario comes with its test.

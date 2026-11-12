@@ -28,6 +28,7 @@ func writeRegistryTemplate(t *testing.T, c *cbox, name string) {
 // #41 (1, 2, 3): right after an approve (a merge commit) rollback by
 // proposal works, removes the added service's files and units, and leaves
 // the other secrets untouched.
+// Ablauf L-12
 func TestRollbackAfterAnApproveRemovesTheAddedService(t *testing.T) {
 	c := newCbox(t)
 	writeRegistryTemplate(t, c, "echo2")

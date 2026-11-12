@@ -78,6 +78,7 @@ func TestADiagFindingCarriesItsRepair(t *testing.T) {
 	t.Fatal("no unit finding for the failed whoami")
 }
 
+// Ablauf L-39
 func TestARepairIsProposedByTheOperatorAndRunsOnlyAfterAHumanApproves(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)

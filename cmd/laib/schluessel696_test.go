@@ -25,6 +25,7 @@ import (
 // declares as external into secrets.age, and applies what uses it — the
 // way `laib secret rotate` does. The value goes in only: it is never on a
 // page, in the journal, in the state repo's history or in laib's log.
+// Ablauf L-16, L-17
 func TestTheBoxPageTakesAKeyAndAppliesWhatUsesIt(t *testing.T) {
 	c := newCbox(t)
 	svc := filepath.Join(c.env.Paths.State, "services", "whoami")

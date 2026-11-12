@@ -13,6 +13,7 @@ import (
 // was the new news file, each a card „… ändert sich nichts Sichtbares“. A
 // diff of news alone changes nothing that runs: the box takes it over on
 // main, as bookkeeping, and files no proposal.
+// Ablauf L-25
 func TestANewsOnlyTemplateUpdateIsTakenOverWithoutAProposal(t *testing.T) {
 	ctx := context.Background()
 	repo, inbox := goldenRepo(t)

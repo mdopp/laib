@@ -102,6 +102,7 @@ func redDataRun(t *testing.T) (env *cliEnv, p *proposal.Proposal, calls func() [
 // as the update left them and that the snapshot from HH:MM is there, and
 // offers two ways on: „Sicherung zurückspielen“ and „Nach vorne reparieren“,
 // each a proposal laib files, one tap each.
+// Ablauf L-10
 func TestARedRunWithDataSaysTheDataStayAndOffersTwoWays(t *testing.T) {
 	env, p, calls, before := redDataRun(t)
 	if slices.ContainsFunc(calls(), func(c string) bool { return strings.HasPrefix(c, "restore") }) {

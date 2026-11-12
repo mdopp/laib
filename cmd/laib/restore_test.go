@@ -115,6 +115,7 @@ func copyGolden(t *testing.T, src, dst string) {
 // restarted, verify waited 60 s for a unit nobody started, the restore
 // ended red. Earlier runs passed only because the converge timer fired
 // inside that minute. A restore starts what it stopped.
+// Ablauf L-30
 func TestRestoreStartsWhatItStopped(t *testing.T) {
 	b := newRbox(t)
 	realRestic := backup.ResticRun

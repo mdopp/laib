@@ -13,6 +13,7 @@ import (
 // #637: a --set whose key someone else changed since it was proposed is not
 // re-applied over that change: the intent itself conflicts, and the Inbox
 // says why in German.
+// Ablauf L-13
 func TestASetWhoseKeyChangedMeanwhileGoesStale(t *testing.T) {
 	ctx := context.Background()
 	repo, inbox := goldenRepo(t)
@@ -45,6 +46,7 @@ func TestASetWhoseKeyChangedMeanwhileGoesStale(t *testing.T) {
 // stays, the template's new keys come too. When the template itself moved
 // on since the owner saw the proposal, the approval does not cover it: the
 // old one is stale and the new content is filed fresh.
+// Ablauf L-13
 func TestATemplateUpdateIsRecomputedFromTheTemplate(t *testing.T) {
 	ctx := context.Background()
 	tpl := func(version string) fstest.MapFS {

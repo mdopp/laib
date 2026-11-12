@@ -36,6 +36,7 @@ func sqliteFile(pages, counted int) []byte {
 // (path, size), a restore with --verify (restic's own checksums), and a
 // restored SQLite database must be whole. Each way a restore can be broken
 // turns it red.
+// Ablauf L-29
 func TestTheRestoreTestComparesWithTheSnapshotNotTheLiveFile(t *testing.T) {
 	b := newRbox(t)
 	// the header checks first, whether or not this machine has sqlite3 (CI's runner has)

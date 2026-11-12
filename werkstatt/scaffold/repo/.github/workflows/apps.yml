@@ -80,12 +80,17 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - run: bash scripts/pins.sh
   gates:
-    # one source for the gates: the copies are laib's scaffold's; one cap on the lines (laib#1170)
+    # one source for the gates: the copies are laib's scaffold's; one cap on the lines (laib#1170);
+    # every scenario of docs/ABLAEUFE.md named by a test, its baseline only shrinking against main
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
       - run: bash scripts/copies.sh
       - run: sh scripts/loc.sh
+      - run: python3 -m unittest scripts/test_ablaeufe.py
+      - run: python3 scripts/ablaeufe.py
   ratchet:
     # dead code, lint findings, duplicates and complexity only go down; the tools
     # pinned in the script, today's findings in scripts/ratchet/ (laib#1170)
