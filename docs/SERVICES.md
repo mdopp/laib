@@ -14,7 +14,7 @@ Pod YAML and `variables.json`, with `podlet`/hand for the units, then
 | nginx (NPM, 80/443/81, 24 hosts) | `caddy`, role proxy | built-in exists; DNS-01 waits for deSEC, unverified on a box until Box-Aufgabe #5 („deSEC einrichten“) is done |
 | auth (Authelia 9091 + LLDAP 3890/17170) | `auth`, roles sso + identity | built-in: Authelia and LLDAP in one pod, configuration.yml, OIDC key and LLDAP seeding by the hook |
 | adguard (53, 8083) | `adguard`, role dns | built-in: host network, first config by the hook, rewrites, the PTR upstream (the router, #551), NXDOMAIN for PTR in 172.16.0.0/12 and the query log retention (#901) synced via the API |
-| llama, llama-embed (11434/11436, GPU) | `llama`, role model, + `laib-lease` | ported (#18); on the box the model sits in the GPU's memory <!-- box: laib auslastung ~ "memUsed": [1-9]\d{9} ~ "model": "([^"]+)" --> *(box 2026-11-11: yes, qwen3.6-35b-a3b)* |
+| llama, llama-embed (11434/11436, GPU) | `llama`, role model, + `laib-lease` | ported (#18); on the box the model sits in the GPU's memory <!-- box: laib auslastung ~ "memUsed": [1-9]\d{9} ~ "model": "([^"]+)" --> *(box 2026-11-12: yes, qwen3.6-35b-a3b)* |
 | servicebay (5888) | Laib itself (5900) + Operator | done; retired at the end |
 
 ## Household and apps

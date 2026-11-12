@@ -27,7 +27,7 @@ history.
 - **Laib:** release v2.26.0 <!-- x-release-please-version --> in this repo
   (`version.txt`, bumped by release-please). Which release the box runs, `laib
   version` answers (the version shown is the box's):
-  <!-- box: laib version ~ "version": "(v\d+\.\d+\.\d+)" --> *(box 2026-11-11: yes, v2.20.0)*
+  <!-- box: laib version ~ "version": "(v\d+\.\d+\.\d+)" --> *(box 2026-11-12: yes, v2.26.0)*
 - **State and journal:** `/mnt/data/laib/state`, `/mnt/data/laib/journal`
   (`docs/STATE.md`). The data disk is an mdadm RAID1 with XFS. It runs with
   one member, which `laib diag` reports (`docs/BACKUP.md`).
@@ -50,7 +50,7 @@ them, takes their ignore.yml lines out, adds Stimme and lets Home
 Assistant's post-deploy wire Stimme's Wyoming entries (#540, the
 script's docstring is the runbook; in git history since 2026-10-24); their data stays 30 days.
 It ran: no unit of the retired Solaris is left in `ignore.yml`
-<!-- box: laib state ignore.yml ~ "path": "ignore.yml" !~ (?i)solaris --> *(box 2026-11-11: yes)*. Its links into ServiceBay were
+<!-- box: laib state ignore.yml ~ "path": "ignore.yml" !~ (?i)solaris --> *(box 2026-11-12: yes)*. Its links into ServiceBay were
 switched off explicitly before (#396). ServiceBay itself is off; its data dir
 stays 30 days after migration day.
 
@@ -67,7 +67,7 @@ stays 30 days after migration day.
   and `pi-web` (#402, #405, #407; the rollout check #436 is closed). The
   bridges on ServiceBay units are gone: no `devweb`, `claude-dev` or
   `pi-web` among the services
-  <!-- box: laib status ~ "name": "werkstatt" !~ devweb|claude-dev|pi-web --> *(box 2026-11-11: yes)*.
+  <!-- box: laib status ~ "name": "werkstatt" !~ devweb|claude-dev|pi-web --> *(box 2026-11-12: yes)*.
 - **The chat is the interface** (owner, 2026-10-19, #441): "Das Interface
   ist jetzt der Chat, das heißt aber nicht, dass die Daten deshalb falsch
   sein dürfen." What ServiceBay showed on web pages comes back as Laib
@@ -94,7 +94,7 @@ stays 30 days after migration day.
   monthly restore test (`docs/BACKUP.md`). Until v0.9.0 the nightly run
   was refused on every box, so it never ran on the Kraftwerk (#444).
   A green nightly snapshot exists
-  <!-- box: laib backups ~ "LastGreen": "(20\d\d-\d\d-\d\d) --> *(box 2026-11-11: yes, 2026-11-10)*.
+  <!-- box: laib backups ~ "LastGreen": "(20\d\d-\d\d-\d\d) --> *(box 2026-11-12: yes, 2026-11-12)*.
 - **Off the box:** a second restic repo on the Fritz!Box NAS, filled by
   `restic copy` after each backup (`backup.offsite`, #391). It needs the
   owner's step: a NAS user, FTP on, the password as a Laib secret, the
@@ -119,7 +119,7 @@ only from a proven deployment (`docs/INSTALL.md`, "OS updates").
 The hand-made Zincati pauses (`55-servicebay-lock.toml`,
 `90-paused-nvidia-kmod.toml`) stay until the owner lifts them after #445.
 They are gone: `laib diag` names no paused OS update
-<!-- box: laib diag ~ ^\[ !~ OS-Updates pausiert --> *(box 2026-11-11: yes)*.
+<!-- box: laib diag ~ ^\[ !~ OS-Updates pausiert --> *(box 2026-11-12: yes)*.
 
 ## What moved out of ServiceBay and Solaris
 
