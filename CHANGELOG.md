@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.26.0](https://github.com/mdopp/laib/compare/v2.25.0...v2.26.0) (2026-11-12)
+
+
+### Features
+
+* **inbox:** chained approvals, a proposal waits for what comes first ([#1197](https://github.com/mdopp/laib/issues/1197)) ([a8f48b0](https://github.com/mdopp/laib/commit/a8f48b00384fdde406c4d9f8d15e86f45575b0c4))
+
 ## [2.25.0](https://github.com/mdopp/laib/compare/v2.24.0...v2.25.0) (2026-11-12)
 
 
