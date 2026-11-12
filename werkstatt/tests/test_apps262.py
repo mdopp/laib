@@ -87,7 +87,7 @@ class Scaffold(unittest.TestCase):
     def test_a_new_repo_carries_the_gates_from_one_source(self):
         # #1170: ratchet.py and its test are laib's own, copied; copies.sh fails
         # on a copy that differs, loc.sh holds the one cap of scripts/loc.txt
-        for f in ("ratchet.py", "test_ratchet.py", "copies.sh"):
+        for f in ("ratchet.py", "test_ratchet.py", "ablaeufe.py", "test_ablaeufe.py", "copies.sh"):
             self.assertEqual((HERE / "scaffold/repo/scripts" / f).read_text(), (ROOT / "scripts" / f).read_text(),
                              f"the scaffold's scripts/{f} is a copy of laib's")
         self.assertEqual(subprocess.run(["bash", "scripts/copies.sh"], cwd=ROOT, capture_output=True, text=True).returncode, 0)
@@ -95,8 +95,10 @@ class Scaffold(unittest.TestCase):
             repo = Path(d) / "laib-apps"
             self.assertEqual(laib_app("new", "hallo", "--repo", str(repo), "--owner", "mdopp").returncode, 0)
             wf = (repo / ".github/workflows/apps.yml").read_text()
-            for step in ("bash scripts/copies.sh", "sh scripts/loc.sh", "python3 scripts/ratchet.py"):
+            for step in ("bash scripts/copies.sh", "sh scripts/loc.sh", "python3 scripts/ratchet.py", "python3 scripts/ablaeufe.py"):
                 self.assertIn(step, wf)
+            # the Abläufe start empty: the format, no scenario, nothing baselined
+            self.assertTrue((repo / "docs/ABLAEUFE.md").is_file() and (repo / "scripts/ablaeufe-baseline.txt").is_file())
             src = dict(os.environ, COPIES_FROM=str(HERE / "scaffold/repo/scripts"))
             copies = lambda: subprocess.run(["bash", "scripts/copies.sh"], cwd=repo, env=src, capture_output=True, text=True, timeout=60)
             p = copies()

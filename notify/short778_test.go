@@ -14,6 +14,7 @@ import (
 // new proposal reaches the owner as one short line: „Freigabe, Nummer,
 // Text, Link“. No impact lines, no decision words, no poll; a destructive
 // one reads the same, since the chat decides nothing any more.
+// Ablauf L-1
 func TestANewProposalIsOneLineWithTheInboxLink(t *testing.T) {
 	f := newFakeLaib(t)
 	b := newFakeBote(t)
@@ -51,6 +52,7 @@ func TestANewProposalIsOneLineWithTheInboxLink(t *testing.T) {
 
 // #778: without a reachable chat the mail carries the same line, as its
 // subject and as its body, and nothing else.
+// Ablauf L-1
 func TestTheMailFallbackIsTheSameLine(t *testing.T) {
 	f := newFakeLaib(t)
 	g := newGmailSMTP(t)

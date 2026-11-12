@@ -23,6 +23,7 @@ import (
 // #309: the Box page shows what a template says about itself with its age;
 // looking at a stale one starts the template's check in the background and
 // the page reloads until it lands; "jetzt prüfen" starts it on demand.
+// Ablauf L-41
 func TestTheBoxPageShowsAndRefreshesATemplatesStatus(t *testing.T) {
 	c := newCbox(t)
 	svc := filepath.Join(c.env.Paths.State, "services", "whoami")

@@ -15,6 +15,7 @@ import (
 // The owner's mail itself (#393) moved with laib-notify (#443): notify/notify_test.go.
 
 // #393: a failed or stale nightly backup is red in diag, so it reaches the owner's mail.
+// Ablauf L-27
 func TestAFailedOrStaleBackupIsRed(t *testing.T) {
 	b := newRbox(t)
 	st, err := cli.LoadState(b.env)

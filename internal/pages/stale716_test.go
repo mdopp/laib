@@ -10,6 +10,7 @@ import (
 // #716: a stale proposal that a later proposal on the same file or intent
 // answered is not shown as something to do; one that really needs a new
 // proposal says so in German, git's output only behind the details.
+// Ablauf L-13
 func TestStaleProposalsSupersededByALaterOneAreNotShown(t *testing.T) {
 	gitOut := "Konflikt mit dem aktuellen State in policy.yml Auto-merging policy.yml CONFLICT (content): Merge conflict in policy.yml"
 	p90 := &proposal.Proposal{ID: 90, Status: "stale", Reason: "claude darf apply", Files: []string{"policy.yml"}, StaleReason: gitOut}

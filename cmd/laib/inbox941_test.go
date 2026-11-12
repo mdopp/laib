@@ -78,6 +78,7 @@ func writeDecided(t *testing.T, env *cliEnv, id int, ago time.Duration) {
 // oldest first; the approved one keeps its place and says there what the
 // box does, in the page and in the live fragment; „Zuletzt entschieden“
 // stands at the bottom, busy or idle.
+// Ablauf L-4
 func TestADecidedCardKeepsItsPlace(t *testing.T) {
 	env, _ := testBox(t)
 	st, _ := cli.LoadState(env)
@@ -143,6 +144,7 @@ var buttonRe = regexp.MustCompile(`<button[^>]*>([^<]*)</button>`)
 // risky or not; a risky one says its risk above the row and its Freigeben
 // has no accent; no „Später“; the reason and „Ablehnen bestätigen“ come
 // only after the first tap on Ablehnen.
+// Ablauf L-3, L-5
 func TestEveryCardHasTheSameButtonRow(t *testing.T) {
 	env, _ := testBox(t)
 	inbox := cli.InboxDir(env)

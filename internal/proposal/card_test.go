@@ -8,6 +8,7 @@ import (
 // #58: every decision shows the same card — what changes in one sentence,
 // what it means for the family, whether it can be undone, who asked and
 // why, and a safe default. Mechanical, from the classified change.
+// Ablauf L-2
 func TestCardsArePlainGermanAndDefaultToSpaeterWhenRisky(t *testing.T) {
 	cases := []struct {
 		name    string

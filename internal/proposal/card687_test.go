@@ -18,6 +18,7 @@ import (
 // „häufig noch technisch. Und sehr lang.“ What it should have said: what
 // the update brings the household, from the template's news; the review's
 // reasons in one plain sentence, the technical part behind Details, capped.
+// Ablauf L-25
 func TestTheTemplateUpdateCardSaysWhatItBringsInFiveLines(t *testing.T) {
 	var lines []string
 	for i := range 49 {

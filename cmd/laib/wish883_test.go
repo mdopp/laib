@@ -14,6 +14,7 @@ import (
 // behind the door, becomes a Box-Aufgabe for the admins with the person
 // who asked — never an issue in box.yml intake.repo. laib-haushalt adds it
 // over MCP with its own hand; the kernel writes aufgaben.yml and journals.
+// Ablauf L-21
 func TestABotesWishLandsOnTheAdminsBoxAufgaben(t *testing.T) {
 	c := newCbox(t)
 	g := newFakeGitHub(t)

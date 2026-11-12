@@ -263,6 +263,7 @@ func lanOnly(site string) bool {
 	return ok && strings.Contains(handle, "file_server") && strings.TrimSpace(after) == "import lanonly"
 }
 
+// Ablauf L-36
 func TestLanSiteServesTheLANOnly(t *testing.T) {
 	st := lanState(t)
 	cf := caddyfile(st, nil)

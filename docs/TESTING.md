@@ -55,6 +55,23 @@ Rules:
   Operator's tools, ports, counts, tracked artifacts, the release
   manifest) and `scripts/ratchet.py`; nothing else.
 
+## Abläufe: every behaviour names its test
+
+`docs/ABLAEUFE.md` (owner, 2026-11-12) lists what the owner and the
+family see Laib do, as numbered scenarios in plain German: an id (`L-12`)
+and one sentence, then a few Wenn/Dann lines. Each is proven by a test
+that names its id in a comment or its name — `// Ablauf L-12`, `# Ablauf
+L-3, L-4`, `ablauf:L-12` in a test title. `scripts/ablaeufe.py` (CI, job
+`test`) fails on a scenario no test names, on a test naming an id the doc
+does not have, on an id twice, and on `scripts/ablaeufe-baseline.txt`
+(scenarios without a test yet) when it holds a covered or vanished id or
+grew against the merge base with `origin/main`: it only shrinks. A
+feature PR adds or changes its scenario and the test naming it.
+`scripts/ablaeufe.py --list` says which test proves which. The script is
+one of the gates every repo of the household copies (`scripts/copies.sh`);
+each repo has its own prefix. A cross-program run of the scenarios on the
+test box comes later.
+
 ## Done on the box, after the merge (#867)
 
 Issues close at merge; the box gets the release at night. The Werkstatt's

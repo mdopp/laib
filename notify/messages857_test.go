@@ -32,6 +32,7 @@ func lastWith(mails []string, s string) string {
 	return out
 }
 
+// Ablauf L-37
 func TestTheRedMessageSaysSinceWhenWhoIsOnItAndLinksToStatus(t *testing.T) {
 	for _, tc := range []struct{ name, ready, aufgabe, want string }{
 		{"the Operator works on it", `{"state":"bereit","operator":"läuft","operatorWork":{"incident":"health paperless: dial tcp","since":"2026-10-30T09:00:00Z"}}`, "", "Der Operator arbeitet an einem Vorfall"},
@@ -65,6 +66,7 @@ func TestTheRedMessageSaysSinceWhenWhoIsOnItAndLinksToStatus(t *testing.T) {
 	}
 }
 
+// Ablauf L-37
 func TestARedThatWasToldEndsInWiederGruen(t *testing.T) {
 	f := newFakeLaib(t)
 	addr, mails := fakeSMTP(t)
@@ -126,6 +128,7 @@ func TestThePingMeansOnlyThatLaibLives(t *testing.T) {
 	}
 }
 
+// Ablauf L-23
 func TestTheWeeklyListComesOnlyWhenItChanged(t *testing.T) {
 	f := newFakeLaib(t)
 	addr, mails := fakeSMTP(t)

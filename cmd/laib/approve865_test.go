@@ -22,6 +22,7 @@ import (
 // TestApprovalsAreTheInboxsAlone), and an agent hand whose ceiling holds
 // approve (ops, claude) may approve a proposal that is not human-class and
 // not its own. The bote hand (ceiling propose) approves nothing.
+// Ablauf L-7
 func TestAnAgentHandApprovesWhatIsNotHumanClass(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
