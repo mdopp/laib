@@ -48,13 +48,13 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	var edit proposal.Edit
 	var anchor proposal.Anchor
-	var words []string
+	var words, waits []string
 	usePatch := false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--patch":
 			usePatch = true
-		case "--finding", "--evidence", "--undo", "--source", "--note": // the anchor (#544); a note, ADR 0034's summary
+		case "--finding", "--evidence", "--undo", "--source", "--note", "--wartet": // the anchor (#544); a note, ADR 0034's summary; what it waits for (#1194)
 			if i+1 >= len(args) {
 				return env.Fail(fmt.Errorf("%s wants a value", args[i]))
 			}
@@ -68,6 +68,8 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 				anchor.Undo = v
 			case "--note":
 				note(&anchor, v)
+			case "--wartet":
+				waits = append(waits, v)
 			default:
 				anchor.Sources = append(anchor.Sources, v)
 			}
@@ -151,7 +153,7 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 		}
 		edit.Patch = string(b)
 	}
-	if err := MayPaths(st, env.Actor, edit.At); err != nil {
+	if err := errors.Join(MayPaths(st, env.Actor, edit.At), checkWaits(st, waits)); err != nil {
 		return cli.Refused(env, err.Error())
 	}
 	reason := strings.Join(words, " ")
@@ -174,9 +176,11 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
+	p.WartetAuf = waits
 	if err := Anchor(cli.InboxDir(env), p, anchor); err != nil {
 		return env.Fail(err)
 	}
+	supersede(ctx, env, st, p)
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s%s)", p.ID, strings.Join(p.Files, " "), p.Class, reasonsSuffix(p))})
 	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" && env.Ceiling == "" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
 		// The dial says laib decides this class itself: approve as laib,
@@ -286,7 +290,7 @@ var Present func(ctx context.Context, env *cli.Env, st *state.State, finding str
 // Anchor stores what a proposal answers (#544). A proposal that rests on an
 // outside source is class human: what the web says, a person checks.
 func Anchor(inbox string, p *proposal.Proposal, a proposal.Anchor) error {
-	if a.Finding == "" && a.Evidence == "" && a.Undo == "" && a.Wish == "" && len(a.Sources) == 0 && len(a.Notes) == 0 {
+	if a.Finding == "" && a.Evidence == "" && a.Undo == "" && a.Wish == "" && len(a.Sources) == 0 && len(a.Notes) == 0 && len(p.WartetAuf) == 0 {
 		return nil
 	}
 	p.Anchored(a)
@@ -308,6 +312,9 @@ func AutoApprove(ctx context.Context, env *cli.Env, p *proposal.Proposal) int {
 	st, err := cli.LoadState(env)
 	if err != nil {
 		return env.Fail(err)
+	}
+	if held, code := hold(env, st, p, "laib"); held {
+		return code
 	}
 	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, "laib", stateLoads, recomputeFor(env, st, p)); err != nil {
 		return env.Fail(err)
@@ -358,6 +365,9 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "reject", Reason: p.Reason, Result: "info", Detail: strings.TrimSuffix(fmt.Sprintf("#%d von %s: %s", p.ID, p.Actor, why), ": ")})
 		fmt.Fprintf(env.W(), "Vorschlag #%d abgelehnt.\n", p.ID)
 		return cli.ExitOK
+	}
+	if held, code := hold(env, st, p, env.Actor); held {
+		return code
 	}
 	if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, stateLoads, recomputeFor(env, st, p)); err != nil {
 		if errors.Is(err, proposal.ErrOwnProposal) {
@@ -512,12 +522,13 @@ func List(_ context.Context, env *cli.Env, args []string) int {
 	if env.JSON {
 		type withCard struct {
 			*proposal.Proposal
-			Card proposal.Decision `json:"card"`
+			Card   proposal.Decision `json:"card"`
+			Wartet []Wait            `json:"wartet,omitempty"` // #1194
 		}
 		out := []any{}
 		for _, p := range ps {
 			if full(p) {
-				out = append(out, withCard{p, proposal.Card(p, domain, box...)})
+				out = append(out, withCard{p, proposal.Card(p, domain, box...), WaitsOf(env, p)})
 			} else {
 				out = append(out, p)
 			}
@@ -538,6 +549,7 @@ func List(_ context.Context, env *cli.Env, args []string) int {
 		}
 		c := proposal.Card(p, domain, box...)
 		fmt.Fprintf(env.W(), "     %s  [%s: %s]\n", c.Summary, c.Risk, c.RiskWhy)
+		printWaits(env, p)
 		for _, l := range c.Changes {
 			fmt.Fprintf(env.W(), "     %s %s\n", l.Op, l.Text)
 		}

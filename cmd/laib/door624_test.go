@@ -132,9 +132,9 @@ func TestTheHaushaltHandProposesAndTheDialDecidesNothingOfIt(t *testing.T) {
 		}
 		return r.Result.Content[0].Text, r.Result.IsError
 	}
-	propose := func(tok, ceiling string) (*proposal.Proposal, string) {
+	propose := func(tok, ceiling string, key ...string) (*proposal.Proposal, string) {
 		t.Helper()
-		out, isErr := call(tok, ceiling, "laib_propose", `--set services/whoami/values.yml:GREETING=hallo "Gruß setzen"`)
+		out, isErr := call(tok, ceiling, "laib_propose", `--set services/whoami/values.yml:`+append(key, "GREETING")[0]+`=hallo "Gruß setzen"`)
 		var p proposal.Proposal
 		if isErr || json.Unmarshal([]byte(out), &p) != nil || p.ID == 0 {
 			return nil, out
@@ -152,7 +152,7 @@ func TestTheHaushaltHandProposesAndTheDialDecidesNothingOfIt(t *testing.T) {
 	if p, out := propose(hh, "read"); p != nil {
 		t.Fatalf("a call back under ceiling read proposed: %s", out)
 	}
-	propose(bote, "")
+	propose(bote, "", "FAREWELL") // another value: the same one would supersede haushalt's (#1194)
 	all, _ := proposal.List(cli.InboxDir(env), false)
 	if i := slices.IndexFunc(all, func(o *proposal.Proposal) bool { return o.Actor == "bote" }); i < 0 || all[i].Status == "open" {
 		t.Fatalf("the control: bote's values proposal is the dial's (values: auto): %+v", all)

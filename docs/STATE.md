@@ -557,6 +557,14 @@ that carries it comes after, as one run for whatever was approved
 meanwhile, with reason `Freigaben #4, #5, #6 (<from>..<to>)` — the
 proposals and the state's commit range, also kept on each inbox entry as
 `batch`. A red run's `rollback` lines name it per proposal (#609).
+An approve of a proposal that still waits (#1194, inbox entry
+`wartetAuf`) merges nothing: its `approve` line reads `#N von <hand>
+freigegeben, wartet auf …`, the entry stays `open` with `freigabe: <who
+approved>`, and the run that finds nothing missing any more approves it
+as that person (a second `approve` line, the merge). A held one that
+then does not merge is a red `approve` line by `laib`. A values proposal
+superseded by a newer one for the same values is `stale` with
+`refiled: <newer>` and a `reject` line by `laib`, `#N abgelöst durch #M`.
 
 No line carries a secret (#1012): every line's `reason` and `detail` are
 scrubbed as they are written, whatever the verb — the box's secret values

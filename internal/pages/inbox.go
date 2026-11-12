@@ -248,6 +248,17 @@ func card(r *http.Request, env *cli.Env, p *proposal.Proposal, domain string, bo
 	c := proposal.Card(p, domain, box...)
 	b := &strings.Builder{}
 	fmt.Fprintf(b, "<section class=card id=%d data-f><h2>Vorschlag #%d · %s</h2>%s", p.ID, p.ID, html.EscapeString(c.Summary), red) // /inbox#N, where a message links (#857)
+	waits := inbox.WaitsOf(env, p)                                                                                                  // #1194: what it waits for, where that is done
+	for _, w := range waits {
+		fmt.Fprintf(b, "<p class=gelb>%s", html.EscapeString(w.Text))
+		if w.Link != "" {
+			fmt.Fprintf(b, ` <a href="%s">Dorthin ›</a>`, html.EscapeString(w.Link))
+		}
+		b.WriteString("</p>")
+	}
+	if p.Freigabe != "" && len(waits) > 0 {
+		b.WriteString("<p>Freigegeben: Laib wendet ihn von selbst an, sobald nichts mehr fehlt.</p>")
+	}
 	fmt.Fprintf(b, "<p><span class=\"risk %s\">%s</span> %s", c.Risk, c.Risk, html.EscapeString(c.RiskWhy))
 	if c.Decider != "" {
 		fmt.Fprintf(b, " · <strong>%s</strong>", html.EscapeString(c.Decider))
@@ -285,7 +296,11 @@ func card(r *http.Request, env *cli.Env, p *proposal.Proposal, domain string, bo
 		fmt.Fprintf(b, "<p class=risiko>Vorsicht: %s Lies oben, was sich ändert, bevor du freigibst.</p>", html.EscapeString(c.RiskWhy))
 	}
 	// a no asks for its reason (#544), optional, only after the first tap (#941)
-	fmt.Fprintf(b, `<div class=knoepfe>%s<button type=button aria-expanded=false onclick="const f=this.parentNode.nextElementSibling;f.hidden=false;this.setAttribute('aria-expanded','true');f.querySelector('input').focus()">Ablehnen</button></div>`, DecisionForm(p.ID, "approve", "Freigeben", accent))
+	approve := DecisionForm(p.ID, "approve", "Freigeben", accent)
+	if p.Freigabe != "" && len(waits) > 0 {
+		approve = ""
+	}
+	fmt.Fprintf(b, `<div class=knoepfe>%s<button type=button aria-expanded=false onclick="const f=this.parentNode.nextElementSibling;f.hidden=false;this.setAttribute('aria-expanded','true');f.querySelector('input').focus()">Ablehnen</button></div>`, approve)
 	fmt.Fprintf(b, `<form class=nein method=post action=/inbox/%d/reject hidden onsubmit="const b=this.querySelector('button');b.disabled=true;b.textContent='wird abgelehnt …'"><input name=grund maxlength=200 placeholder="Warum nicht? (optional)" aria-label="Warum nicht? (optional)"><span class=knoepfe><button>Ablehnen bestätigen</button><button type=button onclick="this.form.hidden=true;this.form.previousElementSibling.lastChild.setAttribute('aria-expanded','false')">Abbrechen</button></span></form>`, p.ID)
 	fmt.Fprintf(b, "<details><summary>Technische Details</summary><p class=muted>%s</p><pre>%s</pre></details>",
 		html.EscapeString(c.Details), html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
@@ -301,7 +316,7 @@ func approvable(env *cli.Env, open []*proposal.Proposal) []*proposal.Proposal {
 		return nil
 	}
 	return slices.DeleteFunc(slices.Clone(open), func(p *proposal.Proposal) bool {
-		return p.Status != "open" || DecisionState(p.ID) != "" || !policy.Allowed(st.Policy, "human", p.Tier)
+		return p.Status != "open" || p.Freigabe != "" || DecisionState(p.ID) != "" || !policy.Allowed(st.Policy, "human", p.Tier)
 	})
 }
 

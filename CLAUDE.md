@@ -17,7 +17,7 @@ them.
    cannot verify on the box, say so in those words.
 3. **KISS, and the kernel grows only on purpose.** Every program has a
    production-line cap in `scripts/loc.sh` with its reason next to the
-   number: the kernel 22,110 (#609, +10 % 2026-10-30, homes#362), the Operator 3,300, and one for each program
+   number: the kernel 22,370 (#609, +10 % 2026-10-30, homes#362, #1194), the Operator 3,300, and one for each program
    that left the kernel (ADR 0005 amendment #309, ADR 0023): stick, frage,
    automat, directory, mcpserver, disk, notify, haushalt and, since #677, the
    lease. Tests are not

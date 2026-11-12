@@ -293,7 +293,12 @@ func OwnerSecrets(st *state.State) []OwnerSecret {
 // KeyLink is the box page's form for exactly one key (#696): what a
 // finding, or another app's settings, points the owner to.
 func KeyLink(st *state.State, name string) string {
-	return "https://" + fqdn(st, st.Box.Laib.Host) + "/schluessel?name=" + url.QueryEscape(name)
+	return PageLink(st, "/schluessel?name="+url.QueryEscape(name))
+}
+
+// PageLink is a path on the box page, e.g. /inbox#12.
+func PageLink(st *state.State, path string) string {
+	return "https://" + fqdn(st, st.Box.Laib.Host) + path
 }
 
 // SecretUsers are the services that reference a secret in a value or

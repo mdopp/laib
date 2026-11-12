@@ -94,19 +94,18 @@ func TestAProposalNamesAFindingDiagShowsAndAWebSourceMakesItHuman(t *testing.T) 
 func TestARejectKeepsTheOwnersReasonAndNichtJetztIsFree(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
-	// a human's proposals stay open whatever the dial says
-	for _, v := range []string{"v1.98", "v1.97"} {
-		if code := inbox.Propose(ctx, &cliEnv{Paths: env.Paths, Actor: "human:other"}, []string{"--set", "services/whoami/values.yml:IMAGE=docker.io/traefik/whoami:" + v, "zurück auf " + v}); code != cli.ExitOK {
-			t.Fatalf("propose %s: %d", v, code)
-		}
-	}
-	open, _ := proposal.List(cli.InboxDir(env), true)
+	// a human's proposals stay open whatever the dial says; one at a time, as a newer one for the same value closes the older (#1194)
 	human := &cliEnv{Paths: env.Paths, Actor: "human:test"}
-	if code := inbox.Reject(ctx, human, []string{strconv.Itoa(open[0].ID), "v1.10", "hat", "die", "Lücke"}); code != cli.ExitOK {
-		t.Fatalf("reject: %d", code)
-	}
-	if code := inbox.Reject(ctx, human, []string{strconv.Itoa(open[1].ID), "Nicht jetzt."}); code != cli.ExitOK {
-		t.Fatalf("reject: %d", code)
+	var open []*proposal.Proposal
+	for _, v := range [][]string{{"v1.97", "Nicht jetzt."}, {"v1.98", "v1.10", "hat", "die", "Lücke"}} {
+		if code := inbox.Propose(ctx, &cliEnv{Paths: env.Paths, Actor: "human:other"}, []string{"--set", "services/whoami/values.yml:IMAGE=docker.io/traefik/whoami:" + v[0], "zurück auf " + v[0]}); code != cli.ExitOK {
+			t.Fatalf("propose %s: %d", v[0], code)
+		}
+		now, _ := proposal.List(cli.InboxDir(env), true)
+		if code := inbox.Reject(ctx, human, append([]string{strconv.Itoa(now[0].ID)}, v[1:]...)); code != cli.ExitOK {
+			t.Fatalf("reject: %d", code)
+		}
+		open = append([]*proposal.Proposal{now[0]}, open...)
 	}
 	a, _ := proposal.Get(cli.InboxDir(env), open[0].ID)
 	b, _ := proposal.Get(cli.InboxDir(env), open[1].ID)
