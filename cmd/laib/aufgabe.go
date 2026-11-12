@@ -12,9 +12,13 @@ import (
 
 	"github.com/mdopp/laib/internal/aufgaben"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
+	"github.com/mdopp/laib/internal/render"
+	"github.com/mdopp/laib/internal/secrets"
+	"github.com/mdopp/laib/internal/state"
 )
 
 // cmdAufgabe: `laib aufgabe list [--alle] [--faellig] | zeigen <id> | add "<titel>"
@@ -72,6 +76,7 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 			return env.Fail(err)
 		}
 		list = slices.DeleteFunc(list, func(a aufgaben.Aufgabe) bool { return !sees(a) })
+		linkKeys(st, list)
 		if act == "zeigen" {
 			id, err := strconv.Atoi(strings.TrimPrefix(append(pos, "")[1], "#"))
 			i := slices.IndexFunc(list, func(a aufgaben.Aufgabe) bool { return a.ID == id })
@@ -91,8 +96,8 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 		list = slices.DeleteFunc(list, func(a aufgaben.Aufgabe) bool {
 			return val["--faellig"] != "" && !a.Due(today) || val["--alle"] == "" && !a.Open()
 		})
-		if env.JSON {
-			return cli.Emit(env, map[string]any{"offen": open, "faellig": due, "aufgaben": append([]aufgaben.Aufgabe{}, list...)})
+		if keys := missingKeys(env, st, list); env.JSON {
+			return cli.Emit(env, map[string]any{"offen": open, "faellig": due, "aufgaben": append([]aufgaben.Aufgabe{}, list...), "schluessel": keys})
 		}
 		fmt.Fprintf(env.W(), "Box-Aufgaben: %d offen, %d fällig\n", open, due)
 		for _, a := range list {
@@ -138,6 +143,9 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 			if a.Weg, err = aufgaben.ParseWeg(w); err != nil {
 				return env.Fail(err)
 			}
+			if err := keyWeg(st, &a); err != nil {
+				return cli.Refused(env, err.Error())
+			}
 		}
 	case "erledigt", "zurueckstellen", "befund":
 		pos = append(pos, "", "")
@@ -167,11 +175,7 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 			} else if a.Fuer != aufgaben.Admins {
 				detail += " für " + a.Fuer
 			}
-			if a.FertigWenn != "" && aufgaben.ClosesItself(a.FertigWenn) {
-				msg += fmt.Sprintf(". Laib hakt sie selbst ab, wenn der Befund %s weg ist.", a.FertigWenn)
-			} else if a.FertigWenn != "" {
-				msg += fmt.Sprintf(". Laib hakt sie nicht selbst ab: %s misst nicht bei jedem diag, abhaken tut ein Mensch.", a.FertigWenn)
-			}
+			msg += closes(st, a.FertigWenn)
 		case "erledigt":
 			err = aufgaben.Done(list, a.ID, by, "", now)
 			msg, detail = fmt.Sprintf("Box-Aufgabe #%d erledigt.", a.ID), fmt.Sprintf("erledigt #%d", a.ID)
@@ -196,4 +200,70 @@ func cmdAufgabe(ctx context.Context, env *cliEnv, args []string) int {
 	}
 	fmt.Fprintln(env.W(), msg)
 	return cli.ExitOK
+}
+
+// Schluessel is an owner's key something on the box waits for (homes#362):
+// its name, what the template tells the owner, and its form on the box page.
+type Schluessel struct {
+	Name    string `json:"name"`
+	Dienst  string `json:"dienst,omitempty"`
+	Label   string `json:"label"`
+	Warum   string `json:"warum,omitempty"`
+	Hilfe   string `json:"hilfe,omitempty"`
+	Link    string `json:"link"`
+	Aufgabe int    `json:"aufgabe,omitempty"` // an open task that waits for it
+}
+
+// keyWeg: a task whose way is a key names an owner's key, and closes
+// itself once that key is set (homes#362).
+func keyWeg(st *state.State, a *aufgaben.Aufgabe) error {
+	k := a.Weg.Schluessel
+	if k != "" && !slices.ContainsFunc(render.OwnerSecrets(st), func(o render.OwnerSecret) bool { return o.Name == k }) {
+		return errors.New(k + " ist kein Schlüssel, den der Besitzer auf der Box-Seite einträgt")
+	} else if k != "" {
+		a.FertigWenn = cmp.Or(a.FertigWenn, "schluessel "+k)
+	}
+	return nil
+}
+
+// closes: what add says about who checks the task off.
+func closes(st *state.State, fertigWenn string) string {
+	k, key := strings.CutPrefix(fertigWenn, "schluessel ")
+	switch {
+	case key:
+		return ". Laib hakt sie selbst ab, sobald der Schlüssel eingetragen ist: " + render.KeyLink(st, k)
+	case fertigWenn != "" && aufgaben.ClosesItself(fertigWenn):
+		return fmt.Sprintf(". Laib hakt sie selbst ab, wenn der Befund %s weg ist.", fertigWenn)
+	case fertigWenn != "":
+		return fmt.Sprintf(". Laib hakt sie nicht selbst ab: %s misst nicht bei jedem diag, abhaken tut ein Mensch.", fertigWenn)
+	}
+	return ""
+}
+
+// linkKeys fills in each key way's form on the box page.
+func linkKeys(st *state.State, list []aufgaben.Aufgabe) {
+	for _, a := range list {
+		if a.Weg != nil && a.Weg.Schluessel != "" {
+			a.Weg.Link = render.KeyLink(st, a.Weg.Schluessel)
+		}
+	}
+}
+
+// missingKeys: the keys diag's schluessel probe finds missing, never a
+// value; nil (JSON null) when secrets.age cannot be read, [] for none.
+func missingKeys(env *cliEnv, st *state.State, tasks []aufgaben.Aufgabe) []Schluessel {
+	sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key)
+	if err != nil {
+		return nil
+	}
+	out := []Schluessel{}
+	for _, k := range diag.MissingKeys(st, sec) {
+		i := slices.IndexFunc(tasks, func(a aufgaben.Aufgabe) bool { return a.Open() && a.FertigWenn == "schluessel "+k.Name })
+		s := Schluessel{Name: k.Name, Dienst: k.Service, Label: k.Owner.Label, Warum: k.Owner.Warum, Hilfe: k.Owner.Hilfe, Link: render.KeyLink(st, k.Name)}
+		if i >= 0 {
+			s.Aufgabe = tasks[i].ID
+		}
+		out = append(out, s)
+	}
+	return out
 }

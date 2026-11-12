@@ -206,7 +206,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_module` | `action` (`aus`), `liste?` (the modules with commas, `podcasts,energie`; empty: every module whose service runs), `grund?` (one sentence for the family, at most 200 characters, the proposal's reason; empty: laib names the modules) → `{proposal, class, message}`; the proposal waits in the Inbox, the dial never approves it (#1036) |
 | `laib_zuhause` | `action` (`show`, `set`); for set `street?`, `postcode?`, `city?`, `country?` (two letters, `DE`), `latitude?` + `longitude?` (degrees as strings, `"52.1234"`, together or not at all), `elevation?` (whole metres) — the whole block, what is left out is removed. show → `{street?, postcode?, city?, country?, latitude?, longitude?, elevation?}` (numbers as JSON numbers; `{}` when unset); set → `{proposal, message}`, a class-human proposal whose reason carries no address; the address applies once a human approves it (#561). The homes hand calls it from the admins' form, by its verb and its path grant `zuhause` (#598); Laib never geocodes: coordinates come from the form (a map pin, or a lookup the person starts knowingly) |
 | `laib_scan` | `action` (`status`, `start`, `weiter`, `abschliessen`, `verwerfen`, `redo`, `suchen`, `pruefen`, `probe`, `einrichten`), `geraet?` (einrichten: a SANE device; the answer is `{proposal, class, message}`), `person?` (whom the closing message is for; empty: `notify.person`), `stapel?` (redo: `JJJJ-MM-TTThh-mm-ss`) → status: the service's status file as it is (templates/scan/README.md); otherwise `{message}`. Tier propose: the homes hand by its verbs, the Bote by its ceiling (#568) |
-| `laib_aufgabe` | `action` (`list`, `zeigen`, `add`, `erledigt`, `zurueckstellen`); add: `titel`, `warum?`, `erinnern?` (`JJJJ-MM-TT`), `fertig_wenn?` (`<probe> [<service or topic>]` from `laib_diag`, e.g. `raid`, `watchdog`, `backup offsite`; `befund?` is its old name), `fuer?` (`admins`, the default; `alle`; `person:<login>`), `weg?` (a Homes path such as `/stimme`, or `gespraech`); zeigen, erledigt: `id`; zurueckstellen: `id`, `erinnern`; `von?` (Homes and the Bote: the login of the person they act for; Homes's changes are recorded as `homes:<login>`); list: `alle?`, `faellig?` (booleans). list → `{offen, faellig, aufgaben: [task]}`; the others → `{message, aufgabe: task}`; task: see "Box-Aufgaben for Homes" below. Tier propose; add for ops, claude, homes, humans and haushalt (the Bote's wish, `von` the caller it names, #883), erledigt and zurueckstellen for humans, claude and homes, list and zeigen for every hand with the verb; Homes needs `aufgabe` in its verbs (#667) |
+| `laib_aufgabe` | `action` (`list`, `zeigen`, `add`, `erledigt`, `zurueckstellen`); add: `titel`, `warum?`, `erinnern?` (`JJJJ-MM-TT`), `fertig_wenn?` (`<probe> [<service or topic>]` from `laib_diag`, e.g. `raid`, `watchdog`, `backup offsite`; `befund?` is its old name), `fuer?` (`admins`, the default; `alle`; `person:<login>`), `weg?` (a Homes path such as `/stimme`, `gespraech`, or `schluessel:<NAME>`, an owner's key: closes itself once the key is set); zeigen, erledigt: `id`; zurueckstellen: `id`, `erinnern`; `von?` (Homes and the Bote: the login of the person they act for; Homes's changes are recorded as `homes:<login>`); list: `alle?`, `faellig?` (booleans). list → `{offen, faellig, aufgaben: [task], schluessel: [key] | null}`; the others → `{message, aufgabe: task}`; task: see "Box-Aufgaben for Homes" below. Tier propose; add for ops, claude, homes, humans and haushalt (the Bote's wish, `von` the caller it names, #883), erledigt and zurueckstellen for humans, claude and homes, list and zeigen for every hand with the verb; Homes needs `aufgabe` in its verbs (#667) |
 | `laib_session` | `args`: the session's name → `{token, id, hand, expires}`: only for a hand with `session:` in policy.yml (the Werkstatt, #380) |
 | `laib_apply` | `proposal` — for the ops hand only its own open proposal, inside the envelope (#286, ADR 0019 amendment) |
 
@@ -326,12 +326,37 @@ A task, as `list` and `zeigen` return it:
 - `weg` is missing, `{"seite": "<path>"}` (a Homes page that leads through
   it), or `{"gespraech": true}` (Homes offers „Gemeinsam mit Homes“ and
   opens the Bote with „Aufgabe #7 mit dir erledigen“, below).
+- `weg` may also be `{"schluessel": "<NAME>", "link": "https://<laib host>/schluessel?name=<NAME>"}`
+  (homes#362): Homes links the form, appending its own `&zurueck=…`; its
+  `fertig_wenn` is `schluessel <NAME>`, and diag ticks it off once the
+  key is set.
 - `fertig_wenn` is missing or the finding that closes the task by itself;
   `erledigt` is missing while it is open. `erledigt.von` is `laib` when
   diag closed it (`wie`: „Befund weg“), `homes:<login>` when Homes ticked
   it off for someone.
 - `befund`, the key before #878, is no longer in the answer; `befund` is
   still taken as an argument.
+
+**The keys the box waits for (homes#362).** `list` also answers
+`schluessel`: the owner's keys that are not set while something on the box
+needs them (diag's `schluessel` probe: a set value `requires:` it, or the
+DNS-01 token); an optional key nobody waits for is not there (owner,
+2026-11-12). Never a value. `null` when Laib cannot read secrets.age (not
+measured), `[]` when none is missing. Each:
+
+```json
+{"name": "DOKUMENTE_MAIL_PASSWORD_ANNA", "dienst": "archiv-anna",
+ "label": "Dokumenten-Mails im Archiv: Passwort des Dokumenten-Postfachs",
+ "warum": "…", "hilfe": "…",
+ "link": "https://laib.example.de/schluessel?name=DOKUMENTE_MAIL_PASSWORD_ANNA",
+ "aufgabe": 12}
+```
+
+`dienst` is missing for a key no template asks for (box.yml's model key);
+`aufgabe` is an open task the caller sees whose `fertig_wenn` is this key,
+so Homes shows one row, not two. The same for every caller: Homes shows
+them to admins, as the `admins` tasks. A key leaves the list at the next
+`list` after it is set.
 
 **Who sees what.** Homes calls with `von`: the login of the person who is
 looking. The kernel answers with the tasks for `admins`, for `alle` and

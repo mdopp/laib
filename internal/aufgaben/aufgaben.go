@@ -46,11 +46,14 @@ type Aufgabe struct {
 	Erledigt   *Erledigt `yaml:"erledigt,omitempty" json:"erledigt,omitempty"`
 }
 
-// Weg is how a task is done (#878): a Homes page that leads through it, or
-// a conversation with the Bote; one of the two.
+// Weg is how a task is done (#878): a Homes page that leads through it, a
+// conversation with the Bote, or an owner's key on Laib's form (homes#362),
+// whose Link the list fills in; one of the three.
 type Weg struct {
-	Seite     string `yaml:"seite,omitempty" json:"seite,omitempty"`
-	Gespraech bool   `yaml:"gespraech,omitempty" json:"gespraech,omitempty"`
+	Seite      string `yaml:"seite,omitempty" json:"seite,omitempty"`
+	Gespraech  bool   `yaml:"gespraech,omitempty" json:"gespraech,omitempty"`
+	Schluessel string `yaml:"schluessel,omitempty" json:"schluessel,omitempty"`
+	Link       string `yaml:"-" json:"link,omitempty"`
 }
 
 // Who a task is for (#878); a person's is "person:<uid>".
@@ -62,6 +65,7 @@ const (
 var (
 	fuerRe  = regexp.MustCompile(`^person:[a-z0-9][a-z0-9._-]{0,63}$`)
 	seiteRe = regexp.MustCompile(`^/[a-z0-9][a-z0-9/_-]{0,63}$`)
+	keyRe   = regexp.MustCompile(`^schluessel:([A-Z][A-Z0-9_]{0,63})$`)
 )
 
 // Fuer checks who a task is for.
@@ -72,15 +76,17 @@ func Fuer(s string) error {
 	return nil
 }
 
-// ParseWeg reads a weg: a Homes page's path, or gespraech.
+// ParseWeg reads a weg: a Homes page's path, gespraech, or schluessel:<NAME>.
 func ParseWeg(s string) (*Weg, error) {
-	switch {
+	switch m := keyRe.FindStringSubmatch(s); {
 	case s == "gespraech":
 		return &Weg{Gespraech: true}, nil
 	case seiteRe.MatchString(s):
 		return &Weg{Seite: s}, nil
+	case m != nil:
+		return &Weg{Schluessel: m[1]}, nil
 	}
-	return nil, fmt.Errorf("%q ist kein Weg: eine Seite von Homes (/stimme) oder gespraech (gemeinsam mit dem Boten)", s)
+	return nil, fmt.Errorf("%q ist kein Weg: eine Seite von Homes (/stimme), gespraech (gemeinsam mit dem Boten) oder schluessel:<NAME> (ein Schlüssel auf der Box-Seite)", s)
 }
 
 // Sees: may a caller see a task? whole: its hand sees the whole list;
@@ -100,10 +106,11 @@ func Sees(a Aufgabe, whole bool, person string) bool {
 // a finding it marks unmeasured, or no file, closes nothing.
 var Closable = []string{"watchdog", "backup", "recovery", "restore-test", "raid", "status"}
 
-// ClosesItself: does diag check a task with this fertig_wenn off?
+// ClosesItself: does diag check a task with this fertig_wenn off? A
+// "schluessel <NAME>" closes once the key is set (homes#362).
 func ClosesItself(fertigWenn string) bool {
 	probe, _, _ := strings.Cut(fertigWenn, " ")
-	return slices.Contains(Closable, probe)
+	return slices.Contains(Closable, probe) || probe == "schluessel"
 }
 
 // Erledigt: when and by whom; Wie says how, when it was not a person's tick.
@@ -119,7 +126,7 @@ func (a Aufgabe) Open() bool { return a.Erledigt == nil }
 // Due: open, and its reminder day has come.
 func (a Aufgabe) Due(today string) bool { return a.Open() && a.Erinnern != "" && a.Erinnern <= today }
 
-var befundRe = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}( [a-z0-9][a-z0-9._-]{0,63})?$`)
+var befundRe = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}( [A-Za-z0-9][A-Za-z0-9._-]{0,63})?$`) // a key's topic is its NAME
 
 // Day checks a YYYY-MM-DD date.
 func Day(s string) error {

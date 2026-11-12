@@ -10,6 +10,7 @@ import (
 	"github.com/mdopp/laib/internal/aufgaben"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/secrets"
 	"github.com/mdopp/laib/internal/state"
 )
 
@@ -80,10 +81,22 @@ func unmeasuredStatus(st *state.State, fs []Finding) []Finding {
 	return fs
 }
 
+// unsetKeys: fs and, for each task waiting on a key (homes#362), a finding
+// while that key is not set; all of them unmeasured when secrets.age cannot be read.
+func unsetKeys(fs []Finding, tasks []aufgaben.Aufgabe, sec map[string]string, err error) []Finding {
+	for _, a := range tasks {
+		if p, name, _ := strings.Cut(a.FertigWenn, " "); p == "schluessel" && (err != nil || sec[name] == "") {
+			fs = append(fs, Finding{Probe: p, Topic: name, Unmeasured: err != nil})
+		}
+	}
+	return fs
+}
+
 // closeGone checks off what gone finds, as laib, one journal line each.
 func closeGone(env *cli.Env, st *state.State, fs []Finding) {
 	tasks, err := aufgaben.Load(st.Dir)
-	ids := gone(unmeasuredStatus(st, slices.Clip(fs)), tasks)
+	sec, serr := secrets.Load(env.Paths.Secrets, env.Paths.Key)
+	ids := gone(unsetKeys(unmeasuredStatus(st, slices.Clip(fs)), tasks, sec, serr), tasks)
 	if err != nil || len(ids) == 0 {
 		return
 	}
