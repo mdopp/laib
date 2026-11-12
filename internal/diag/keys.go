@@ -13,6 +13,18 @@ import (
 // only the app knows (Homes' Discogs) Laib cannot tell: no finding, no nag.
 func keyFindings(st *state.State, sec map[string]string) []Finding {
 	var out []Finding
+	for _, k := range MissingKeys(st, sec) {
+		out = append(out, Finding{Severity: "gelb", Probe: "schluessel", Service: k.Service, Topic: k.Name,
+			Detail: k.Owner.Label + " fehlt: " + k.Owner.Warum, Fix: "Schlüssel hinterlegen: " + render.KeyLink(st, k.Name)})
+	}
+	return out
+}
+
+// MissingKeys: the owner's keys that are not set while something on the
+// box waits for them; an optional one nobody waits for is not among them
+// (homes#362, owner 2026-11-12). Names and labels, never a value.
+func MissingKeys(st *state.State, sec map[string]string) []render.OwnerSecret {
+	var out []render.OwnerSecret
 	for _, k := range render.OwnerSecrets(st) {
 		inUse := k.Name == st.Box.DNS.SecretRef && st.Box.DNS.Provider != "" && st.Box.TLS != "internal"
 		for _, svc := range st.Services {
@@ -21,8 +33,7 @@ func keyFindings(st *state.State, sec map[string]string) []Finding {
 			}
 		}
 		if inUse && sec[k.Name] == "" {
-			out = append(out, Finding{Severity: "gelb", Probe: "schluessel", Service: k.Service, Topic: k.Name,
-				Detail: k.Owner.Label + " fehlt: " + k.Owner.Warum, Fix: "Schlüssel hinterlegen: " + render.KeyLink(st, k.Name)})
+			out = append(out, k)
 		}
 	}
 	return out

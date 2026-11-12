@@ -836,7 +836,7 @@ aufgaben:
     seit: "2026-10-28"
     von: homes:mdopp
     fuer: person:anna
-    weg: {seite: /stimme}         # or {gespraech: true}: with the Bote (#878)
+    weg: {seite: /stimme}         # or {gespraech: true}: with the Bote (#878); or {schluessel: NAME}: a key's form (homes#362)
   - id: 1
     titel: TOTP für mdopp prüfen
     seit: "2026-10-25"
@@ -856,7 +856,12 @@ aufgaben:
 - **The guided way (#878).** `weg` is a Homes page that leads through it
   (`seite`, a path) or a conversation with the Bote (`gespraech: true`):
   Homes offers „Gemeinsam mit Homes“, which opens a conversation with
-  „Aufgabe #N mit dir erledigen“ (templates/bote/README.md).
+  „Aufgabe #N mit dir erledigen“ (templates/bote/README.md). Or an
+  owner's key (`schluessel`, `--weg schluessel:<NAME>`, homes#362): the
+  name of a key a template marks `owner:`; the list adds its form's
+  `link` on the box page, and the task's `fertig_wenn` is `schluessel
+  <NAME>` unless given: the next full diag ticks it off once the key is in
+  secrets.age (none while secrets.age cannot be read).
 - An aufgaben.yml from before loads unchanged: a missing `fuer` is
   `admins`, the old key `befund` is `fertig_wenn`; the next change writes
   both under their new names.
