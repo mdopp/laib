@@ -95,10 +95,28 @@ pre-start therefore writes Laib's own sentences, a file Laib owns whole,
   the artist a wildcard.
 
 `packages/laib_medien.yaml` answers them with an `intent_script`: Music
-Assistant's `play_media` (radio by name, artist by name) on Music
-Assistant's player in the satellite's area, else the one named like the
-area (`media_player.wohnzimmer_2` for the Wohnzimmer), else none, and then
-the answer says „Ich finde hier keinen Lautsprecher.“ When pre-start
+Assistant's `play_media` (radio by name, artist by name) on the room's
+**standard speaker** first, else Music Assistant's player in the
+satellite's area, else the one named like the area
+(`media_player.wohnzimmer_2` for the Wohnzimmer), else none, and then the
+answer says „Ich finde hier keinen Lautsprecher.“
+
+The standard speaker (owner 2026-11-12) is Home Assistant's label
+**„Standard-Lautsprecher“** on a Music Assistant player in the satellite's
+area (`label_entities` ∩ Music Assistant's players ∩ `area_entities`).
+It lives in Home Assistant, where anyone can see and change it
+(ADR 0017): Homes' Geräte page sets it per room for the admins (the label,
+made once, moved from the room's other players; a Music Assistant player
+with no area gets the room's), and Einstellungen → Bereiche, Labels does
+the same by hand. A label on a player Music Assistant does not play is
+not taken: `music_assistant.play_media` could not play there. Only the
+music moves: the satellite's answer („Ich spiele Einslive.“) and its
+timers stay on the satellite. An automation that mutes the speaker while
+the satellite listens (a soundbar beside a Voice PE) does not get in the
+way: the intent runs after the satellite stopped listening, when such an
+automation lifts the mute, and a mute never stops what plays, so even a
+late unmute only lets the first second be silent. Not measured: that the
+station plays, and that a box's own mute automation lifts on that state. When pre-start
 changed either file it leaves `.laib-sentences-changed`; post-deploy then
 reloads conversation and intent_script once, or restarts Home Assistant
 when intent_script was not set up at its start. The check counts the two

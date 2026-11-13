@@ -243,3 +243,10 @@ Und einen Admin einladen darf nur ein Mensch.
 ### L-44 Jeder Tipp antwortet sofort
 Wenn jemand auf der Box-Seite einen Knopf tippt,
 Dann endet es sichtbar, wo es begann: fertig, rot mit Grund und nächstem Schritt, oder wartend mit Grenze.
+
+## Haus
+
+### L-45 Musik per Sprache läuft auf dem Standard-Lautsprecher des Raums
+Wenn in einem Raum ein Standard-Lautsprecher gewählt ist und jemand dort „Spiele Einslive“ oder „Spiele Musik von Queen“ sagt,
+Dann läuft die Musik auf diesem Lautsprecher, und die Antwort kommt weiter vom Sprachgerät.
+Und ohne gewählten Standard spielt sie wie bisher auf dem Lautsprecher im Raum.
