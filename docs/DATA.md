@@ -84,6 +84,7 @@ laib.yml) belong to whichever account the owner made them in; the
 | media, audiobookshelf, music-assistant | per person (LDAP / OIDC / via HA) | no, per-person progress | admin keys read every person's progress | none |
 | usage-metrics | none | counts, no who; unanswered sentences 30 days | root: all | none |
 | kalender | none of its own (service account) | mirrors into the person's own read-only books | root: the subscription addresses | none |
+| abstimmung (registry mdopp/abstimmung) | none: invited guests from outside, one cookie id per browser | only the names of who took part, after voting; never another's choice | root: the votes file | none |
 
 ## Per service
 
@@ -658,6 +659,24 @@ person asked. Reached only from inside the box with
 
 No `private:`. A test page behind the family login; keeps no data.
 
+### abstimmung
+
+No `private:`. Not a built-in template: the registry `mdopp/abstimmung`,
+a poll for invited guests from outside the household (who was a good
+person, who a good chancellor). It holds no data of the family and has no
+accounts. The route is public with `auth: none`; the app lets in only a
+browser that opened the invite link with the owner's word
+(`ABSTIMMUNG_EINLADUNG`, the owner's key, entered on the box page), and
+marks it with a cookie: a random id, signed with that word.
+
+`${DATA_DIR}/abstimmung/stimmen.json` holds the votes by cookie id (where
+the guest put each of ten chancellors) and, if the guest typed one, a name
+of their own choosing, at most 40 characters. No login, address, mail or
+time is kept. A guest sees the summed result and the names of who took
+part only after voting, never who voted for what (flow 28). Root and the
+backup read the file, where a name stands beside its vote. The service
+holds no key to another service and calls nothing; nothing leaves the box.
+
 ## Where data crosses from one person to others
 
 Each line: what moves, from whom to whom, where in the code. Household
@@ -693,6 +712,7 @@ design and not listed again.
 | 25 | The photo on each household contact card (Homes' own address books only; never a person's `handy-kontakte` or archive; firms and faces Homes wrote aside) goes into the owner's Immich, one upload per photo hash, archived (out of the timeline), in one album Homes keeps; Immich's own face detection runs on it, Homes runs no ML. When its one face lands in an unnamed Immich person, Homes' „Wer ist das?“ offers that contact's name, and only the owner's tap names the person. A changed photo replaces the upload, a photo on no card any more deletes it. **Owner-decided 2026-11-11**, accepting that faces of people outside the family then live in the owner's Immich. | household book → owner's Immich (and its face recognition) | homes internal/gesichter/kontaktfotos.go, internal/immich/immich.go `Album`, `InsAlbum`; internal/pages/kontakte_wer.go (homes#352) |
 | 26 | Which owner's keys are missing that something on the box waits for: the key's name, its service, the template's label, why and help text, and its form's link — never a value, never whether an optional key is set. Every hand with `aufgabe` reads it in `laib_aufgabe list` (homes#362); Homes shows it only to admins in „Deine Aufgaben“ | secrets.age's key names (set or not) → the admins' Homes view | laib cmd/laib/aufgabe.go `missingKeys`, internal/diag/keys.go `MissingKeys`; homes „Deine Aufgaben“ |
 | 27 | How many questions, suggestions and cleanup findings wait in a person's archive, and whether a key it waits for is missing: counts, a flag and the time they were counted, nothing else (owner 2026-11-12). Counted only while the vault is open, the last count kept outside it; Homes reads it with that person's archive secret and shows it only to that person | the person's archive → Homes (service) → that person; root on the box can read the file | archiv apps/archiv/aufgaben.go, intern.go `/intern/aufgaben`; homes „Deine Aufgaben“ (homes#362) |
+| 28 | The name an invited guest of the poll chose to type (optional; an anonymous vote otherwise) is shown as „Abgestimmt haben: …“; the votes only summed, never beside a name | an invited guest → the other invited guests who have voted | mdopp/abstimmung apps/abstimmung/vote.go (`teilnehmer`), web.go (`ergebnis`) |
 
 Not crossings, checked: location goes to the person's own Reitti with
 their own token (homes internal/napi/standort.go); phone backups go to
