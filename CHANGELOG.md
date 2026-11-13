@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.27.0](https://github.com/mdopp/laib/compare/v2.26.0...v2.27.0) (2026-11-13)
+
+
+### Features
+
+* **template:** voice music plays on the room's standard speaker ([#1206](https://github.com/mdopp/laib/issues/1206)) ([9764607](https://github.com/mdopp/laib/commit/9764607e047499f61d77f1511de9188201db7090))
+* **test:** Abläufe, numbered scenarios each named by a test ([#1202](https://github.com/mdopp/laib/issues/1202)) ([66ec1ed](https://github.com/mdopp/laib/commit/66ec1ed799fad854162096db773d62692dda9b9b))
+
 ## [2.26.0](https://github.com/mdopp/laib/compare/v2.25.0...v2.26.0) (2026-11-12)
 
 
