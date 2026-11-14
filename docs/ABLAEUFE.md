@@ -251,6 +251,12 @@ Wenn in einem Raum ein Standard-Lautsprecher gewählt ist und jemand dort „Spi
 Dann läuft die Musik auf diesem Lautsprecher, und die Antwort kommt weiter vom Sprachgerät.
 Und ohne gewählten Standard spielt sie wie bisher auf dem Lautsprecher im Raum.
 
+### L-47 Wer den Lautsprecher aus Versehen weckt, hört nur einen kurzen Ton statt einer langen Antwort
+Wenn der Lautsprecher auf ein Gespräch am Tisch oder den Fernseher hin aufwacht und nichts hört, das an ihn gerichtet ist,
+Dann sagt er nichts, sondern spielt nur einen kurzen, leisen Ton „düü-doow“.
+Und eine echte Frage, Bitte oder ein Befehl bekommt die Antwort wie bisher, auch wenn die Prüfung gerade nicht antwortet.
+Und auf der Box-Seite zählt dieses Aufwachen als „ohne Befehl“; was gesagt wurde, wird nirgends gespeichert.
+
 ## Drucken
 
 ### L-46 Jedes Gerät im Heimnetz findet den Drucker ohne App; von außen ist er nicht erreichbar

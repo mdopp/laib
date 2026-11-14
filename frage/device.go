@@ -32,8 +32,7 @@ func device(q, system string) (answer string, ok bool) {
 	if heard == "" {
 		return "Welches Gerät meinst du?", true
 	}
-	_, list, found := strings.Cut(system, "\nGeräte:")
-	list, _, _ = strings.Cut(list, "\n")
+	list, found := promptLine(system, "Geräte")
 	for _, n := range strings.Split(list, ";") {
 		// every word of the name in what was heard, or one letter apart (Whisper's „Sofa-Dicht“)
 		if n = strings.TrimSpace(n); found && n != "" && len(near) < 2 && (contains(key(heard), n) || oneOff(key(heard), key(n))) {
@@ -44,6 +43,13 @@ func device(q, system string) (answer string, ok bool) {
 		return "„" + heard + "“ habe ich nicht gefunden: welches Gerät meinst du?", true
 	}
 	return "„" + heard + "“ kenne ich nicht. Meinst du " + strings.Join(near, " oder ") + "?", true
+}
+
+// promptLine is the line „name: …“ of HA's prompt (post-deploy's FRAGE_PROMPT), and whether it is there.
+func promptLine(system, name string) (string, bool) {
+	_, v, ok := strings.Cut(system, "\n"+name+":")
+	v, _, _ = strings.Cut(v, "\n")
+	return strings.TrimSpace(v), ok
 }
 
 func contains(heard, name string) bool {

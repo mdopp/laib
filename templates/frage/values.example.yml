@@ -3,3 +3,6 @@ SEARX_IMAGE: docker.io/searxng/searxng:latest
 MODEL_NAME: qwen3.6-35b-a3b
 SEARX_SECRET: !secret SEARX_SECRET
 CHECK_IMAGE: docker.io/library/python:3.13-alpine    # frage-check.py, the standard library only (#785)
+HA_URL: http://host.containers.internal:8123       # Home Assistant: the tone on the satellite for a wake nobody meant
+HA_TOKEN: !secret FRAGE_HA_TOKEN                   # minted by home-assistant's post-deploy: the non-admin user frage
+WAKES_ADDR: host.containers.internal:10302         # stimme-wakes: Frage's „ohne“, counted as a wake without a command

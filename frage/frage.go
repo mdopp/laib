@@ -28,6 +28,11 @@ type Config struct {
 	Language  string // de
 	Results   int    // how many hits go into the summary
 	Client    *http.Client
+	// a wake nobody meant (gate.go): the tone on the satellite through Home Assistant, the count in stimme-wakes
+	HAURL, HAToken string        // http://host.containers.internal:8123, FRAGE_HA_TOKEN (the HA user frage)
+	Tone           string        // the tone's media id, HA's /local/laib/falsch.wav (home-assistant's pre-start)
+	WakesAddr      string        // stimme-wakes' signal port, host.containers.internal:10302
+	ToneAfter      time.Duration // HA ends the run without speech first
 }
 
 // Hit is one search result the summary cites.
@@ -91,13 +96,19 @@ func (c Config) Summarise(ctx context.Context, q string, hits []Hit) (string, er
 		fmt.Fprintf(&b, "[%d] %s — %s\n%s\n\n", i+1, h.Title, h.URL, strings.TrimSpace(h.Content))
 	}
 	system := "Du beantwortest eine Frage aus dem Haushalt in zwei bis vier Sätzen, auf Deutsch, zum Vorlesen geeignet: keine Listen, keine Links, keine Fußnoten. Nutze nur die Treffer unten. Wenn sie die Frage nicht beantworten, sag das in einem Satz."
+	// thinking included: a loop never holds a llama slot past 4096 (#489)
+	return c.chat(ctx, system, "Frage: "+q+"\n\nTreffer:\n"+b.String(), 0.2, 4096)
+}
+
+// chat is one call to the model: its answer's text.
+func (c Config) chat(ctx context.Context, system, user string, temperature float64, maxTokens int) (string, error) {
 	body, _ := json.Marshal(map[string]any{
 		"model":       c.ModelName,
-		"temperature": 0.2,
-		"max_tokens":  4096, // thinking included: a loop never holds a llama slot past this (#489)
+		"temperature": temperature,
+		"max_tokens":  maxTokens,
 		"messages": []map[string]string{
 			{"role": "system", "content": system},
-			{"role": "user", "content": "Frage: " + q + "\n\nTreffer:\n" + b.String()},
+			{"role": "user", "content": user},
 		},
 	})
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.ModelURL, "/")+"/chat/completions", bytes.NewReader(body))
@@ -257,11 +268,17 @@ func Handler(c Config) http.Handler {
 	return mux
 }
 
-// spoken is Ask's answer, or a sentence about the failure: never silence on a speaker.
-// A device command HA's intents missed is answered without a search (#760).
+// spoken is Ask's answer, or a sentence about the failure: never silence on a speaker,
+// unless nobody spoke to it (gate.go: no words, a tone). A device command HA's intents
+// missed is answered without a search (#760).
 func (c Config) spoken(ctx context.Context, q, system string) string {
 	if text, ok := device(q, system); ok {
 		return text
+	}
+	if sat, _ := promptLine(system, "Satellit"); sat != "" && !c.addressed(ctx, q) {
+		fmt.Println("frage: nicht angesprochen: keine Antwort, ein Ton") // never the text: it was the household's talk
+		go c.overheard(sat)
+		return ""
 	}
 	a, err := c.Ask(ctx, q)
 	if err != nil {

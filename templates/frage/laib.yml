@@ -10,9 +10,15 @@ upstream: [https://github.com/searxng/searxng, https://docs.searxng.org/]   # wh
 # settings.yml before it starts (#490).
 # /search answers SearXNG's hits alone, no model: the Operator reads the
 # web through it (FRAGE_URL, #544, ADR 0025).
+# A wake nobody meant (frage/gate.go): no words, a tone on that satellite through
+# Home Assistant (FRAGE_HA_TOKEN), and „ohne“ to stimme-wakes (WAKES_ADDR).
+uses: [home-assistant, stimme]   # talks to both without after: (a box without them still loads, without the tone or the count)
 routes: []
 secrets:
   - name: SEARX_SECRET
+  - name: FRAGE_HA_TOKEN             # minted by home-assistant's post-deploy for HA's non-admin user frage: the tone on the satellite (assist_satellite.announce); without HA no tone
+    external: true
+    optional: true
 data:
   - path: ${DATA_DIR}/frage/searxng
   - path: ${DATA_DIR}/frage/check     # frage-check's status file (#785): made again by its timer

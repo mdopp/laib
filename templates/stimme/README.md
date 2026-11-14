@@ -66,6 +66,11 @@ transcription within 30 s of the last one is a follow-up, no wake. It counts
 per day in `stimme/micro/laib-wakes.json`; stimme-names writes „heute 2×
 geweckt, 2 ohne Befehl“ into the status line and the last days into
 `einzelheiten`. Nothing it hears is kept or printed, only counts.
+Frage judges the sentences that reach it as well (frage/gate.go): one nobody
+meant gets a tone instead of an answer, and Frage sends „ohne“ to
+stimme-wakes' second port, 10302 (0.0.0.0 for the frage pod, `lan: false`).
+The wake that transcript was, if it was the last one and less than 30 s ago,
+then counts as one without a command, once. Nothing of the text crosses.
 
 Until ADR 0030 Stimme trained the persona's own phrase („Hey Joshua“) and kept
 the household's recordings and false wakes for it. The trainer is gone; what it

@@ -24,6 +24,11 @@ func main() {
 		ModelName: env("MODEL_NAME", "qwen3.6-35b-a3b"),
 		Language:  env("FRAGE_LANGUAGE", "de"),
 		Results:   n,
+		HAURL:     env("HA_URL", "http://host.containers.internal:8123"),
+		HAToken:   os.Getenv("HA_TOKEN"),
+		Tone:      env("FRAGE_TONE", "/local/laib/falsch.wav"),
+		WakesAddr: env("WAKES_ADDR", "host.containers.internal:10302"),
+		ToneAfter: time.Second,
 	}
 	if c.ModelURL == "" {
 		log.Fatal("frage: MODEL_URL is required")

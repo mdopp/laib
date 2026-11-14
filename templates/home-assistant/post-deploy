@@ -13,6 +13,8 @@ then names the machine that switched, not whoever onboarded HA.
   MUSIC_ASSISTANT_HA_TOKEN  "Music Assistant", administrator (below)
   STIMME_HA_TOKEN        "Stimme", no administrator: the exposed names Whisper
                          hears (templates/stimme, stimme-names)
+  FRAGE_HA_TOKEN         "Frage", no administrator: the tone on the satellite
+                         for a wake nobody meant (templates/frage, frage/gate.go)
 
 HA mints a long-lived token only for the user of the session that asks, so
 each user has a homeassistant login with a generated password (HA_*_PASSWORD)
@@ -117,6 +119,7 @@ MACHINES = {
     "MUSIC_ASSISTANT_HA_TOKEN": ("laib: music-assistant", "music-assistant", "Music Assistant", True, "HA_MUSIC_ASSISTANT_PASSWORD"),  # MA reads HA's users (config/auth/list)
     "STIMME_HA_TOKEN": ("laib: stimme", "stimme", "Stimme", False, "HA_STIMME_PASSWORD"),  # the entity, area and floor registries: every user may list them
     "HA_NAMES_TOKEN": ("laib: namen", "laib-namen", "Laib-Namen", True, "HA_NAMES_PASSWORD"),  # #760: the spellings as aliases, entity_registry/update is admin-only
+    "FRAGE_HA_TOKEN": ("laib: frage", "frage", "Frage", False, "HA_FRAGE_PASSWORD"),  # the tone on a satellite: assist_satellite.announce, every user may
 }
 RETIRED = [tuple(w.split("=", 1)) for w in E.get("LAIB_SECRET_HA_RETIRED_TOKENS", "").split() if "=" in w]  # (secret, old token)
 RETIRED_AT_START = list(RETIRED)
@@ -517,20 +520,23 @@ NAMES_TOKEN = ""   # the user Laib-Namen's, once main() has it (#760)
 def main():
     global session, NAMES_TOKEN
     session = next((E["LAIB_SECRET_" + n] for n in ("HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "MUSIC_ASSISTANT_HA_TOKEN", "HA_TOKEN") if kind(E.get("LAIB_SECRET_" + n, "")) == "admin"), None)
-    for secret in ("HA_TOKEN", "HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "BOTE_HA_TOKEN", "STIMME_HA_TOKEN"):
+    for secret in ("HA_TOKEN", "HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "BOTE_HA_TOKEN", "STIMME_HA_TOKEN", "FRAGE_HA_TOKEN"):
         machine(secret)
     drop_legacy()
     NAMES_TOKEN = machine("HA_NAMES_TOKEN")[0]
-    print("home-assistant: tokens for the check, Homes, the Automat, the Bote, Stimme and the names work, each on its own user")
+    print("home-assistant: tokens for the check, Homes, the Automat, the Bote, Stimme, Frage and the names work, each on its own user")
 
 
 # Frage's prompt (#760): HA renders it as a template on every request, so its second line is the names of what
 # Assist switches as HA has them now; a device command HA's intents missed gets the nearest ones from Frage
 # („Meinst du „Sofalicht“?“). No LLM API on the agent: with one HA hands GetState and media to it, not its intents.
 SPOKEN = "['light', 'switch', 'fan', 'cover', 'climate', 'media_player', 'lock', 'vacuum', 'valve', 'scene']"
-FRAGE_PROMPT = ("Antworte kurz, auf Deutsch, zum Vorlesen.\n"
-                "Geräte: {{ states | selectattr('domain', 'in', " + SPOKEN + ") | map(attribute='name') | join('; ') }}")
-FRAGE_OLD_PROMPTS = ("Antworte kurz, auf Deutsch, zum Vorlesen.",)   # Laib's own before #760: replaced; any other is the owner's
+# Its third line is the asking satellite's device (HA's llm_context.device_id, empty when typed): Frage judges
+# whether it was meant, and plays its tone there when not (frage/gate.go).
+FRAGE_PROMPT_760 = ("Antworte kurz, auf Deutsch, zum Vorlesen.\n"
+                    "Geräte: {{ states | selectattr('domain', 'in', " + SPOKEN + ") | map(attribute='name') | join('; ') }}")
+FRAGE_PROMPT = FRAGE_PROMPT_760 + "\nSatellit: {{ llm_context.device_id or '' }}"
+FRAGE_OLD_PROMPTS = ("Antworte kurz, auf Deutsch, zum Vorlesen.", FRAGE_PROMPT_760)   # Laib's own before: replaced; any other is the owner's
 
 
 def frage_prompt(tok, entry_id, sub):
@@ -554,7 +560,7 @@ def frage_prompt(tok, entry_id, sub):
     st, done = call("POST", "/api/config/config_entries/subentries/flow/" + flow["flow_id"], dict(data, prompt=FRAGE_PROMPT), token=tok)
     if (done or {}).get("reason") != "reconfigure_successful":
         raise RuntimeError(f"Frage's prompt was refused: {(done or {}).get('reason') or (done or {}).get('errors') or st}")
-    print("home-assistant: Frage's prompt names the devices now (#760)")
+    print("home-assistant: Frage's prompt names the devices and the asking satellite now (#760)")
 
 
 def frage_agent():
