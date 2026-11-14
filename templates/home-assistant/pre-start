@@ -20,8 +20,12 @@ configuration.yaml is only ever added to.
    S0/S2 keys, and ServiceBay left copies of it next to it
    (settings.json.servicebay, .sb-bak-…). Each is 0600 for the store's
    owner, the user the zwave container runs as (its root, which is the
-   box's core); home-assistant-check names one that others can read."""
-import hashlib, io, json, os, re, shutil, sys, tarfile, urllib.request
+   box's core); home-assistant-check names one that others can read.
+5. The media sentences (#933).
+6. The tone for a wake nobody meant (owner 2026-11-14): www/laib/falsch.wav,
+   served at /local/laib/falsch.wav; Frage plays it on the satellite instead
+   of an answer (frage/gate.go). Computed, so every apply writes the same bytes."""
+import hashlib, io, json, math, os, re, shutil, struct, sys, tarfile, urllib.request, wave
 
 E = os.environ
 C = os.path.join(E["LAIB_DATA_DIR"], "home-assistant", "homeassistant")
@@ -30,12 +34,12 @@ INCLUDE = "packages: !include_dir_named packages"
 
 
 def write(path, text):
-    """only when it differs, so a second run changes nothing"""
-    path = os.path.join(C, path)
-    if os.path.exists(path) and open(path).read() == text:
+    """only when it differs, so a second run changes nothing; text or bytes"""
+    path, b = os.path.join(C, path), "b" if isinstance(text, bytes) else ""
+    if os.path.exists(path) and open(path, "r" + b).read() == text:
         return False
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path + ".tmp", "w") as f:
+    with open(path + ".tmp", "w" + b) as f:
         f.write(text)
     os.replace(path + ".tmp", path)
     return True
@@ -238,4 +242,23 @@ changed = write("packages/laib_medien.yaml", "# rendered by laib pre-start (temp
 if changed:
     write(".laib-sentences-changed", "")   # post-deploy reloads them once (#933)
     print("custom_sentences/de/laib_medien.yaml: " + (f"{len(names)} Sender" if names else "keine Sender auf der Freigabe") + ", Musik von …")
-print("home-assistant: family login (auth_oidc via Authelia), rest_command.mitteilung and the media sentences in place")
+
+
+def tone(rate=16000):
+    """„düü-doow“, 0.4 s, quiet: D5, then A4 falling to G4; a soft start and end, so it does not click"""
+    pcm = bytearray()
+    for f0, f1, sec in ((587.33, 587.33, 0.15), (440.0, 392.0, 0.25)):
+        n, phase = int(rate * sec), 0.0
+        for i in range(n):
+            phase += 2 * math.pi * (f0 + (f1 - f0) * i / n) / rate
+            pcm += struct.pack("<h", round(0.18 * 32767 * min(1, i / (0.01 * rate), (n - i) / (0.05 * rate)) * math.sin(phase)))
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        w.setnchannels(1), w.setsampwidth(2), w.setframerate(rate), w.writeframes(bytes(pcm))
+    return out.getvalue()
+
+
+# 6. the tone (HA serves www/ at /local/ when the folder is there at its start: pre-start runs before it)
+if write("www/laib/falsch.wav", tone()):
+    print("www/laib/falsch.wav: the tone for a wake nobody meant")
+print("home-assistant: family login (auth_oidc via Authelia), rest_command.mitteilung, the media sentences and the tone in place")

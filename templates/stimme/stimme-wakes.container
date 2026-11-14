@@ -11,6 +11,8 @@ Exec=/app/stimme-wakes.py
 Environment=TZ=${TZ}
 Environment=WAKES_LISTEN=127.0.0.1:10301
 Environment=WHISPER=127.0.0.1:10300
+# Frage's „ohne“ (a wake it answered with a tone): on every address for the frage pod, never the LAN (laib.yml)
+Environment=SIGNAL_LISTEN=0.0.0.0:10302
 # quoted: systemd splits an unquoted value at a space (#627)
 Environment="WAKE_PHRASE=Hey Mycroft"
 Volume=./stimme-wakes.py:/app/stimme-wakes.py:ro,z

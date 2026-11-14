@@ -36,6 +36,17 @@ whose agent is Frage gets `prefer_local_intents: true` (ADR 0015, #557):
 „Mach Bambi aus“ is HA's intent in about a second, not a web search. Without Frage the hook says so and stays green; `laib
 diag` lists „Frage als Gesprächsagent: fehlt“.
 
+**A wake nobody meant** (owner 2026-11-14). Frage's prompt has a third line,
+`Satellit: …`: HA renders the asking device into it when that device has an
+`assist_satellite` entity (`device_entities`), else nothing (typed, or the
+phone app's voice, which could hear no tone). Frage judges a sentence from a satellite
+(frage/gate.go); when nobody meant it, it answers no words (HA skips the
+speech for an empty answer) and calls `assist_satellite.announce` on that
+device with `media_id: /local/laib/falsch.wav`, `preannounce: false`, as the
+non-admin user `frage` (`FRAGE_HA_TOKEN`, minted here). pre-start writes the
+tone, a quiet falling „düü-doow“ of 0.4 s, computed, into `www/laib/`; HA
+serves `www/` at `/local/` only when the folder was there at its start.
+
 ## The assistant's Assist pipeline (#634)
 
 One Assist pipeline is Laib's, named after the assistant (box.yml

@@ -10,6 +10,10 @@ Environment=MODEL_URL=${MODEL_URL}
 Environment=MODEL_KEY=${MODEL_KEY}
 Environment=MODEL_NAME=${MODEL_NAME}
 Environment=FRAGE_LISTEN=0.0.0.0:8710
+# a wake nobody meant: the tone through Home Assistant, the count in stimme-wakes (frage/gate.go)
+Environment=HA_URL=${HA_URL}
+Environment=HA_TOKEN=${HA_TOKEN}
+Environment=WAKES_ADDR=${WAKES_ADDR}
 AutoUpdate=registry
 
 [Service]

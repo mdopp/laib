@@ -22,6 +22,11 @@ For each transcript:
   and question words HA's intents and Frage answer); anything else, an empty or a
   hallucinated transcript too, is a wake without a command.
 
+Frage judges the sentences that reach it too (frage/gate.go): one nobody meant gets a tone instead of an
+answer, and Frage says „ohne“ on SIGNAL_LISTEN (0.0.0.0:10302, for the frage pod; one line, nothing of the
+text). The wake that transcript was, the last one and within FOLLOWUP_SECONDS, then counts as one without a
+command, if it did not already.
+
 The counts per day go to /micro/laib-wakes.json, which stimme-names writes into Stimme's
 status line. Nothing it hears is kept or printed: no transcript, no audio, only counts. The
 standard library only.
@@ -95,6 +100,16 @@ class Wakes:
         self.last = {"at": now, "day": day, "ohne": ohne}
         self.count(day, geweckt=1, ohne=int(ohne))
         return "ohne" if ohne else "befehl"
+
+    def overheard(self) -> str:
+        """Frage's „ohne“: the last transcript, if it was a wake (no follow-up) a moment ago, had no command"""
+        prev = self.last
+        if not prev or prev["at"] != self.last_end or self.clock() - prev["at"] > self.followup:
+            return "keine Weckung dazu"
+        if not prev["ohne"]:
+            prev["ohne"] = True
+            self.count(prev["day"], ohne=1)
+        return "ohne"
 
     def count(self, day: str, geweckt: int = 0, ohne: int = 0) -> None:
         try:
@@ -179,6 +194,18 @@ def serve(wakes: Wakes, whisper: tuple):
     return handle
 
 
+def signals(wakes: Wakes):
+    async def handle(reader, writer):
+        try:
+            if (await asyncio.wait_for(reader.readline(), 5)).strip() == b"ohne":
+                print(f"stimme-wakes: Frage: {wakes.overheard()}", flush=True)
+        except (asyncio.TimeoutError, OSError, ValueError):
+            pass
+        finally:
+            writer.close()
+    return handle
+
+
 def hostport(s: str) -> tuple:
     host, _, port = s.rpartition(":")
     return host, int(port)
@@ -189,9 +216,10 @@ async def main() -> None:
     wakes = Wakes(pathlib.Path(e.get("MICRO", "/micro")), e["WAKE_PHRASE"])
     host, port = hostport(e.get("WAKES_LISTEN", "127.0.0.1:10301"))
     server = await asyncio.start_server(serve(wakes, hostport(e.get("WHISPER", "127.0.0.1:10300"))), host, port)
-    print(f"stimme-wakes: on {host}:{port}, Whisper behind it", flush=True)
-    async with server:
-        await server.serve_forever()
+    sig = await asyncio.start_server(signals(wakes), *hostport(e.get("SIGNAL_LISTEN", "0.0.0.0:10302")))
+    print(f"stimme-wakes: on {host}:{port}, Whisper behind it; Frage's signal on {e.get('SIGNAL_LISTEN', '0.0.0.0:10302')}", flush=True)
+    async with server, sig:
+        await asyncio.gather(server.serve_forever(), sig.serve_forever())
 
 
 if __name__ == "__main__":

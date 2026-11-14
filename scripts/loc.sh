@@ -84,7 +84,10 @@ door=$(wc -l < skills/laibskill.py)
 [ "$door" -le 275 ] || { echo "skills/laibskill.py has $door lines, the scripts' door is at most 275 (#839)"; bad=1; }
 # the programs that moved out of the kernel (#309): their size then, plus a quarter
 budget stick 1980 stick         # the laptop's install-stick builder, 1,468
-budget frage 440 frage          # "was ist …", 261
+# frage 540: the owner's request of 2026-11-14 („kein langes Blabla, sondern einfach einen Ton“): a wake
+# nobody meant is judged, answered with a tone and counted (frage/gate.go); frage at 413 before, about
+# 95 lines asked, the request counts as the owner's yes.
+budget frage 540 frage          # "was ist …", 261
 budget automat 660 automat      # the Bote's HA automations, 421
 budget directory 530 directory  # the Bote's directory (ADR 0030; the persona engine's cap was 990), 421
 budget mcpserver 220 mcpserver  # the Bote's tools' MCP server, 111

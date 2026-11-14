@@ -21,10 +21,11 @@ ADMIN_SECRETS = ("HA_TOKEN", "HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN")
 MACHINES = {"HA_TOKEN": ("laib-pruefung", "user"), "HOMES_HA_TOKEN": ("homes", "admin"),
             "BOTE_AUTOMAT_HA_TOKEN": ("bote-automat", "admin"), "BOTE_HA_TOKEN": ("bote", "user"),
             "STIMME_HA_TOKEN": ("stimme", "user"),   # the names Whisper hears: the entity registry, every user may list it
-            "HA_NAMES_TOKEN": ("laib-namen", "admin")}   # #760: the spellings Whisper writes, as aliases: entity_registry/update is admin-only
+            "HA_NAMES_TOKEN": ("laib-namen", "admin"),   # #760: the spellings Whisper writes, as aliases: entity_registry/update is admin-only
+            "FRAGE_HA_TOKEN": ("frage", "user")}   # the tone on a satellite: assist_satellite.announce, every user may
 PASSWORDS = {"HA_CHECK_PASSWORD": "-ha-check-pw-1a", "HA_HOMES_PASSWORD": "-ha-homes-pw-2b", "HA_BOTE_AUTOMAT_PASSWORD": "-ha-automat-pw-4c",
              "HA_MUSIC_ASSISTANT_PASSWORD": "-ha-ma-pw-5d", "HA_STIMME_PASSWORD": "-ha-stimme-pw-6e",
-             "HA_NAMES_PASSWORD": "-ha-names-pw-7f"}
+             "HA_NAMES_PASSWORD": "-ha-names-pw-7f", "HA_FRAGE_PASSWORD": "-ha-frage-pw-8g"}
 HA = {}
 MA = {}
 
@@ -640,10 +641,10 @@ class PostDeploy(Hook):
         self.assertEqual(HA["core"].get("time_zone"), "Europe/Berlin")
         self.assertEqual(set(handed), set(MACHINES))
         self.assertOnItsOwnUser(handed)
-        self.assertEqual(len({handed[n] for n in handed}), 6, "one token per consumer, each revocable on its own")
+        self.assertEqual(len({handed[n] for n in handed}), 7, "one token per consumer, each revocable on its own")
         laib = HA["creds"]["laib"][1]
         self.assertFalse([n for t, n in HA["names"].items() if n[0] == laib], "a consumer's token on the administrator's own user (#591)")
-        self.assertEqual({HA["users"][i]["name"] for _, i in HA["creds"].values()}, {"Laib", "Laib-Prüfung", "Homes", "Bote-Automat", "Bote", "Stimme", "Laib-Namen"})
+        self.assertEqual({HA["users"][i]["name"] for _, i in HA["creds"].values()}, {"Laib", "Laib-Prüfung", "Homes", "Bote-Automat", "Bote", "Stimme", "Frage", "Laib-Namen"})
         bote = HA["tokens"][handed["BOTE_HA_TOKEN"]]
         self.assertEqual(self.kind(handed["BOTE_HA_TOKEN"]), "user", "the Bote's token must not be an administrator's")
         self.assertEqual((username(bote), HA["users"][bote]["group_ids"]), ("bote", ["system-users"]))
@@ -730,7 +731,7 @@ class PostDeploy(Hook):
         owner, old = old_box()
         p, handed, log = self.run_hook(tokens=old)
         self.assertEqual(p.returncode, 0, log)
-        self.assertEqual(set(handed), {"HA_TOKEN", "HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "STIMME_HA_TOKEN", "HA_NAMES_TOKEN", "HA_RETIRED_TOKENS"}, log)
+        self.assertEqual(set(handed), {"HA_TOKEN", "HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "STIMME_HA_TOKEN", "HA_NAMES_TOKEN", "FRAGE_HA_TOKEN", "HA_RETIRED_TOKENS"}, log)
         self.assertOnItsOwnUser(handed)
         for name, tok in old.items():
             self.assertIn(tok, HA["tokens"], f"the old {name} revoked before its consumer had the new one")
@@ -782,7 +783,7 @@ class PostDeploy(Hook):
             self.assertNotIn("Homes“", log, "Laib's own users listed as strangers")
             self.assertNotIn(secret, log)
             self.assertNotIn("k-" + secret, log)
-        self.assertEqual(len(HA["users"]), users + 5, "a user deleted, or more than Laib-Prüfung, Homes, Bote-Automat, Stimme and Laib-Namen added")
+        self.assertEqual(len(HA["users"]), users + 6, "a user deleted, or more than Laib-Prüfung, Homes, Bote-Automat, Stimme, Frage and Laib-Namen added")
         self.assertIn(secret, HA["tokens"])
 
     def test_a_rotation_changes_the_admin_password_in_home_assistant_and_hands_it_back(self):
@@ -915,6 +916,24 @@ class FrageAgent(Hook):
         p, _, log = self.run_hook(tokens=handed, frage=self.url, data_dir=self.tmp.name)
         self.assertNotIn("sf2", HA["flows"], "reconfigured again although the prompt is set")
         self.assertIn("conversation agent Frage is there", log)
+
+    # Ablauf L-47
+    def test_the_prompt_of_760_learns_the_asking_satellite(self):
+        # Frage judges only a sentence from a satellite and plays its tone there: HA renders the
+        # device into the prompt's third line (llm_context.device_id, empty when typed)
+        fresh()
+        self.agent_on_disk("Antworte kurz, auf Deutsch, zum Vorlesen.\n"
+                           "Geräte: {{ states | selectattr('domain', 'in', ['light', 'switch', 'fan', 'cover', 'climate', 'media_player', "
+                           "'lock', 'vacuum', 'valve', 'scene']) | map(attribute='name') | join('; ') }}")
+        p, handed, log = self.run_hook(frage=self.url, data_dir=self.tmp.name)
+        self.assertEqual(p.returncode, 0, log)
+        prompt = HA["subentries"]["e-f"][0]["data"]["prompt"]
+        line = prompt.rsplit("\n", 1)[1]
+        self.assertTrue(line.startswith("Satellit: {% set d = llm_context.device_id %}"), prompt)
+        # a phone's voice request carries a device too, but no satellite: no gate there, it could hear no tone
+        self.assertIn("device_entities(d) | select('match', 'assist_satellite[.]')", line)
+        self.assertTrue(line.endswith("else '' }}"), line)
+        self.assertIn("Geräte: {{ states", prompt)
 
     def test_an_owners_own_prompt_stays(self):
         fresh()

@@ -73,6 +73,27 @@ class Judge(unittest.TestCase):
         self.heard("Fehlalarm", later=3600)
         self.assertEqual(self.today(), {"geweckt": 2, "ohne": 0})
 
+    # Ablauf L-47
+    def test_frage_marks_the_wake_it_answered_with_a_tone(self):
+        self.assertEqual(self.heard("Was macht der denn da?"), "befehl", "starts with a question word: counted addressed")
+        self.clock.t += 3
+        self.assertEqual(self.w.overheard(), "ohne")
+        self.assertEqual(self.today(), {"geweckt": 1, "ohne": 1})
+        self.assertEqual(self.w.overheard(), "ohne")
+        self.assertEqual(self.today(), {"geweckt": 1, "ohne": 1}, "a wake counts once")
+        self.heard("Auch ein netter Schlaffler.")    # counted without a command already
+        self.w.overheard()
+        self.assertEqual(self.today(), {"geweckt": 2, "ohne": 2})
+
+    def test_frage_marks_no_follow_up_and_nothing_late(self):
+        self.heard("Mach das Licht an")
+        self.heard("Und noch was", later=8)       # a follow-up: the wake before stays a command
+        self.assertEqual(self.w.overheard(), "keine Weckung dazu")
+        self.heard("Wie spät ist es")
+        self.clock.t += 600
+        self.assertEqual(self.w.overheard(), "keine Weckung dazu")
+        self.assertEqual(self.today(), {"geweckt": 2, "ohne": 0})
+
     def test_the_days_are_kept_two_weeks(self):
         for _ in range(20):
             self.heard("Mach das Licht an", later=86400)
@@ -122,6 +143,29 @@ class Forward(unittest.TestCase):
         self.assertEqual(json.loads((d / "micro" / "laib-wakes.json").read_text())["tage"].popitem()[1], {"geweckt": 1, "ohne": 1})
         self.assertNotIn("Wiedersehen", out.getvalue(), "what the household said is never printed")
 
+    # Ablauf L-47
+    def test_frages_signal_is_one_line_and_nothing_else(self):
+        d = Path(tempfile.mkdtemp())
+        (d / "micro").mkdir()
+        w = wakes.Wakes(d / "micro", "Hey Mycroft")
+        w.heard("Was macht der denn da?")
+
+        async def run():
+            sig = await asyncio.start_server(wakes.signals(w), "127.0.0.1", 0)
+            for line in (b"irgendwas\n", b"ohne\n"):
+                r, wr = await asyncio.open_connection(*sig.sockets[0].getsockname()[:2])
+                wr.write(line)
+                await wr.drain()
+                await asyncio.wait_for(r.read(), 5)   # the server closes once it read the line
+                wr.close()
+            sig.close()
+
+        out = io.StringIO()
+        with redirect_stdout(out):
+            asyncio.run(run())
+        self.assertEqual(json.loads((d / "micro" / "laib-wakes.json").read_text())["tage"].popitem()[1], {"geweckt": 1, "ohne": 1})
+        self.assertEqual(out.getvalue().strip(), "stimme-wakes: Frage: ohne")
+
     def test_an_event_it_cannot_read_is_still_forwarded(self):
         e = wakes.Events()
         with self.assertRaises(ValueError):
@@ -134,6 +178,8 @@ class Forward(unittest.TestCase):
         self.assertIn('Environment="WAKE_PHRASE=Hey Mycroft"', u)
         self.assertNotIn("/recordings", u, "no audio is kept")
         self.assertIn("{port: 10301, lan: false}", (T / "laib.yml").read_text())
+        self.assertIn("Environment=SIGNAL_LISTEN=0.0.0.0:10302", u, "Frage's pod reaches it at host.containers.internal")
+        self.assertIn("{port: 10302, lan: false}", (T / "laib.yml").read_text(), "never the LAN")
         self.assertNotIn("print(text", (T / "stimme-wakes.py").read_text())
 
 

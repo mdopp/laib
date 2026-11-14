@@ -97,6 +97,28 @@ class PreStart(unittest.TestCase):
         self.assertEqual((p.returncode, SERVED["hits"]), (0, hits), "the pinned archive was fetched again")
         self.assertEqual(before, {p: p.read_bytes() for p in self.c.rglob("*") if p.is_file()}, "a second run changed files")
 
+    # Ablauf L-47
+    def test_the_tone_for_a_wake_nobody_meant_is_short_quiet_and_falling(self):
+        import array, wave
+        p = self.run_hook()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        f = self.c / "www/laib/falsch.wav"   # HA serves it at /local/laib/falsch.wav, Frage's FRAGE_TONE
+        with wave.open(str(f)) as w:
+            self.assertEqual((w.getnchannels(), w.getsampwidth()), (1, 2))
+            rate, pcm = w.getframerate(), array.array("h", w.readframes(w.getnframes()))
+        self.assertAlmostEqual(len(pcm) / rate, 0.4, delta=0.05)
+        self.assertLess(max(map(abs, pcm)), 0.25 * 32767, "not quiet")
+        self.assertLess(max(abs(pcm[0]), abs(pcm[-1])), 300, "it clicks: no soft start or end")
+
+        def pitch(part):   # zero crossings per second, halved
+            return sum(1 for a, b in zip(part, part[1:]) if (a < 0) != (b < 0)) / (len(part) / rate) / 2
+        first, second = pitch(pcm[:int(0.15 * rate)]), pitch(pcm[int(0.15 * rate):])
+        self.assertGreater(first, second * 1.2, f"not a falling „düü-doow“: {first:.0f} Hz, then {second:.0f} Hz")
+        before = f.read_bytes()
+        p = self.run_hook()
+        self.assertEqual(f.read_bytes(), before)
+        self.assertNotIn("falsch.wav", p.stdout, "a second run wrote the tone again")
+
     def test_the_admins_configuration_is_left_as_it_is(self):
         (self.c / "configuration.yaml").write_text(KRAFTWERK)
         (self.c / ".storage").mkdir()

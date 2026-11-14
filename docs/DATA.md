@@ -629,8 +629,17 @@ No `private:` (templates/home-assistant/laib.yml).
   `automatic_person_creation`; `admins` → HA admin, `family` → user).
   Service users, each its own (templates/home-assistant/laib.yml
   `secrets:`): `homes` (administrator), `bote` (no administrator),
-  `bote-automat` (administrator), `laib-pruefung`, `stimme`,
+  `bote-automat` (administrator), `laib-pruefung`, `stimme`, `frage`,
   `laib-namen` (administrator), `music-assistant` (administrator).
+- **A wake nobody meant** (owner 2026-11-14): Frage judges a sentence
+  from a satellite (one call to the box's own model, never a cloud
+  one; frage/gate.go) and, when nobody meant it, plays a tone on that
+  satellite with `FRAGE_HA_TOKEN` (the user `frage`, no administrator:
+  `assist_satellite.announce`, so HA's log names `frage`) and sends
+  stimme-wakes one word, „ohne“, on 10302 (no key: it can only raise a
+  count). The overheard text is not logged, not searched and not
+  kept: it lives only in the request, as before, and in HA's own
+  pipeline debug runs, as for every sentence.
 - **Printers** (owner 2026-11-14): `home-assistant-drucker` adds an ipp
   entry for every printer druck lists, with `HA_NAMES_TOKEN` (the user
   `laib-namen`, already an administrator for the aliases; config flows are
