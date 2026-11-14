@@ -4,7 +4,7 @@ After=network-online.target
 
 [Container]
 Image=${DRUCK_IMAGE}
-# DNS-SD: announcing the queues and finding the printers is multicast on the LAN (hostNetwork carve-out)
+# host network: DNS-SD; announcing the queues and finding the printers is multicast in the LAN (box.yml hostNetwork)
 Network=host
 Environment=TZ=${TZ}
 Environment=DRUCK_VERGESSEN_TAGE=${DRUCK_VERGESSEN_TAGE}

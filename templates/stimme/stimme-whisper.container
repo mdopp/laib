@@ -4,6 +4,7 @@ After=network-online.target
 
 [Container]
 Image=${WHISPER_IMAGE}
+# host network: Home Assistant and stimme-wakes reach it on 127.0.0.1:10300
 Network=host
 Environment=WHISPER_MODEL=${WHISPER_MODEL}
 Environment=WHISPER_LANG=${WHISPER_LANG}
@@ -17,6 +18,7 @@ Volume=${DATA_DIR}/stimme/whisper:/config:z
 # Stimme's status: stimme-names writes whether the devices listen for „Hey Mycroft“, with the wakes per day
 Volume=${DATA_DIR}/stimme/micro:/micro:z
 AddDevice=nvidia.com/gpu=all
+# labelling off: a container_t process may not open the NVIDIA device nodes the GPU line above adds
 SecurityLabelDisable=true
 AutoUpdate=registry
 

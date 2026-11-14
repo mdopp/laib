@@ -4,6 +4,8 @@ After=network-online.target
 
 [Container]
 Image=${OPENWAKEWORD_IMAGE}
+# host network: only so Home Assistant reaches it on 127.0.0.1:10400; a pod with a loopback port
+# would do (#1166)
 Network=host
 # serves streaming satellites with its built-in models, hey_mycroft among them (ADR 0030); the
 # Voice PE wakes on the device. No preload: a satellite asks for its model by name.

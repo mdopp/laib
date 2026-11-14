@@ -7,6 +7,7 @@ PublishPort=8096:8096
 Environment=TZ=${TZ}
 Environment=JELLYFIN_PublishedServerUrl=https://media.${DOMAIN}
 AddDevice=nvidia.com/gpu=all
+# labelling off: a container_t process may not open the NVIDIA device nodes the GPU line above adds
 SecurityLabelDisable=true
 Volume=${DATA_DIR}/media/jellyfin-config:/config:z
 Volume=${DATA_DIR}/media/jellyfin-cache:/cache:z

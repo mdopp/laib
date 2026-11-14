@@ -4,6 +4,7 @@ After=network-online.target
 
 [Container]
 Image=${SAMBA_IMAGE}
+# host network: SMB on port 445 of the box's own address, for every device in the LAN
 Network=host
 Environment=TZ=${TZ}
 # the shared account: the fallback for devices that mount with it, as ServiceBay kept its own

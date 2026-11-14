@@ -4,8 +4,10 @@ After=network-online.target
 
 [Container]
 Image=${IMAGE}
+# host network: the router listens on 127.0.0.1 for llama-lease, the policy proxy in front of it
 Network=host
 AddDevice=nvidia.com/gpu=all
+# labelling off: a container_t process may not open the NVIDIA device nodes the GPU line above adds
 SecurityLabelDisable=true
 Volume=${DATA_DIR}/llama/models:/models:z
 # Router mode: one server holds every preset and loads the one a request

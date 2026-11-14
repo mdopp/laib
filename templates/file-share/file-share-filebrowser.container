@@ -4,6 +4,8 @@ After=network-online.target
 
 [Container]
 Image=${FILEBROWSER_IMAGE}
+# host network: only so Caddy reaches it on 127.0.0.1:8088; nothing else needs it, a pod with
+# a loopback port is the shape to move to (#1166)
 Network=host
 # container root is core on the host, who owns the share and the database folder;
 # the image's own user (1000) is a subuid that may write neither

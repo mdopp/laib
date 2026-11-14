@@ -4,6 +4,8 @@ After=network-online.target
 
 [Container]
 Image=${IMAGE}
+# host network: the house's front door on ports 80 and 443 of the box's address; it proxies to the
+# services' ports on the host's loopback
 Network=host
 Environment=LAIB_DNS_TOKEN=${DNS_TOKEN}
 Volume=/mnt/data/laib/render/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,z

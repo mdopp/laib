@@ -4,6 +4,8 @@ After=network-online.target
 
 [Container]
 Image=${IMAGE}
+# host network: it finds the speakers (Chromecast, AirPlay, Sonos) by mDNS and SSDP and streams to
+# them in the LAN
 Network=host
 Environment=TZ=${TZ}
 Volume=${DATA_DIR}/music-assistant/data:/data:z
@@ -12,6 +14,8 @@ Volume=${DATA_DIR}/music-assistant/data:/data:z
 # its post-deploy adds the Audiobookshelf source (#646, #349's pattern)
 Environment=LAIB_ABS_TOKEN=${ABS_TOKEN}
 AddCapability=DAC_READ_SEARCH,SYS_ADMIN
+# labelling off: with the two capabilities above Music Assistant mounts a network share for its
+# music inside the container, which its install guide asks for and the container label refuses
 SecurityLabelDisable=true
 AutoUpdate=registry
 

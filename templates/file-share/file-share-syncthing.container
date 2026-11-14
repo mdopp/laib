@@ -4,6 +4,8 @@ After=network-online.target
 
 [Container]
 Image=${SYNCTHING_IMAGE}
+# host network: Syncthing finds the family's devices by local discovery (LAN broadcast) and syncs
+# with them on port 22000; its own page stays on 127.0.0.1:8384
 Network=host
 Environment=PUID=0
 Environment=PGID=0

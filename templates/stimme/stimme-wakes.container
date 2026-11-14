@@ -5,6 +5,8 @@ After=stimme-whisper.service
 [Container]
 # a stock Python, the standard library only: stimme-wakes.py forwards every byte to Whisper and back
 Image=${WAKES_IMAGE}
+# host network: between Home Assistant and Whisper on the host's loopback (10301 to 10300), and
+# Frage's pod reaches its signal at host.containers.internal:10302
 Network=host
 Entrypoint=/usr/local/bin/python3
 Exec=/app/stimme-wakes.py

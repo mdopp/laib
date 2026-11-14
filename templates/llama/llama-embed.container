@@ -4,8 +4,10 @@ After=network-online.target
 
 [Container]
 Image=${IMAGE}
+# host network: it listens on 127.0.0.1 for llama-lease, the proxy the pods reach it through (#567)
 Network=host
 AddDevice=nvidia.com/gpu=all
+# labelling off: a container_t process may not open the NVIDIA device nodes the GPU line above adds
 SecurityLabelDisable=true
 Volume=${DATA_DIR}/llama/models:/models:z
 Exec=--host 127.0.0.1 --port ${EMBED_PORT} --embeddings -m /models/${EMBED_FILE} --alias ${EMBED_ALIAS} --ctx-size 2048 --batch-size 2048 --ubatch-size 2048
