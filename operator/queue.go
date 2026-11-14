@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/mdopp/laib/atomicfile"
 )
 
 // The incident queue (#550, owner 2026-10-24): an incident that comes while
@@ -61,7 +63,7 @@ func (o *Operator) enqueue(ctx context.Context, skill string, tr Trigger, now ti
 		w.Trigger.Queued, w.Trigger.Count = now.Unix(), 1
 	}
 	b, _ := json.Marshal(w)
-	if os.WriteFile(path+".tmp", b, 0o644) != nil || os.Rename(path+".tmp", path) != nil {
+	if atomicfile.Write(path+".tmp", path, b, 0o644) != nil {
 		return
 	}
 	if ws := o.waiting(); len(ws) > queueMax {

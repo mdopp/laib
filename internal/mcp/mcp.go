@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -173,6 +174,10 @@ func InputSchema(verb string) map[string]any {
 	return map[string]any{"type": "object", "properties": props}
 }
 
+// readActions are the actions of a writing verb that only read (#1030):
+// Homes' list of Box-Aufgaben waited for every running call.
+var readActions = map[string][]string{"aufgabe": {"list", "zeigen"}}
+
 // Call runs one verb as the hand, capturing stdout.
 func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string, args map[string]any) (string, int) {
 	verbName := strings.TrimPrefix(name, "laib_")
@@ -199,11 +204,15 @@ func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string,
 	if err != nil {
 		return "ungültige Argumente für " + name + ": " + err.Error() + " — nicht ausgeführt", cli.ExitUsage
 	}
-	// reads run side by side; a verb that changes something runs alone (#289);
-	// a verb behind the door takes nothing: its call back does (ADR 0027)
+	// reads run side by side; a verb that changes something runs alone (#289),
+	// and so does a verb's writing action while its reading ones run side by
+	// side (#1030); a verb behind the door takes nothing: its call back does
+	// (ADR 0027)
+	action, _ := args["action"].(string)
 	switch {
 	case v.Door:
-	case v.Tier == "read" && verbName != "skill" && verbName != "template" && verbName != "session":
+	case v.Tier == "read" && verbName != "skill" && verbName != "template" && verbName != "session",
+		slices.Contains(readActions[verbName], action):
 		Mu.RLock()
 		defer Mu.RUnlock()
 	default:

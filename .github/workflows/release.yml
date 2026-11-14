@@ -169,3 +169,14 @@ jobs:
       - run: gh release upload "${{ needs.release-please.outputs.tag }}" laib-linux-amd64 laib-disk-linux-amd64 laib-boot-check.sh laib-host-image.sh laib-install-box.sh laib-self-update.sh laib-stick-* SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}
+      # the Werkstatt carries the latest release's kernel (#262): when this
+      # release commit built a Werkstatt image, that build took the release
+      # before (its assets were not up yet, #1061); build it again now
+      - name: rebuild the Werkstatt image this release commit started
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ran=$(gh run list --workflow werkstatt-image --commit "$SHA" --event push --json databaseId -q 'length')
+          if [ "${ran:-0}" -gt 0 ]; then gh workflow run werkstatt-image --ref main; else echo "no Werkstatt image on $SHA: nothing to rebuild"; fi

@@ -527,6 +527,9 @@ def release_own_lease(cfg: dict, http) -> None:
         http(cfg["lease_url"], "DELETE", cfg.get("model_key", ""), {"holder": LEASE_HOLDER})
 
 
+REFUSAL = re.compile(r"(?<![\w.-])409\b.*?Modell \S+ ist im Modus ([^\s.\\\"]+) nicht erlaubt")
+
+
 def refusal_note(lines: list[str], preset: str) -> str:
     """A sentence for the protocol when the run died on a refused preset.
 
@@ -537,13 +540,14 @@ def refusal_note(lines: list[str], preset: str) -> str:
     to be named where the operator reads it.
     """
     for line in lines:
-        low = line.lower()
-        if "409" not in low or ("allowed" not in low and "mode" not in low):
+        # Only the router's refusal itself (#1191): the status as a number of
+        # its own and the router's sentence (lease/lease.go denial), which the
+        # OpenAI client puts after it as "409 <message>". A timestamp, a session
+        # id or a token count that contains 409 next to a "model" key is not.
+        found = REFUSAL.search(line)
+        if not found:
             continue
-        # The body reaches this file inside Pi's own JSON event, so the router's
-        # quotes arrive escaped as often as not.
-        found = re.search(r'\\?"mode\\?"\s*:\s*\\?"([^"\\]+)', line)
-        mode = found.group(1) if found else "Haushalt"
+        mode = found.group(1)
         return (
             f"Modell {preset} ist im Modus {mode} nicht erlaubt und der Modus "
             "war nicht zu bekommen — die Modell-Kachel in Solaris zeigt, wer "

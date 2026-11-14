@@ -12,14 +12,14 @@ import (
 
 // #148: a temp file renamed over the target without an fsync can surface
 // as a zero-length file after a power cut (XFS, the data disk), the same
-// shape #107 found in the shell. Every durable write of the kernel,
-// laib-haushalt and laib-lease goes through Write, so a rename anywhere
-// else there is a write that skipped the sync.
+// shape #107 found in the shell. Every durable write of the kernel, the
+// Operator (#1035), laib-haushalt and laib-lease goes through Write, so a
+// rename anywhere else there is a write that skipped the sync.
 func TestEveryRenameIsADurableWrite(t *testing.T) {
 	allowed := map[string]string{"atomicfile/atomicfile.go": "the helper itself"}
 	rename := regexp.MustCompile(`\bRename\(`)
 	var bad []string
-	for _, top := range []string{"cmd", "internal", "haushalt", "lease"} {
+	for _, top := range []string{"cmd", "internal", "operator", "haushalt", "lease"} {
 		filepath.WalkDir(filepath.Join("..", top), func(p string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
 				return err
