@@ -4,6 +4,7 @@ After=network-online.target
 
 [Container]
 Image=${MATTER_IMAGE}
+# host network: Matter is IPv6 and mDNS in the LAN, and its devices are commissioned over Bluetooth
 Network=host
 Environment=TZ=${TZ}
 Volume=${DATA_DIR}/home-assistant/matter:/data:z

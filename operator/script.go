@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mdopp/laib/atomicfile"
 )
 
 // A skill's script (#839): a built-in skill's skills/<name>/run.py, the
@@ -228,10 +230,7 @@ func (o *Operator) keep(skill string, state json.RawMessage) {
 		return
 	}
 	os.MkdirAll(filepath.Join(o.Home, "skills"), 0o700)
-	p := o.statePath(skill)
-	if os.WriteFile(p+".tmp", state, 0o600) == nil {
-		os.Rename(p+".tmp", p)
-	}
+	atomicfile.Write(o.statePath(skill)+".tmp", o.statePath(skill), state, 0o600)
 }
 
 // capped keeps the first 8 KiB a script writes to stderr, for the error.

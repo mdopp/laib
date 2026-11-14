@@ -4,6 +4,8 @@ After=network-online.target
 
 [Container]
 Image=${DOKUMENTE_IMAGE}
+# host network: finding a network scanner (eSCL/AirScan by mDNS, SANE's net backends) is multicast
+# and broadcast in the LAN
 Network=host
 Environment=TZ=${TZ}
 # quoted: an AirScan device name has spaces (#571)

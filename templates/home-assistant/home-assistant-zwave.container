@@ -4,6 +4,8 @@ After=network-online.target
 
 [Container]
 Image=${ZWAVE_IMAGE}
+# host network: only so Home Assistant and Caddy reach it on the host's loopback (HOST=127.0.0.1);
+# the stick is a device, not the network: a pod with a loopback port would do (#1166)
 Network=host
 Environment=TZ=${TZ}
 Environment=SESSION_SECRET=${ZWAVE_SECRET}
@@ -11,7 +13,7 @@ Environment=HOST=127.0.0.1
 Environment=PORT=8091
 Volume=${DATA_DIR}/home-assistant/zwave-js:/usr/src/app/store:z
 AddDevice=${ZWAVE_DEVICE}:${ZWAVE_DEVICE}
-# SELinux: a container_t process may not open a USB serial device; with the
+# labelling off: a container_t process may not open a USB serial device; with the
 # label on, the stick gives EACCES and the whole Z-Wave network is down while
 # Home Assistant answers 200 (#417). ServiceBay ran this container privileged.
 SecurityLabelDisable=true

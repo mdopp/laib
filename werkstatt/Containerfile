@@ -40,10 +40,14 @@ ARG GO_SHA256=ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5
 RUN curl -fsSL -o /tmp/go.tgz "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" \
     && echo "${GO_SHA256}  /tmp/go.tgz" | sha256sum -c - && tar -xzf /tmp/go.tgz -C /usr/local && rm /tmp/go.tgz \
     && ln -s /usr/local/go/bin/go /usr/local/go/bin/gofmt /usr/local/bin/ && go version
-# the latest release's kernel binary: `laib template lint` runs here, on the Werkstatt's own files (#262)
+# the latest release's kernel binary: `laib template lint` runs here, on the Werkstatt's own files (#262).
+# The workflow names the newest release that has its assets (#1061): on a
+# release commit "latest" is already the new release while its binary is
+# still being built, and releases/latest/download answers 404.
+ARG LAIB_DOWNLOAD=https://github.com/mdopp/laib/releases/latest/download
 RUN mkdir -p /opt/werkstatt/laib && cd /opt/werkstatt/laib \
-    && curl -fsSL -o laib https://github.com/mdopp/laib/releases/latest/download/laib-linux-amd64 \
-    && curl -fsSL https://github.com/mdopp/laib/releases/latest/download/SHA256SUMS | grep ' laib-linux-amd64$' | sed 's/laib-linux-amd64$/laib/' | sha256sum -c - \
+    && curl -fsSL -o laib "${LAIB_DOWNLOAD}/laib-linux-amd64" \
+    && curl -fsSL "${LAIB_DOWNLOAD}/SHA256SUMS" | grep ' laib-linux-amd64$' | sed 's/laib-linux-amd64$/laib/' | sha256sum -c - \
     && chmod +x laib && ./laib version
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY laibctl.py /usr/local/bin/laib

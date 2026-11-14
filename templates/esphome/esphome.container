@@ -3,6 +3,7 @@ Description=ESPHome — Firmware und OTA für die ESP-Geräte
 
 [Container]
 Image=${IMAGE}
+# host network: the dashboard finds the ESP devices by mDNS and pings them, and OTA reaches them in the LAN
 Network=host
 Environment=TZ=${TZ}
 Environment=ESPHOME_DASHBOARD_USE_PING=true

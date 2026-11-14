@@ -4,6 +4,8 @@ After=network-online.target
 
 [Container]
 Image=${HA_IMAGE}
+# host network: Home Assistant finds the house's devices by mDNS, SSDP and broadcast, and the voice
+# satellites and ESPHome devices connect to it from the LAN
 Network=host
 Environment=TZ=${TZ}
 # box.yml zuhause (#561): a move changes it, so laib applies HA again and post-deploy sets its home

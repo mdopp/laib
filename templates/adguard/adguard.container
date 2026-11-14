@@ -4,6 +4,7 @@ After=network-online.target
 
 [Container]
 Image=${IMAGE}
+# host network: the house's DNS, port 53 on the box's own address for every device in the LAN
 Network=host
 Environment=TZ=${TZ}
 Volume=${DATA_DIR}/adguard/conf:/opt/adguardhome/conf:z

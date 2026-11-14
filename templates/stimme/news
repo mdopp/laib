@@ -1,6 +1,7 @@
 # What each change of this template brings the household, newest first: one
 # German sentence a family member understands, no technical words (#687). A
 # template update shows the lines the box does not have yet on its card.
+Für euch ändert sich nichts: die Box schreibt jetzt bei jeder Ausnahme von ihrem Schutz dazu, warum dieser Dienst sie braucht.
 Auf der Box-Seite zählen auch die Male als „ohne Befehl“, bei denen der Lautsprecher nur mit einem Ton geantwortet hat
 Der Lautsprecher hört jetzt auf „Hey Mycroft“ und spricht mit ${ASSISTANT}; nichts muss mehr trainiert werden, und Aufnahmen von euch werden nicht mehr gesammelt
 Startet Home Assistant geplant neu, meldet die Box die kurzen Aussetzer von der Stimme nicht mehr als Fehler

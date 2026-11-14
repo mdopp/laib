@@ -126,6 +126,28 @@ class LeaseContract(unittest.TestCase):
         self.assertEqual(calls, ["GET"])
 
 
+class RefusalNote(unittest.TestCase):
+    # #1191: a message_end whose millisecond timestamp holds 409, next to its
+    # "model" key, is no refusal; the router's own 409 still is.
+    def test_a_timestamp_with_409_is_no_refusal(self):
+        line = json.dumps({"type": "message_end", "message": {"role": "assistant", "model": "qwen3.8-27b",
+                           "usage": {"input": 4091, "output": 409}, "timestamp": 1794409123456,
+                           "stopReason": "stop"}, "session": "c0a8-409e-77"})
+        self.assertEqual(al.refusal_note([line], "qwen3.8-27b"), "")
+
+    def test_the_routers_409_gives_the_note_with_its_mode(self):
+        msg = ("409 Modell qwen3.8-27b ist im Modus exklusiv nicht erlaubt. Erlaubt ist: gemma-4-e4b. "
+               "\u201efoundry-chronicle\u201c hat die Grafikkarte gerade; die Lease zeigt, bis wann.")
+        line = json.dumps({"type": "message_end", "message": {"role": "assistant", "model": "qwen3.8-27b",
+                           "stopReason": "error", "errorMessage": msg, "timestamp": 1794400000000}})
+        note = al.refusal_note(["{}", line], "qwen3.8-27b")
+        self.assertIn("im Modus exklusiv nicht erlaubt", note)
+
+    def test_a_404_for_an_unknown_preset_is_no_lease_refusal(self):
+        line = "404 Modell foo ist im Modus haushalt nicht erlaubt. Dieses Modell kennt der Router nicht"
+        self.assertEqual(al.refusal_note([line], "foo"), "")
+
+
 class NoPiWebLeftovers(unittest.TestCase):
     """#162: the Werkstatt is one noun (laib ADR 0021); pi-web is gone."""
 

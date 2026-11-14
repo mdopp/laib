@@ -10,10 +10,10 @@ PublishPort=18540:8080
 Volume=${DATA_DIR}/${SERVICE}:/data
 # read, write and delete: the archive removes packed backups and keeps the newest in letzte/
 Volume=${DATA_DIR}/archiv-eingang/${PERSON}:/eingang
-# the vault is a gocryptfs (FUSE) mount in the container's own user and mount
-# namespace; labelling off as for Homes's shared inbox, which Homes writes too
+# the vault is a gocryptfs (FUSE) mount in the container's own user and mount namespace
 AddDevice=/dev/fuse
 AddCapability=SYS_ADMIN
+# labelling off as for Homes's shared inbox, which Homes writes too
 SecurityLabelDisable=true
 Environment=ARCHIV_PERSON=${PERSON}
 Environment=PROXY_SECRET=${PROXY}
