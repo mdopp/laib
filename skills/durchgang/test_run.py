@@ -73,7 +73,7 @@ class Fake:
 
 
 class Durchgang(unittest.TestCase):
-    # Ablauf L-50, L-51
+    # Ablauf L-50, L-51: a run that went back as a whole (one that never ran alone)
     def test_the_morning_of_2026_11_14(self):
         s = Fake(steps=2)
         r = run.run(s)
@@ -102,6 +102,29 @@ class Durchgang(unittest.TestCase):
         self.assertIn("Unbeteiligt und einzeln neu vorgeschlagen: #542 als #571; #546 als #572.", note["text"])
         self.assertIn(f"Nur du kannst das: {OWNER} (die Box-Aufgabe #31 ist für dich).", note["text"])
         self.assertEqual(r["state"], {"done": [RUN]})
+
+    # Ablauf L-50, L-51
+    def test_since_1209_the_green_ones_stay_and_laibs_own_task_is_not_filed_twice(self):
+        # #1209: the run went back, each approval was applied again alone; #543 waits for the
+        # Box-Aufgabe its hook named, as a fresh card laib filed (#560)
+        alone = [RED, {"t": "2026-11-14T09:56:30Z", "verb": "apply", "result": "green", "reason": f"Freigabe #542 allein, aus dem Lauf {RUN}"},
+                 {"t": "2026-11-14T09:57:10Z", "verb": "apply", "result": "red", "reason": f"Freigabe #543 allein, aus dem Lauf {RUN}"},
+                 {"t": "2026-11-14T09:57:40Z", "verb": "apply", "result": "green", "reason": "rollback #543"},
+                 {"t": "2026-11-14T09:58:20Z", "verb": "apply", "result": "green", "reason": f"Freigabe #546 allein, aus dem Lauf {RUN}"},
+                 {"t": "2026-11-14T09:58:21Z", "verb": "rollback", "result": "info", "actor": "laib",
+                  "detail": f"Lauf {RUN} war rot; jede Freigabe allein angewendet: angewendet #542, #546 zurückgenommen #543"}]
+        cards = [dict(CARDS[0], outcome="", restore=None, forward=None), dict(CARDS[1], refiled=560, forward=None,
+                 because="wartet auf Box-Aufgabe #31 „Marktplatz-Hinweis bestätigen“; ist sie erledigt, wendet Laib die Änderung von selbst an (Vorschlag #560)"),
+                 dict(CARDS[2], outcome="", restore=None, forward=None), CARDS[3]]
+        s = Fake(journal=alone, cards=cards)
+        self.assertEqual(run.run(s)["outcome"], "green")
+        self.assertIn("- #542: Neue Versionen: beets, frage (Dienste: beets, frage; allein angewendet)", s.asked[0])
+        self.assertIn("(Dienste: home-assistant; zurückgenommen)", s.asked[0])
+        self.assertEqual((s.tools("laib_propose"), s.tools("laib_aufgabe")), ([], []))
+        note = s.tools("laib_note")[0]
+        self.assertEqual(note["karten"], "543,547")
+        self.assertIn("Laib hat jede Freigabe allein angewendet; angewendet ist #542, #546.", note["text"])
+        self.assertIn("Laib hat die Box-Aufgabe dazu schon angelegt, die Karte wartet darauf", note["text"])
 
     def test_once_per_run_and_never_for_another_red(self):
         s = Fake(state={"done": [RUN]})
