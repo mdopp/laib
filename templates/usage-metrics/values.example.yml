@@ -1,4 +1,4 @@
-IMAGE: ghcr.io/mdopp/usage-metrics:0.3.0   # built and published by the repo's own CI
+IMAGE: ghcr.io/mdopp/usage-metrics:0.3.0@sha256:33df381dedd7c8a35a2cedbe93edf1b21915b31fc190fd2f147801b16d7b3716   # built and published by the repo's own CI
 RETENTION_DAYS: "90"                        # calendar days of counters kept; older ones are deleted, not rolled up
 TOKEN: !secret USAGE_METRICS_TOKEN
 CHECK_IMAGE: docker.io/library/python:3.13-alpine    # usage-metrics-check.py, the standard library only (#785)

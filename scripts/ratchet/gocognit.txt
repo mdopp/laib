@@ -34,7 +34,7 @@
 46 internal/registry/lint.go: registry.lintHostWrites
 36 internal/registry/lint.go: registry.lintMounts
 37 internal/registry/template.go: registry.TemplateCmd
-46 internal/registry/updates.go: registry.ImageUpdates
+42 internal/registry/updates.go: registry.ImageUpdates
 32 internal/render/net.go: render.Net
 33 internal/render/render.go: render.Render
 67 internal/render/render.go: render.caddyfile

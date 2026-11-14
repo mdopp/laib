@@ -56,8 +56,10 @@ def run(s):
             h.append(f"Host-Image {key} → {patch} ließ sich nicht vorschlagen: {first_line(r.text)}." if r.error else f"Host-Image {key} → {patch} vorgeschlagen, für einen Menschen.")
             continue
         if patch:
-            s.offers[svc + " " + key] = image + ":" + patch
-            listed.append(f"- service {svc}, key {key}, value {image}:{patch} (jetzt {cur})")
+            # with its digest when the registry names one: a patch keeps the value pinned (ADR 0034, #1130)
+            value = image + ":" + patch + ("@" + field(u, "patchDigest") if field(u, "patchDigest") else "")
+            s.offers[svc + " " + key] = value
+            listed.append(f"- service {svc}, key {key}, value {value} (jetzt {cur})")
         if field(u, "minor"):
             h.append(f"{svc}: Minor-Version {field(u, 'minor')} (jetzt {cur}) für einen Menschen.")
         if field(u, "error"):

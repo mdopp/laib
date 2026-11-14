@@ -46,6 +46,11 @@ func newSelfBox(t *testing.T) *selfBox {
 	shim(t, s.bin, "systemctl", `[ "$*" = "--user is-active laib-backup.service" ] && cat "$FX/backup" 2>/dev/null; exit 0`)
 	shim(t, s.bin, "sudo", `exec "$@"`)
 	shim(t, s.bin, "sleep", "exit 0")
+	// cosign in its pinned image (#1130): the bundle the release carries holds "good" when its
+	// signature is laib's release workflow's on main
+	shim(t, s.bin, "podman", `echo "podman $*" >> "$SHIM_LOG"
+for a in "$@"; do case "$a" in *:/w:ro,Z) w="${a%%:/w:ro,Z}";; esac; done
+[ "$(cat "$w/SHA256SUMS.bundle")" = good ] || { echo "Error: none of the expected identities matched what was in the certificate" >&2; exit 1; }`)
 	// the network: /ready, the releases API and the release downloads
 	shim(t, s.bin, "curl", `o=""; prev=""
 for a in "$@"; do [ "$prev" = -o ] && o=$a; prev=$a; done
@@ -99,6 +104,7 @@ func (s *selfBox) release(tag, body, sum string) {
 		sum = hex.EncodeToString(h[:])
 	}
 	os.WriteFile(filepath.Join(d, "SHA256SUMS"), []byte("1111  laib-linux-amd64\n"+sum+"  laib-install-box.sh\n"), 0o644)
+	os.WriteFile(filepath.Join(d, "SHA256SUMS.bundle"), []byte("good"), 0o644)
 }
 
 // installer is a release's install-box.sh: it logs how it was called, puts
@@ -107,7 +113,7 @@ func (s *selfBox) release(tag, body, sum string) {
 func (s *selfBox) installer(version, state string) string {
 	b, _ := json.Marshal(map[string]any{"state": state, "red": 0, "version": version})
 	os.WriteFile(filepath.Join(s.fx, "laib-"+version), []byte(laibBin(version)), 0o755)
-	return `echo "install-box.sh $* LAIB_SELF_UPDATE=$LAIB_SELF_UPDATE" >> "$SHIM_LOG"
+	return `echo "install-box.sh $* LAIB_SELF_UPDATE=$LAIB_SELF_UPDATE sums=$(basename "$LAIB_SUMS")" >> "$SHIM_LOG"
 cp "$FX/laib-` + version + `" "$LAIB_BIN_DIR/laib"
 echo '` + string(b) + `' > "$FX/ready"
 `
@@ -146,7 +152,7 @@ func TestSelfUpdateTakesTheNewestReleaseAndProvesIt(t *testing.T) {
 	 {"tag_name":"v0.16.0","draft":false,"prerelease":false,"assets":[{"name":"laib-linux-amd64"},{"name":"SHA256SUMS"}]}]`)
 	s.release("v0.16.0", s.installer("v0.16.0", "bereit"), "")
 	log, out, rec := s.run(t)
-	if !strings.Contains(log, "install-box.sh --version v0.16.0 LAIB_SELF_UPDATE=1") {
+	if !strings.Contains(log, "install-box.sh --version v0.16.0 LAIB_SELF_UPDATE=1 sums=SHA256SUMS") {
 		t.Fatalf("v0.16.0's own installer did not run as a self-update:\n%s\n%s", log, out)
 	}
 	if rec["result"] != "updated" || rec["running"] != "v0.11.1" || rec["latest"] != "v0.16.0" {
@@ -211,6 +217,34 @@ func TestSelfUpdateRefusesAnInstallerThatDoesNotMatchItsSums(t *testing.T) {
 	s.release("v0.16.0", s.installer("v0.16.0", "bereit"), strings.Repeat("0", 64))
 	if log, out, rec := s.run(t); installed(log) || rec["result"] != "failed" {
 		t.Fatalf("an unverified installer ran: %v\n%s\n%s", rec, log, out)
+	}
+}
+
+// Ablauf L-53. #1130 (ADR 0034 §3): SHA256SUMS comes from the same place as the
+// installer, so a match proves nothing about who made them. The sums'
+// signature must be laib's release workflow's on main; a release without
+// one, or signed by anyone else, is refused with the reason in German and
+// never installed, and the installer gets the very sums that were checked.
+func TestSelfUpdateInstallsOnlyASignedRelease(t *testing.T) {
+	s := newSelfBox(t)
+	s.release("v0.16.0", s.installer("v0.16.0", "bereit"), "")
+	log, out, _ := s.run(t)
+	if !strings.Contains(log, "verify-blob --bundle /w/SHA256SUMS.bundle --certificate-oidc-issuer https://token.actions.githubusercontent.com --certificate-identity https://github.com/mdopp/laib/.github/workflows/release.yml@refs/heads/main /w/SHA256SUMS") {
+		t.Fatalf("the sums' signature was not checked against laib's release workflow on main:\n%s\n%s", log, out)
+	}
+	for name, sig := range map[string]string{"unsigned": "", "signed by another": "evil"} {
+		s := newSelfBox(t)
+		s.release("v0.16.0", s.installer("v0.16.0", "bereit"), "")
+		bundle := filepath.Join(s.fx, "dl", "v0.16.0", "SHA256SUMS.bundle")
+		if sig == "" {
+			os.Remove(bundle)
+		} else {
+			os.WriteFile(bundle, []byte(sig), 0o644)
+		}
+		log, out, rec := s.run(t)
+		if installed(log) || rec["result"] != "failed" || rec["failed"] != "v0.16.0" || !strings.Contains(rec["detail"], "Signatur") {
+			t.Errorf("%s: a release without laib's signature must be refused, in German: %v\n%s\n%s", name, rec, log, out)
+		}
 	}
 }
 
@@ -333,5 +367,17 @@ touch "$FX/ready-503"; printf '%s' '`+body+`' > "$FX/ready"
 	s.release("v0.16.0", s.installer("v0.16.0", "eingeschränkt"), "")
 	if _, out, rec := s.run(t); !strings.HasSuffix(rec["detail"], "nach dem Update nicht grün (v0.16.0, eingeschränkt, 0 rot)") {
 		t.Errorf("the rollback must say what /ready said: %v\n%s", rec, out)
+	}
+}
+
+// #1130: install-box.sh checks the binaries against the sums self-update.sh
+// verified (LAIB_SUMS), not against a second download of SHA256SUMS that
+// could differ from the signed one.
+func TestInstallUsesTheVerifiedSumsItIsHanded(t *testing.T) {
+	real, _ := os.ReadFile(filepath.Join("..", "scripts", "boot-check.sh"))
+	sums := filepath.Join(t.TempDir(), "SHA256SUMS")
+	os.WriteFile(sums, []byte(strings.Repeat("0", 64)+"  laib-linux-amd64\n"), 0o644)
+	if _, out := runInstallTo(t, string(real), "LAIB_SUMS="+sums); !strings.Contains(out, "checksum mismatch for laib") {
+		t.Fatalf("install-box.sh did not check the binaries against the handed sums:\n%s", out)
 	}
 }

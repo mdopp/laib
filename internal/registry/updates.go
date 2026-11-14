@@ -30,10 +30,10 @@ import (
 // newest patch release (same major.minor) and the newest minor release
 // (same major) the registry has, the tag's shape kept. For a floating tag
 // (latest, stable, a bare major) and a digest pin, the registry's digest of
-// the tag when the box runs another one (#528), and for a floating tag the
-// digest it runs (Pin). Nothing pulls it (ADR 0034): the Operator's nightly
-// versionen proposes it, with --notes' changelog and signature. Reading
-// only, except --run.
+// the tag when the box runs another one (#528), and for a value without a
+// digest, a version tag too (#1130), the digest it runs (Pin). Nothing
+// pulls it (ADR 0034): the Operator's nightly versionen proposes it, with
+// --notes' changelog and signature. Reading only, except --run.
 
 type ImageUpdate struct {
 	Service string `json:"service"`
@@ -59,6 +59,8 @@ type ImageUpdate struct {
 	Notes      string `json:"notes,omitempty"`
 	Unsigned   string `json:"unsigned,omitempty"`
 	value      string // the value as it stands, for --notes
+
+	PatchDigest string `json:"patchDigest,omitempty"` // Patch's digest: its proposal keeps the value pinned (#1130)
 }
 
 // RegistryURL is where a registry host's v2 API lives; tests swap it.
@@ -99,11 +101,10 @@ func ImageUpdates(ctx context.Context, st *state.State) []ImageUpdate {
 				continue
 			}
 			cur := semverTag.FindStringSubmatch(tag)
-			ref, pin, pinned := strings.Cut(v.Literal, "@")
+			ref, pin, _ := strings.Cut(v.Literal, "@")
 			u := ImageUpdate{Service: name, Key: key, Image: ref[:strings.LastIndex(ref, ":")], Current: tag, value: v.Literal}
-			if cur == nil || pinned {
-				u.Digest, u.Pin, u.Error = newDigest(ctx, host, repo, tag, ref, pin)
-			}
+			// every value, a version tag without a digest too: pinned to what runs (#1130)
+			u.Digest, u.Pin, u.Error = newDigest(ctx, host, repo, tag, ref, pin)
 			if cur == nil {
 				out = append(out, u)
 				continue
@@ -131,6 +132,7 @@ func ImageUpdates(ctx context.Context, st *state.State) []ImageUpdate {
 			}
 			if bestP[0] != tag {
 				u.Patch = bestP[0]
+				u.PatchDigest, _ = tagDigest(ctx, host, repo, u.Patch) // proposed with it: a patch stays pinned (#1130)
 			}
 			if bestM[0] != tag {
 				u.Minor = bestM[0]
@@ -156,18 +158,26 @@ func newDigest(ctx context.Context, host, repo, tag, ref, pin string) (moved, sa
 	if pin == "" {
 		have, _ = sysd.Run(ctx, "podman", "image", "inspect", "--format", "{{json .RepoDigests}}", ref)
 	}
-	resp, err := registryGet(ctx, host, repo, "/manifests/"+tag)
+	d, err := tagDigest(ctx, host, repo, tag)
 	if err != nil {
 		return "", "", err.Error()
 	}
-	resp.Body.Close()
-	d := resp.Header.Get("Docker-Content-Digest")
 	if d != "" && !strings.Contains(have, d) {
 		return d, "", ""
 	} else if pin != "" {
 		return "", "", ""
 	}
 	return "", d, ""
+}
+
+// tagDigest is the registry's digest of the tag, "" when it names none.
+func tagDigest(ctx context.Context, host, repo, tag string) (string, error) {
+	resp, err := registryGet(ctx, host, repo, "/manifests/"+tag)
+	if err != nil {
+		return "", err
+	}
+	resp.Body.Close()
+	return resp.Header.Get("Docker-Content-Digest"), nil
 }
 
 // VersionTimeout bounds one ImageVersion (#959); tests shorten it.

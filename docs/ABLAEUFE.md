@@ -177,6 +177,12 @@ Wenn ein Update des Betriebssystems bereitliegt,
 Dann startet die Box nur zwei bis vier Stunden nach der Sicherung neu, nie während einer, und nur wenn alles grün ist.
 Und `laib diag` sagt, dass ein Update wartet.
 
+### L-53 Laib nimmt nur ein Update, das aus seinem eigenen Release stammt
+Wenn nachts ein neues Laib-Release da ist,
+Dann installiert die Box es nur, wenn seine Prüfsummen die Unterschrift von Laibs Release auf GitHub tragen.
+Und fehlt die Unterschrift oder stammt sie von jemand anderem, bleibt die Box auf ihrer Version, und `laib diag` sagt auf Deutsch, warum.
+Und ein Programm mit Versionsnummer kommt in genau der Fassung, die geprüft wurde; „Images festhalten“ hält auch diese fest.
+
 ## Sicherung
 
 ### L-27 Eine fehlgeschlagene oder alte Sicherung meldet sich

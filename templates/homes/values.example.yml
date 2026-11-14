@@ -1,5 +1,5 @@
 HOMES_IMAGE: ghcr.io/mdopp/homes:latest
-QMD_IMAGE: ghcr.io/mdopp/laib-qmd:2.8.3               # the memory library (#195): qmd as released, pinned by its version; CPU only
+QMD_IMAGE: ghcr.io/mdopp/laib-qmd:2.8.3@sha256:ed3592fdce2aad31cbdc866bed2ee146004c2284b9cb484c614e3a698575531b               # the memory library (#195): qmd as released, pinned by digest (ADR 0034, #1130); CPU only
 LAIB_TOKEN: !secret HOMES_LAIB_TOKEN
 PROXY_SECRET: !secret HOMES_PROXY_SECRET
 HA_URL: http://host.containers.internal:8123             # Home Assistant; used once home-assistant's post-deploy minted HOMES_HA_TOKEN (#349)

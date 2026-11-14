@@ -6,7 +6,9 @@
 # Every asset carries build provenance (actions/attest-build-provenance):
 # `gh attestation verify laib-linux-amd64 -R mdopp/laib` on a laptop proves
 # which workflow built it from which commit. On the box install-box.sh
-# checks SHA256SUMS (CoreOS has no gh); the attestation covers SHA256SUMS too.
+# checks SHA256SUMS (CoreOS has no gh); the attestation covers SHA256SUMS too,
+# and SHA256SUMS.bundle is its cosign signature, which self-update.sh checks
+# with the box's pinned cosign before it trusts the sums (#1130).
 name: release
 on:
   push:
@@ -166,7 +168,11 @@ jobs:
           subject-path: |
             laib-*
             SHA256SUMS
-      - run: gh release upload "${{ needs.release-please.outputs.tag }}" laib-linux-amd64 laib-disk-linux-amd64 laib-boot-check.sh laib-host-image.sh laib-install-box.sh laib-self-update.sh laib-stick-* SHA256SUMS
+      # the box's self-update checks this signature before it trusts SHA256SUMS (ADR 0034 §3, #1130):
+      # keyless, this workflow's identity on main, in the bundle format the box's pinned cosign v2 reads
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - run: cosign sign-blob --yes --new-bundle-format=false --use-signing-config=false --bundle SHA256SUMS.bundle SHA256SUMS
+      - run: gh release upload "${{ needs.release-please.outputs.tag }}" laib-linux-amd64 laib-disk-linux-amd64 laib-boot-check.sh laib-host-image.sh laib-install-box.sh laib-self-update.sh laib-stick-* SHA256SUMS SHA256SUMS.bundle
         env:
           GH_TOKEN: ${{ github.token }}
       # the Werkstatt carries the latest release's kernel (#262): when this
