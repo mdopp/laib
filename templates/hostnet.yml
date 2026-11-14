@@ -1,0 +1,76 @@
+# #1166: a container on the host network reaches every loopback listener of
+# the box, and one with labelling off is not held by SELinux. Each such line
+# in a template's unit is an exception, decided with its reason here, one
+# place, so a reason changes nothing on the box. TestEveryHostNetworkAndLabelOffSaysWhy
+# holds it: every Network=host and SecurityLabelDisable=true has its entry,
+# no entry is stale, and the count per kind only falls.
+adguard/adguard.container:
+  host network: "the house's DNS, port 53 on the box's own address for every device in the LAN"
+archiv/archiv.container:
+  labelling off: "the vault is a gocryptfs (FUSE) mount in the container's own user and mount namespace; labelling off as for Homes's shared inbox, which Homes writes too"
+audiobookshelf/audiobookshelf.container:
+  labelling off: "the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry core does not own, #230); labelling off for this container"
+beets/beets.container:
+  labelling off: "the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry core does not own, #230); labelling off for this container"
+bote/bote-notify.container:
+  labelling off: "the Bote's filing (#521): POST /ablage writes into Paperless' consume folder, Bote/<sender>/; the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry core does not own, #230); labelling off for this container"
+caddy/caddy.container:
+  host network: "the house's front door on ports 80 and 443 of the box's address; it proxies to the services' ports on the host's loopback"
+druck/druck.container:
+  host network: "DNS-SD; announcing the queues and finding the printers is multicast in the LAN (box.yml hostNetwork)"
+  labelling off: "a container_t process may not open the USB node (#417), and the scripts above lie in laib's config folder"
+esphome/esphome.container:
+  host network: "the dashboard finds the ESP devices by mDNS and pings them, and OTA reaches them in the LAN"
+file-share/file-share-filebrowser.container:
+  host network: "only so Caddy reaches it on 127.0.0.1:8088; nothing else needs it, a pod with a loopback port is the shape to move to (#1166)"
+  labelling off: "the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry core does not own, #230); labelling off for this container"
+file-share/file-share-samba-members.container:
+  host network: "LLDAP listens on the host's loopback only"
+file-share/file-share-samba.container:
+  host network: "SMB on port 445 of the box's own address, for every device in the LAN"
+  labelling off: "the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry core does not own, #230); labelling off for this container"
+file-share/file-share-syncthing.container:
+  host network: "Syncthing finds the family's devices by local discovery (LAN broadcast) and syncs with them on port 22000; its own page stays on 127.0.0.1:8384"
+  labelling off: "the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry core does not own, #230); labelling off for this container"
+home-assistant/home-assistant-matter.container:
+  host network: "Matter is IPv6 and mDNS in the LAN, and its devices are commissioned over Bluetooth"
+home-assistant/home-assistant-zwave.container:
+  host network: "only so Home Assistant and Caddy reach it on the host's loopback (HOST=127.0.0.1); the stick is a device, not the network: a pod with a loopback port would do (#1166)"
+  labelling off: "a container_t process may not open a USB serial device; with the label on, the stick gives EACCES and the whole Z-Wave network is down while Home Assistant answers 200 (#417). ServiceBay ran this container privileged."
+home-assistant/home-assistant.container:
+  host network: "Home Assistant finds the house's devices by mDNS, SSDP and broadcast, and the voice satellites and ESPHome devices connect to it from the LAN"
+homes/homes-qmd.container:
+  labelling off: "the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry core does not own, #230); labelling off for this container"
+homes/homes.container:
+  labelling off: "the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry core does not own, #230); labelling off for this container"
+immich/immich-ml.container:
+  labelling off: "a container_t process may not open the NVIDIA device nodes the GPU line above adds"
+immich/immich.container:
+  labelling off: "the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry core does not own, #230); labelling off for this container"
+llama/llama-embed.container:
+  host network: "it listens on 127.0.0.1 for llama-lease, the proxy the pods reach it through (#567)"
+  labelling off: "a container_t process may not open the NVIDIA device nodes the GPU line above adds"
+llama/llama-lease.container:
+  host network: "the model port the pods and Laib reach, in front of the router and the embeddings, which listen on the host's loopback only"
+llama/llama.container:
+  host network: "the router listens on 127.0.0.1 for llama-lease, the policy proxy in front of it"
+  labelling off: "a container_t process may not open the NVIDIA device nodes the GPU line above adds"
+media/media.container:
+  labelling off: "a container_t process may not open the NVIDIA device nodes the GPU line above adds"
+music-assistant/music-assistant.container:
+  host network: "it finds the speakers (Chromecast, AirPlay, Sonos) by mDNS and SSDP and streams to them in the LAN"
+  labelling off: "with the two capabilities above Music Assistant mounts a network share for its music inside the container, which its install guide asks for and the container label refuses"
+paperless/paperless.container:
+  labelling off: "the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry core does not own, #230); labelling off for this container"
+scan/scan.container:
+  host network: "finding a network scanner (eSCL/AirScan by mDNS, SANE's net backends) is multicast and broadcast in the LAN"
+  labelling off: "the shared file-share tree: never relabelled (:z walks it on every start and fails on an entry core does not own, #230); labelling off for this container, as bote-notify's. It is also what lets a container_t process open the USB scanner (#417)"
+stimme/stimme-openwakeword.container:
+  host network: "only so Home Assistant reaches it on 127.0.0.1:10400; a pod with a loopback port would do (#1166)"
+stimme/stimme-piper.container:
+  host network: "Home Assistant reaches it on the host's loopback, the pods at host.containers.internal"
+stimme/stimme-wakes.container:
+  host network: "between Home Assistant and Whisper on the host's loopback (10301 to 10300), and Frage's pod reaches its signal at host.containers.internal:10302"
+stimme/stimme-whisper.container:
+  host network: "Home Assistant and stimme-wakes reach it on 127.0.0.1:10300"
+  labelling off: "a container_t process may not open the NVIDIA device nodes the GPU line above adds"
