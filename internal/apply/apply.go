@@ -572,7 +572,10 @@ var RunHook = func(ctx context.Context, h HookSpec) (string, error) {
 // print `laib-secret: NAME=value` to hand a credential back into
 // secrets.age, and `laib-exec: <container> <cmd…>` to have Laib run a
 // command in one of the service's own containers (the one thing a hook
-// cannot do from inside its image). Non-zero exit is red.
+// cannot do from inside its image), and `laib-wartet: <Titel> | <warum>`
+// for a precondition only the owner meets (#1209): the run that carries a
+// proposal then holds it for that task instead of calling it red. Non-zero
+// exit is red.
 func runHook(ctx context.Context, st *state.State, svc *state.Service, paths boxfs.Paths, phase string, secrets map[string]string, newSecrets map[string]string) (Check, bool) {
 	hook := filepath.Join(svc.Dir, phase)
 	info, err := os.Stat(hook)
@@ -610,6 +613,9 @@ func runHook(ctx context.Context, st *state.State, svc *state.Service, paths box
 				}
 				newSecrets[k] = v
 			}
+		case strings.HasPrefix(line, "laib-wartet: "):
+			heard(ctx, strings.TrimPrefix(line, "laib-wartet: "))
+			kept = append(kept, line)
 		case strings.HasPrefix(line, "laib-exec: "):
 			f := strings.Fields(strings.TrimPrefix(line, "laib-exec: "))
 			red := render.Redact(render.Redact(render.Output{"l": line}, secrets), newSecrets)["l"]

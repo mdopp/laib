@@ -227,6 +227,8 @@ func progress(p *proposal.Proposal, decision string, locked bool) (text, class s
 		return "wartet, bis die Box mit der Arbeit davor fertig ist", "gelb", true
 	case p.Outcome == "waiting":
 		return "fängt gleich an", "gelb", true
+	case p.Outcome == "rolled-back" && p.Refiled != 0: // #1209: a precondition, the change waits as a fresh card
+		return p.Because, "gelb", false
 	case p.Outcome == "rolled-back" && p.Because == "": // taken back on request: done, not red
 		return "zurückgenommen", "info", false
 	case p.Outcome == "rolled-back" && strings.Contains(p.Because, "Journal"):

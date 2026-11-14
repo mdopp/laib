@@ -708,11 +708,22 @@ state's commit range). Every release of the lock starts the run again, so
 three approvals during one long apply give exactly one more apply with all
 three; `laib serve` starts it after a restart, and a converge tick or a
 whole-box `laib apply` that finds approvals waiting hands over to it. A run
-that is not green (verify red, a snapshot failed) is rolled back as a
-whole: each of its merges is reverted, newest first, each proposal is
-`rolled-back` with the run named („#5 zurückgenommen, mit dem ganzen Lauf
-#4, #5, #6 (…)“), and one apply follows. A proposal of that run is proposed
-again to be approved alone.
+that is not green is reverted as a whole, each of its merges newest first
+(„#5 zurückgenommen, mit dem Lauf #4, #5, #6 (…)“). A run of one, or one
+whose snapshot failed (nothing runs without it), ends there with one apply.
+A run of several is then applied again one proposal at a time, in its order
+(#1209): each one's rollback reverted („#4 wieder eingespielt, allein“) and
+applied; a green one stays, a red one is reverted again with its own apply,
+and one whose change no longer goes on without a red one (git cannot
+revert its rollback) stays out with it. Only the red ones are
+`rolled-back`; their cards and one journal line say which went through
+(„– #4 und #6 aus demselben Lauf sind angewendet“), and the snapshot offer
+below names only the red ones' services. A hook that prints `laib-wartet:
+<Titel> | <warum>` names a precondition only the owner meets: its red
+proposal, a set of values, becomes a Box-Aufgabe for the admins and the
+same change as a fresh card, approved in advance by whoever approved it
+(#1194), that Laib applies once the task is done; the old card says
+„wartet auf Box-Aufgabe #N …“, not red.
 A red run that touched a service with data (its pre-update snapshot taken,
 the apply red) restores nothing by itself (#853, ADR 0019 §4 as amended):
 the old program comes back, the data stay as the update left them, and each

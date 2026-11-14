@@ -344,6 +344,21 @@ another version than the approved one is said (HACS downloads what it
 thinks newest). The check names a folder without a manifest as a finding
 too, so an update from Home Assistant's own page is not missed.
 
+Home Assistant's marketplace installs only for a user who accepted its
+warning, each user for themselves (`components/marketplace/update.py`,
+`warning_accepted(user_id)`), and the hook installs as Laib's own
+administrator, so the owner's click in Home Assistant does not count for it
+(#1209: `update.install` answered 500, „Open the Marketplace and read the
+warning first“). The owner's approval of the card is that consent, and the
+card says so. Before the first install the hook asks `marketplace/info`
+whether Laib's user accepted the warning's current version and, only when
+not, records it with `marketplace/warning/accept`, the WebSocket command
+Home Assistant's own page sends; `.storage` is never written. A Home
+Assistant without the marketplace asks nobody. Where Home Assistant
+refuses, nothing is installed and the hook prints `laib-wartet: …`: Laib
+turns the card into a Box-Aufgabe for the admins and holds the same change,
+approved in advance, until the task is done.
+
 Device firmware is `Firmware: …`. The firmware Home Assistant can install
 comes as its own proposal, `HA_FIRMWARE=update.x=<version>,…` (finding
 "Neue Firmware für Geräte einspielen: …"), never folded into the

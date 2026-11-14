@@ -147,10 +147,12 @@ func TestThreeApprovalsDuringOneApplyGiveOneMoreApply(t *testing.T) {
 	}
 }
 
-// #609: a red run rolls back every proposal it carried, and each says
-// with which others it went.
+// #1209 (was #609's whole-run rollback): a red run of three is taken
+// back and applied again one proposal at a time; the two green ones stay,
+// only the red one is rolled back, and its card and the journal say which
+// went through.
 // Ablauf L-9
-func TestARedBatchRollsBackAllAndSaysSoForEach(t *testing.T) {
+func TestARedBatchRollsBackOnlyTheRedProposal(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
 	st, _ := cli.LoadState(env)
@@ -169,20 +171,32 @@ func TestARedBatchRollsBackAllAndSaysSoForEach(t *testing.T) {
 	unlock()
 	for _, p := range ps {
 		got, _ := proposal.Get(cli.InboxDir(env), p.ID)
-		if got.Outcome != "rolled-back" || !strings.HasPrefix(got.Batch, "#1, #2, #3 (") || strings.Contains(got.Batch, "fatal") {
-			t.Fatalf("#%d not rolled back with its run: %+v", p.ID, got)
+		_, inState := os.Stat(filepath.Join(env.Paths.State, "services", "w"+fmt.Sprint(p.ID)))
+		_, onBox := os.Stat(filepath.Join(env.Paths.Quadlet, "w"+fmt.Sprint(p.ID)))
+		if !strings.HasPrefix(got.Batch, "#1, #2, #3 (") {
+			t.Fatalf("#%d not attributed to its run: %+v", p.ID, got)
 		}
-		if _, err := os.Stat(filepath.Join(env.Paths.State, "services", "w"+fmt.Sprint(p.ID))); err == nil {
-			t.Fatalf("#%d still in the state", p.ID)
+		if p.ID == 2 {
+			if got.Outcome != "rolled-back" || inState == nil || onBox == nil {
+				t.Fatalf("the red #2 is not taken back: %+v", got)
+			}
+			if !strings.Contains(got.Because, "w2 danach nicht richtig lief") || !strings.Contains(got.Because, "#1 und #3 aus demselben Lauf sind angewendet") {
+				t.Fatalf("the red card does not say why and which went through: %q", got.Because)
+			}
+			continue
 		}
-		if _, err := os.Stat(filepath.Join(env.Paths.Quadlet, "w"+fmt.Sprint(p.ID))); err == nil {
-			t.Fatalf("#%d still on the box", p.ID)
+		if got.Outcome == "rolled-back" || got.Because != "" || inState != nil || onBox != nil {
+			t.Fatalf("the green #%d went back with the red one: %+v", p.ID, got)
 		}
 	}
 	es, _, _ := journal.ReadCounted(env.Paths.Journal, time.Now().Add(-time.Hour))
-	for _, want := range []string{"#1 zurückgenommen, mit dem ganzen Lauf #1, #2, #3", "#2 zurückgenommen, mit dem ganzen Lauf #1, #2, #3", "#3 zurückgenommen, mit dem ganzen Lauf #1, #2, #3"} {
+	for _, want := range []string{"#1 wieder eingespielt, allein", "#3 wieder eingespielt, allein", "#2 zurückgenommen, allein angewendet", "war rot; jede Freigabe allein angewendet: angewendet #1, #3 zurückgenommen #2"} {
 		if !slices.ContainsFunc(es, func(e journal.Entry) bool { return e.Verb == "rollback" && strings.Contains(e.Detail, want) }) {
 			t.Fatalf("the journal does not say %q", want)
 		}
+	}
+	body := inboxMux(env)("GET", "/inbox", nil)
+	if !strings.Contains(body, "#1 und #3 aus demselben Lauf sind angewendet") {
+		t.Errorf("the Inbox does not say which went through:\n%s", body)
 	}
 }
