@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.0](https://github.com/mdopp/laib/compare/v2.27.0...v2.28.0) (2026-11-14)
+
+
+### Features
+
+* **template:** druck, every printer for every device without an app ([#1208](https://github.com/mdopp/laib/issues/1208)) ([a16fd92](https://github.com/mdopp/laib/commit/a16fd92012895a581fccf0eaea61bbd0f02696b7))
+
 ## [2.27.0](https://github.com/mdopp/laib/compare/v2.26.0...v2.27.0) (2026-11-13)
 
 
