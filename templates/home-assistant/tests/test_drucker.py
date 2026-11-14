@@ -68,7 +68,7 @@ class Run(unittest.TestCase):
         def ha(method, path, body=None):
             calls.append((method, path))
             if path.endswith("/flow") and method == "GET":
-                return []
+                raise RuntimeError("GET /api/config/config_entries/flow: 405")
             if path.endswith("/flow") and method == "POST":
                 return {"flow_id": "n1", "type": "form", "step_id": "user"}
             if method == "POST":
@@ -78,6 +78,17 @@ class Run(unittest.TestCase):
         self.assertEqual(drucker.main([LISTE[2]], "t", ha, {}), 0)
         self.assertIn(("DELETE", "/api/config/config_entries/flow/n1"), calls)
         self.assertFalse([c for c in calls if "/entry" in c[1]], "never an entry deleted or changed")
+
+    def test_the_list_of_flows_is_never_asked_for(self):
+        calls = []
+
+        def ha(method, path, body=None):
+            calls.append((method, path))
+            raise RuntimeError(f"{method} {path}: 405")
+
+        st = {"data": {"entries": [{"domain": "ipp", "source": "zeroconf", "unique_id": LISTE[0].get("uuid") or "u", "data": {"host": LISTE[0]["host"], "base_path": LISTE[0]["pfad"]}}]}}
+        self.assertEqual(drucker.main([LISTE[0]], "t", ha, st), 0, "a printer HA has needs no call at all")
+        self.assertEqual(calls, [])
 
     def test_no_print_server_is_no_change(self):
         self.assertEqual(drucker.main(None, "t", None, {}), 0)
