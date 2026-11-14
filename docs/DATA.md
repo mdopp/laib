@@ -404,11 +404,23 @@ subscriptions). Its data folder holds only the status and the last run.
   what laib-lease keeps is the code's claim above. The model process is the household's, so root reads its
   memory while it answers, as it reads an open vault (flow 22).
 - **Inbox `archiv-eingang/<person>/`:** Homes writes it as the device's
-  person; each instance mounts only its own folder. Signal and WhatsApp
-  databases arrive encrypted by the messenger, SMS age-encrypted on the
-  phone; **WhatsApp `Media/` arrives in plaintext** and stays so until the
-  Briefkasten encrypts it — indefinitely if the person has no vault yet
-  (apps/archiv/briefkasten.go). Not in the backup (`backup: false`).
+  person; each instance mounts only its own folder. **Every file arrives
+  age-encrypted on the phone to the person's archive key** (archiv#64,
+  homes-android#194): WhatsApp's database and `Media/`, Signal's backup,
+  the SMS and calls, a shared export, each as `<name>.age`. Homes relays
+  only these bytes and refuses anything else (a name without `.age`, or
+  first bytes that are not age; homes internal/napi/sicherung.go); it
+  holds no key that opens them. The archive unwraps a WhatsApp database or
+  Signal backup only while the vault is open, into the vault's work
+  folder, then opens the messenger's own encryption with the key inside
+  the vault (apps/archiv/postbote.go `ausAge`). `letzte/` keeps the newest
+  backup as it came, so a new phone gets it back only through the open
+  archive (apps/archiv/intern.go `/intern/letzte/`). A backup Homes took
+  before archiv#64 may still wait encrypted by the messenger only, and a
+  WhatsApp medium of then in plaintext until the Briefkasten encrypts it
+  (apps/archiv/briefkasten.go). Homes' ledger
+  (`HOMES_DATA/sicherung/<person>/`) keeps each file's name and size, not
+  its content. Not in the backup (`backup: false`).
 - **Mail (archiv#34, owner 2026-11-11):** the person's own mailboxes,
   several, fetched hourly with `EXAMINE`/`BODY.PEEK`. Where the owner set
   it for this person, also the household's document mailbox (the one
@@ -449,7 +461,9 @@ subscriptions). Its data folder holds only the status and the last run.
   address check keeps the others out, not the provider; a read-only login
   of the provider, where one exists, is the narrower key). **Keys others hold to
   it:** `ARCHIV_HOMES_SECRET` (Homes, per instance: `/intern/` for a new
-  phone's restore, WhatsApp media only while open, the counts above; the archive also signs
+  phone's restore — every file of `letzte/` only while open, decrypted
+  there to the messenger's own file; the media are then plaintext on
+  their way through Homes to the phone — the counts above; the archive also signs
   with it the answers it posts to Homes' `/intern/uebernahme`, which Homes
   checks with the same secret); the msgvault key on
   `/p/<person>/` only where the person set `AGENT_PATH` (off by default,
@@ -509,7 +523,8 @@ and the app's API (`/napi/`); references below are to mdopp/homes.
   `homes-qmd` (its index), the share's `notes` (the household's notes,
   one folder), `paperless-consume` (the app's uploads),
   `archiv-eingang/<person>/` (phone backups, written as the device's
-  person, internal/napi/sicherung.go).
+  person, only age-encrypted to that person's archive,
+  internal/napi/sicherung.go).
 - **Keys Homes holds** (templates/homes/laib.yml):
   - `HOMES_IMMICH_KEY` — the owner's Immich account (internal/immich/
     immich.go). Reads people, faces, thumbnails, metadata search; writes
@@ -781,10 +796,13 @@ listed again.
    the family's. This is ADR 0017's household share, stated here so it is
    not mistaken for separation.
 5. **The archive's stated limits** (ADR 0029 and its 2026-11-01
-   amendment): root reads an open vault, the IMAP password and messenger
-   keys sit outside the vault, and WhatsApp `Media/` waits in plaintext
-   in `archiv-eingang/<person>/` until the Briefkasten encrypts it —
-   indefinitely for a person without a vault.
+   amendment): root reads an open vault, and the IMAP password sits
+   outside the vault (the Signal passphrase and the WhatsApp key moved
+   inside, archiv README „Where the keys the person enters live“). Since
+   archiv#64 WhatsApp `Media/` no longer arrives in plaintext: the phone
+   encrypts every backup for the archive. What a phone sent before may
+   still wait in plaintext until the Briefkasten encrypts it. A restore still carries the media in
+   plaintext from the open archive through Homes to the new phone.
 6. **Closed: new documents entered Paperless without an owner** (row 6).
    Scans, the app's uploads, the Bote's „ablegen“ and mail were seen by
    every family member (and Homes' `homes`, the Bote) until someone sorted
