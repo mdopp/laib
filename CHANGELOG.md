@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.29.1](https://github.com/mdopp/laib/compare/v2.29.0...v2.29.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **updates:** pin version-tagged images too and verify the release's signature ([#1225](https://github.com/mdopp/laib/issues/1225)) ([2ca4bee](https://github.com/mdopp/laib/commit/2ca4bee77fb7c870f9c1eeafbdfeec8c997e8acb)), closes [#1130](https://github.com/mdopp/laib/issues/1130)
+
 ## [2.29.0](https://github.com/mdopp/laib/compare/v2.28.3...v2.29.0) (2026-11-14)
 
 
