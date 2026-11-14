@@ -190,6 +190,34 @@ BOX_M = ("escpr:0/cups/model/epson-inkjet-printer-escpr/Epson-WF-3540_Series-eps
          "driverless:ipp://EPSON._ipp._tcp.local/ EPSON WF-3540 Series, driverless, cups-filters 1.28.17\n")
 
 
+class StaysPut(unittest.TestCase):
+    """2026-11-14: the queue was re-added every round, its URI flipping between the Epson's
+    dnssd:// and ipp://….local/ names, and phones saw it go offline after printing"""
+
+    def test_the_same_device_whatever_order_cups_lists_them(self):
+        a = finden.parse_devices(BOX_V)
+        first = {k: d["uri"] for k, (d, _) in finden.chosen(a).items()}
+        again = {k: d["uri"] for k, (d, _) in finden.chosen(list(reversed(a))).items()}
+        self.assertEqual(first, again)
+
+    def test_a_known_queue_keeps_its_uri_when_the_printer_shows_by_another_name(self):
+        calls = []
+        orig = finden.run
+        finden.run = lambda *c, **k: (calls.append(c), "device for Epson_WF-3540: x\n")[1]
+        try:
+            known = {"netz:EPSON": {"queue": "Epson_WF-3540", "uri": "dnssd://EPSON._ipp._tcp.local/", "model": "m",
+                                    "shared": True, "info": "i", "gesehen": 0}}
+            p = {"key": "netz:EPSON", "queue": "Epson_WF-3540", "uri": "ipp://EPSON._ipp._tcp.local/", "model": "m",
+                 "shared": True, "name": "Epson WF-3540"}
+            orig_info = finden.info
+            finden.info = lambda p: "i"
+            finden.apply([p], known, 1)
+        finally:
+            finden.run, finden.info = orig, orig_info
+        self.assertFalse([c for c in calls if c[0] == "lpadmin"], "no lpadmin when only the backend's name differs")
+        self.assertEqual(known["netz:EPSON"]["uri"], "dnssd://EPSON._ipp._tcp.local/")
+
+
 class TheBox(unittest.TestCase):
     """the first day on the box: no queue, because the round asked CUPS for the BRF printer's PPDs,
     got „not found“ and gave up, and the Epson's IPP service came as ipp://EPSON._ipp._tcp.local/"""
