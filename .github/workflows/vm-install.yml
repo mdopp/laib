@@ -925,7 +925,7 @@ jobs:
                 # #349: the tokens, minted by post-deploy against this real Home Assistant: onboarded as laib, one token
                 # per consumer, the Bote a user of its own; none of it typed, none of it in the output of the apply
                 grep -q "onboarded, administrator laib" /tmp/add-ha.txt || { echo "post-deploy did not onboard Home Assistant"; exit 1; }
-                for n in HA_TOKEN HOMES_HA_TOKEN BOTE_AUTOMAT_HA_TOKEN BOTE_HA_TOKEN; do grep -q "$n minted" /tmp/add-ha.txt || { echo "$n was not minted"; exit 1; }; done
+                for n in HA_TOKEN HOMES_HA_TOKEN BOTE_AUTOMAT_HA_TOKEN BOTE_HA_TOKEN STIMME_HA_TOKEN HA_NAMES_TOKEN FRAGE_HA_TOKEN; do grep -q "$n minted" /tmp/add-ha.txt || { echo "$n was not minted"; exit 1; }; done
                 tok() { podman secret inspect --showsecret --format "{{.SecretData}}" "laib.tokens.tokens.$1"; }
                 [ -n "$(tok HOMES)" ] && [ -n "$(tok BOTE)" ] || { echo "the stand-in did not get the tokens in the apply that minted them"; exit 1; }
                 if grep -qFf <(printf "%s\n" "$(tok HOMES)" "$(tok BOTE)") /tmp/add-ha.txt || grep -q "laib-secret" /tmp/add-ha.txt; then echo "a token is in the apply output"; exit 1; fi
@@ -955,7 +955,7 @@ jobs:
                 # the next apply keeps what works; a token HA refuses is replaced
                 $L apply home-assistant | tee /tmp/apply-ha2.txt
                 if grep -q " minted" /tmp/apply-ha2.txt; then echo "a working token was minted again"; exit 1; fi
-                grep -q "tokens for the check, Homes, the Automat, the Bote, Stimme and the names work" /tmp/apply-ha2.txt
+                grep -q "tokens for the check, Homes, the Automat, the Bote, Stimme, Frage and the names work" /tmp/apply-ha2.txt || { echo "the second apply does not say every token works"; exit 1; }
                 echo vm-not-a-token-349 | $L secret set HA_TOKEN >/dev/null
                 $L apply home-assistant | tee /tmp/apply-ha3.txt
                 grep -q "HA_TOKEN minted (replaces one HA refuses)" /tmp/apply-ha3.txt || { echo "the refused HA_TOKEN was not replaced"; exit 1; }
