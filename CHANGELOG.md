@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.29.0](https://github.com/mdopp/laib/compare/v2.28.3...v2.29.0) (2026-11-14)
+
+
+### Features
+
+* **frage:** a wake nobody meant gets a tone, not an answer ([#1218](https://github.com/mdopp/laib/issues/1218)) ([7ab9ee1](https://github.com/mdopp/laib/commit/7ab9ee1b924616849e323daaa30eb3fac066399e))
+
 ## [2.28.3](https://github.com/mdopp/laib/compare/v2.28.2...v2.28.3) (2026-11-14)
 
 
