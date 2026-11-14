@@ -32,7 +32,7 @@ func Append(dir string, e Entry) error {
 	if e.T.IsZero() {
 		e.T = time.Now().UTC()
 	}
-	scrubEntry(&e, knownNow())
+	scrubEntry(&e, KnownNow())
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}

@@ -18,7 +18,8 @@ import (
 // #195: a template's timer and the oneshot it fires (homes's library
 // refresh). The oneshot is inactive between runs: apply neither starts nor
 // waits for it, converge does not restart it, and status is green — until a
-// run fails, which status and diag show red. The timer itself is a unit.
+// run fails, which status and diag show gelb, a helper's error: the service
+// runs (2026-11-14). The timer itself is a unit.
 func TestATemplateTimersOneshotCountsOnlyWhenItFails(t *testing.T) {
 	ctx := context.Background()
 	c := newCbox(t)
@@ -79,13 +80,14 @@ func TestATemplateTimersOneshotCountsOnlyWhenItFails(t *testing.T) {
 	if row := tick(); row.State != "grün" {
 		t.Errorf("an idle oneshot turned the service %s: %+v", row.State, row)
 	}
+	// a failed refresh is a helper's error (2026-11-14): tick runs, so gelb, named
 	refresh = "failed"
-	if row := tick(); row.State != "rot" || row.Units["tick-refresh.service"] != "failed" {
-		t.Errorf("a failed refresh is not red in status: %+v", row)
+	if row := tick(); row.State != "gelb" || row.Units["tick-refresh.service"] != "failed" || !strings.Contains(row.Helfer, "tick-refresh.service") {
+		t.Errorf("a failed refresh is not a helper's error in status: %+v", row)
 	}
 	var found bool
 	for _, f := range diag.Probes(ctx, c.env, st, "tick") {
-		found = found || (f.Severity == "rot" && strings.Contains(f.Detail, "tick-refresh.service"))
+		found = found || (f.Severity == "gelb" && strings.Contains(f.Detail, "tick-refresh.service"))
 	}
 	if !found {
 		t.Error("diag does not name the failed refresh")

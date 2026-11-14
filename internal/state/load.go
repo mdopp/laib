@@ -611,6 +611,17 @@ func (svc *Service) Oneshots() []string {
 	return out
 }
 
+// Helper says whether unit u only helps svc (2026-11-14): a timer, or a
+// oneshot other than the check its status names (its health, #417). A
+// helper that fails leaves the service running.
+func (svc *Service) Helper(u string) bool {
+	check := ""
+	if s := svc.Contract.Status; s != nil {
+		check = s.Check
+	}
+	return strings.HasSuffix(u, ".timer") || u != check && slices.Contains(svc.Oneshots(), u)
+}
+
 func oneshot(file, content string) bool {
 	return filepath.Ext(file) == ".service" && !strings.Contains(content, "[Install]")
 }

@@ -28,6 +28,10 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 22,660: two requests of the owner, 2026-11-14, on top of each other: #1209's 22,560 (below) and
+# Durchgang rot with „a failed helper is no ‚läuft nicht‘“: the cause of a red run on its cards
+# (laib note --karten, the Inbox shows it) and a helper's failure gelb with its last log line on
+# every surface, about 100 lines more; each request counts as the owner's yes.
 # 22,560: the owner's #1209 (2026-11-14, „Eine rote Karte nimmt fremde Karten im selben Lauf mit
 # zurück“): a red run of several is applied again one proposal at a time, only the red one goes back,
 # and a hook's precondition holds its card for the owner's task; the kernel at 22,357 before, about
@@ -58,7 +62,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 22560 cmd internal
+budget kernel 22660 cmd internal
 budget operator 3300 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,

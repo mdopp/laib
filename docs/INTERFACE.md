@@ -61,7 +61,7 @@ laib wish list [--alle] | status [<id> offen|erledigt|verworfen "<grund>"]   an 
                                      „erledigt: …“) per wish; ops, claude and humans. The log review closes the Operator's own;
                                      the morning report says it once; the Inbox's „Zuletzt entschieden“ shows it. No ticket
 laib repair <probe> [service]                 a diag finding's repair (its `repair` field: restart <svc>, apply, backup, backup check, operator enable) as a proposal (repairs/<time>.md, class human); a human approves, then laib runs the verb as the human who approved; any other command in repairs/ is refused (#441)
-laib note [--kind report|incident|watch] "<text>"   what a hand concluded; report = the morning report
+laib note [--kind report|incident|watch] [--karten N,M] "<text>"   what a hand concluded; report = the morning report; --karten: on a red run's cards and their follow-ups as its cause
 laib aufgabe list [--alle] [--faellig] | zeigen <id> | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT]
             [--fertig-wenn "<probe> [<dienst|thema>]"] [--fuer admins|alle|person:<login>] [--weg /seite|gespraech]
             | erledigt <id> | zurueckstellen <id> <JJJJ-MM-TT>

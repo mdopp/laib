@@ -262,7 +262,14 @@ LAIB_MCP_URL=http://127.0.0.1:5976/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://
 python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="unchanged" and s["script"][0]=="laib_status {}" and any(c.startswith("laib_logs ") for c in s["script"]) and not s["calls"] and not s.get("refused"), s' "$WORK/durchsicht.json" || fail "durchsicht's script did not run through the runner"
 grep -q '"skill":"durchsicht".*"outcome":"unchanged"' "$WORK/op/incidents.jsonl" || fail "a run with nothing to do is not recorded (#839)"
 kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
-python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green" and s["skill"]=="vorfall" and len(s["calls"])==4, s' "$WORK/op.json"
+python3 - "$WORK/op.json" <<'PY4' || fail "the incident session"
+import json, sys
+text, d, ss = open(sys.argv[1]).read().strip(), json.JSONDecoder(), {}
+while text:  # one session per event skill, one JSON object each
+    s, n = d.raw_decode(text); ss[s["skill"]] = s; text = text[n:].strip()
+assert ss["vorfall"]["outcome"] == "green" and len(ss["vorfall"]["calls"]) == 4, ss["vorfall"]
+assert ss["durchgang"]["outcome"] == "idle" and ss["durchgang"]["why"] == "kein roter Durchgang", ss["durchgang"]  # a unit's red is no run's
+PY4
 # the switch: listed for everyone, set by a human, a commit to policy.yml
 grep -qE "^aktiv +morgenbericht" <<<"$("$BIN" skill list)" || fail "skill list"
 if LAIB_ACTOR=ops "$BIN" skill pause routineblick >/dev/null 2>&1; then fail "ops paused a skill"; fi

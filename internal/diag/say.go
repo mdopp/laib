@@ -43,6 +43,8 @@ var says = map[string]string{
 func Say(f Finding) string {
 	who := cmp.Or(proposal.Named(f.Service), "Ein Dienst")
 	switch {
+	case f.Helfer != "": // a helper's error: the service runs (2026-11-14)
+		return f.Helfer
 	case f.Probe == "status" && f.Detail != "" && !proposal.Technical(f.Detail):
 		return who + ": " + f.Detail
 	case f.Probe == "drift" && f.Severity == "info":

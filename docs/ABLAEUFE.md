@@ -74,6 +74,16 @@ Wenn ein Update eines Dienstes mit Daten nicht richtig läuft,
 Dann läuft das alte Programm wieder und die Karte sagt, dass die Daten auf dem Stand nach dem Update sind.
 Und sie bietet „Sicherung zurückspielen“ und „Nach vorne reparieren“, je ein Tipp.
 
+### L-50 Ein roter Durchgang sagt auf seinen Karten, warum
+Wenn ein Durchgang mit mehreren Freigaben rot endet und Laib ihn zurückgenommen hat,
+Dann liest der Operator Journal und Log und schreibt die Ursache in einem Satz auf die Karten des Durchgangs und ihre Folgekarten: „Der Operator hat nachgesehen: …“.
+Und was mit dem Fehler nichts zu tun hatte, schlägt er einzeln neu vor, so wie es war; freigeben muss es wieder ein Mensch.
+
+### L-51 Was nur der Owner tun kann, wird eine Box-Aufgabe
+Wenn die Ursache eines roten Durchgangs etwas ist, das nur der Owner erledigen kann,
+Dann steht dafür eine Box-Aufgabe bei den Admins, mit der Ursache als Grund.
+Und der Operator gibt dabei nichts frei, umgeht keine Zustimmung und keine Sperre.
+
 ### L-11 Verkettete Freigaben laufen in ihrer Reihenfolge
 Wenn eine Karte auf eine andere, einen Schlüssel oder eine Version wartet,
 Dann kann der Owner sie vorab freigeben, und sie läuft erst, wenn das da ist, in ihrer Reihenfolge.
@@ -221,6 +231,11 @@ Und von außen sieht er nur „nur zu Hause“.
 Wenn ein Dienst zehn Minuten rot ist,
 Dann bekommt der Owner eine Nachricht: seit wann, wer dran ist, mit Link auf den Status.
 Und wird er wieder grün, kommt „wieder grün“.
+
+### L-52 Ein Helfer mit Fehler macht den Dienst gelb, nicht rot
+Wenn ein Helfer eines Dienstes fehlschlägt, ein Timer oder der Auftrag, den er startet, der Dienst selbst aber läuft,
+Dann ist der Dienst gelb: „Home Assistant läuft; ein Helfer meldet einen Fehler: …“ mit dem Helfer und seiner letzten Logzeile.
+Und es kommt keine Nachricht „seit 10 Minuten rot“; rot machen ihn nur sein Hauptdienst und seine Prüfung.
 
 ### L-38 Ein geplanter Neustart ist kein Alarm
 Wenn Laib einen Dienst gerade anwendet oder angekündigt neu startet,

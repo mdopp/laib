@@ -161,7 +161,10 @@ sleep 1
 OPS_TOKEN="$(LAIB_ACTOR=human:boot "$BIN" token mint ops --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')"
 LAIB_MCP_URL=http://127.0.0.1:18090/mcp LAIB_TOKEN="$OPS_TOKEN" MODEL_URL=http://127.0.0.1:18081/v1 OPERATOR_HOME="$WORK/op" OPERATOR_SKILLS="$ROOT/skills" "${LAIB_OPERATOR_BIN:-$ROOT/laib-operator}" -once event:whoami > "$WORK/op.json" || { echo "operator exit $?"; cat "$WORK/op.json"; kill $FAKE $SERVE; exit 1; }
 kill $FAKE $SERVE 2>/dev/null; wait $FAKE $SERVE 2>/dev/null || true
-python3 -c 'import sys,json; s=json.load(open(sys.argv[1])); assert s["outcome"]=="green", s' "$WORK/op.json"
+python3 -c 'import sys,json; t, d, ss = open(sys.argv[1]).read().strip(), json.JSONDecoder(), {}
+while t:  # one session per event skill (vorfall, durchgang)
+    s, n = d.raw_decode(t); ss[s["skill"]] = s; t = t[n:].strip()
+assert ss["vorfall"]["outcome"] == "green" and ss["durchgang"]["outcome"] == "idle", ss' "$WORK/op.json"
 grep -q "whoami.boot.test" <<<"$(curl -fsS http://127.0.0.1:18080/)" || { echo "FAIL: whoami not back after the operator's restart"; exit 1; }
 "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); assert any(e["verb"]=="restart" and e["actor"]=="ops" for e in es) and any(e["verb"]=="note" for e in es), [e["verb"] for e in es]'
 # (before Homes: its test stops homes-boot on purpose, and enable's apply verifies every service)
