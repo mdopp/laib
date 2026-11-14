@@ -87,6 +87,8 @@ def act(ha, action, p, flow):
     if r.get("type") == "form":   # the printer did not answer: no flow left waiting
         ha("DELETE", f"/api/config/config_entries/flow/{flow}")
         return f"{p['name']}: nicht erreicht ({(r.get('errors') or {}).get('base', 'Formular')}), beim nächsten Lauf wieder"
+    if r.get("type") == "abort" and r.get("reason") == "already_in_progress":
+        return f"{p['name']}: wartet in Home Assistant auf eine Bestätigung"
     if r.get("type") == "abort":
         return f"{p['name']}: Home Assistant hat ihn schon ({r.get('reason')})"
     return f"{p['name']}: in Home Assistant eingetragen"
@@ -100,7 +102,9 @@ def main(drucker, token, ha, storage):
         print("drucker: no HA_NAMES_TOKEN yet (laib apply home-assistant mints it): no printer added")
         return 0
     try:
-        todo = plan(drucker, entries_of(storage), ha("GET", "/api/config/config_entries/flow") or [])
+        # HA's REST has no list of flows in progress (GET …/flow answers 405, 2026-11-14): a printer
+        # whose discovery waits is started anew; HA then aborts with already_in_progress
+        todo = plan(drucker, entries_of(storage), [])
         for action, p, flow in todo:
             print("drucker: " + act(ha, action, p, flow))
     except PermissionError as err:
