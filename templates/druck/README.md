@@ -32,14 +32,19 @@ driverless queue.
 
 ## The rule (`druck-finden.py`, every 2 minutes)
 
-1. **Found** is what CUPS finds: `lpinfo -v` with the `dnssd` backend (every
-   printer announced as `_ipp`, `_ipps`, `_pdl-datastream` or `_printer`) and
-   the `usb` backend. A network printer is one DNS-SD name, whichever of its
-   services is there (IPP first). Its queue's URI is that name
-   (`dnssd://EPSON%20WF-3540%20Series._ipp._tcp.local/`), resolved at every
+1. **Found** is what CUPS finds: `lpinfo -v` with the `dnssd` backend and
+   cups-filters' `driverless` backend (every printer announced as `_ipp`,
+   `_ipps`, `_pdl-datastream` or `_printer`) and the `usb` backend; CUPS'
+   bare backends, its virtual BRF printer and the SNMP backend's addresses
+   are no printers. A network printer is one DNS-SD name, whichever of its
+   services is there (IPP first). Its queue's URI is that name (the Epson's
+   is `ipp://EPSON._ipp._tcp.local/`: its DNS-SD name is just „EPSON“), resolved at every
    job: a new address after a DHCP change, or a printer that sleeps and comes
    back, is the same queue. No address is stored.
-2. **Driver** is CUPS' own matching, `lpinfo --device-id <IEEE 1284 ID> -m`:
+2. **Driver** is CUPS' own matching, `lpinfo --device-id "MFG:…;MDL:…;" -m`
+   with the printer's IEEE 1284 make and model (a `CMD` its DNS-SD record
+   made up, `AppleRaster,URF`, would rule out the vendor's PPD; no match is
+   an empty list, never a failed round):
    a printer that takes PDF or PWG raster gets the driverless queue; any
    other the vendor driver CUPS matches, escpr before hpcups before
    Gutenprint before the rest, never a generic PPD; none of those and URF:
@@ -63,7 +68,7 @@ driverless queue.
 The queue names are stable (`bekannt.json`): `Epson_WF-3540`, its
 description „Epson WF-3540 (über die Box)“, which is what phones show.
 
-## Discovery: avahi in the container, on its own host name
+## Discovery: avahi in the container, services only
 
 DNS-SD is multicast on the LAN, so the service is on the host network:
 box.yml `hostNetwork` must list `druck` — **the owner's decision**, put on the
@@ -77,13 +82,20 @@ are Home Assistant's, Music Assistant's and ESPHome's zeroconf, so there is no h
 file-share's would tie printing to Samba. CUPS needs avahi's client API, so
 the container runs its own `avahi-daemon` with:
 
+- `publish-addresses=no` and no host name of its own: it announces the
+  queues as services whose target is the box's own name
+  (`atHome-Server.local`), and no address record. The box's address is
+  answered already, by Samba's avahi and by the router.
+  The first version announced `drucker.local` and renamed itself every 20
+  seconds without end (`drucker-2` … `drucker-46`): the FRITZ!Box answers
+  mDNS for every name of the box's MAC with each IPv4 address it ever
+  leased to it (`.99` and `.100`, measured with a query from the box), and
+  avahi takes the extra address for another host claiming its name. Without
+  an address record there is no unique host record to conflict.
+- `use-ipv6=no`, and `allow-interfaces` set to the default route's interface:
+  nothing goes out on podman's bridges; no workstation or HINFO records.
 - `disallow-other-stacks=no`: it shares 5353 with the others by
-  SO_REUSEPORT, as they share it with each other today;
-- its own `host-name` (`DRUCK_HOSTNAME`, `drucker`): it announces
-  `drucker.local` and never the box's own name, which Samba's avahi
-  announces, so the two never contend for one name;
-- `allow-interfaces` set to the default route's interface: nothing goes out
-  on podman's bridges; no workstation or HINFO records.
+  SO_REUSEPORT, as they share it with each other today.
 
 `libnss-mdns` lets the backends resolve `.local` names.
 
@@ -112,13 +124,14 @@ docs/DATA.md has the flow.
 ## Health and status
 
 The container's `HealthCmd` (`druck-start.sh gesund`) is red when cupsd does
-not answer `lpstat -r`, avahi-daemon is not running, or the search has not
+not answer `lpstat -r`, avahi-daemon is not running or not `running` under
+the box's own name (a name conflict renames it: `-2`, `-3` …), or the search has not
 written its status for 10 minutes; three reds end the container
 (`HealthOnFailure=kill`) and `Restart=` brings it back, so the unit state
 carries it (laib.yml `health: none`). Zero printers is not red: the status
 says „Noch kein Drucker im Heimnetz oder am USB der Box gefunden.“
 
-`${DATA_DIR}/druck/laib-status.json`: `detail` („2 Drucker eingerichtet,
+`${DATA_DIR}/druck/laib-status.json` (in the container `/data/laib-status.json`): `detail` („2 Drucker eingerichtet,
 über die Box angeboten: Epson WF-3540.“), `warteschlangen` (the number of
 queues; `null` when the search did not run through), `geteilt`, and a finding
 per printer without a driver or a queue that could not be made.
@@ -146,7 +159,6 @@ template's `home-assistant-drucker` (every 15 minutes) makes the entries.
 | Value | Default | |
 |---|---|---|
 | `DRUCK_IMAGE` | `ghcr.io/mdopp/laib-druck:1` | the box pins the digest it runs („Images festhalten“, ADR 0034) |
-| `DRUCK_HOSTNAME` | `drucker` | the name the queues are announced under, `drucker.local` |
 | `DRUCK_VERGESSEN_TAGE` | `30` | |
 
 No secret. `laib add druck`; the card names the host network carve-out.

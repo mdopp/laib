@@ -4,14 +4,15 @@
 Runs in the druck container beside cupsd and avahi-daemon, every RUNDE seconds. What it does
 is all CUPS' and avahi's own discovery; this script only applies one rule to what they found:
 
-- **Found:** `lpinfo -l -v --include-schemes dnssd,usb` (CUPS' dnssd backend: every printer
-  announced as _ipp, _ipps, _pdl-datastream or _printer; the usb backend: every printer at the
-  box's USB, each with its IEEE 1284 device ID), and `avahi-browse -rtpk` for the TXT records
+- **Found:** `lpinfo -l -v` (CUPS' dnssd backend and cups-filters' driverless backend: every
+  printer announced as _ipp, _ipps, _pdl-datastream or _printer, by its DNS-SD name; the usb
+  backend: every printer at the box's USB; each with its IEEE 1284 device ID), and `avahi-browse -rtpk` for the TXT records
   of the IPP ones (what they accept: `pdl`, `URF`, `UUID`, `rp`). A network printer is one
   DNS-SD instance name, whichever of its services answers; its queue's URI is CUPS' dnssd://
   name, resolved at every job, so a new address after a DHCP change or a printer that sleeps
   and comes back is the same queue.
-- **Driver:** CUPS' own matching, `lpinfo --device-id <1284 id> -m`. A printer that takes PDF
+- **Driver:** CUPS' own matching, `lpinfo --device-id "MFG:…;MDL:…;" -m`, for the printers only;
+  no match is an empty list, not a failed round. A printer that takes PDF
   or PWG raster gets the driverless queue (cups-filters' `driverless:` entry, else
   `everywhere`); any other one the vendor driver CUPS matches, in the order escpr (Epson),
   hpcups (HP), gutenprint, then the rest; none of those and URF: driverless over URF; nothing:
@@ -150,36 +151,48 @@ def readable(dev, txt):
     return (first + " " + rest).strip()
 
 
-def plan(devices, avahi, models, own=()):
-    """devices: lpinfo -l -v; avahi: parse_avahi; models: {device-id: lpinfo -m}; own: our queues'
-    names as announced. -> [printer], each {key, name, art, uri, model, kind, shared, ha} or with why"""
-    found, order = {}, []
+def chosen(devices, own=()):
+    """the printers among lpinfo -v's devices, one device each: {key: (device, art)}. A network
+    printer is a DNS-SD instance, as CUPS' dnssd backend names it (dnssd://…) or cups-filters'
+    driverless backend (ipp://EPSON._ipp._tcp.local/), IPP first; an address (snmp's lpd://…) or a
+    bare backend (ipp, beh, cups-brf) is none. Our own shared queues are left out."""
+    found, rank = {}, {}
     for d in devices:
         uri = d["uri"]
         if uri.startswith("usb://"):
-            key, art, txt = "usb:" + uri, "usb", {}
-        elif uri.startswith("dnssd://"):
+            key, art, r = "usb:" + uri, "usb", 0
+        elif uri.split("://")[0] in ("dnssd", "ipp", "ipps"):
             name, t = dnssd_name(uri)
             if not name or SUFFIX in name or name in own:   # our own shared queue, maybe as „… @ drucker“
                 continue
-            key, art, txt = "netz:" + name, "netz", avahi.get((name, t), {}).get("txt", {})
+            key, art, r = "netz:" + name, "netz", TYPES.index(t)
         else:
             continue
-        rank = TYPES.index(dnssd_name(uri)[1]) if art == "netz" else 0
-        if key in found and found[key]["rank"] <= rank:
-            continue
-        if key not in found:
-            order.append(key)
-        found[key] = {"rank": rank, "dev": d, "art": art, "txt": txt}
+        if key not in found or r < rank[key]:
+            found[key], rank[key] = (d, art), r
+    return found
+
+
+def match_id(d):
+    """the device ID CUPS matches PPDs by: MFG and MDL only; a CMD the printer's DNS-SD record
+    made up (AppleRaster,URF) would rule out the vendor's PPD"""
+    f = dict(p.split(":", 1) for p in d.get("device-id", "").split(";") if ":" in p)
+    return f"MFG:{f['MFG']};MDL:{f['MDL']};" if f.get("MFG") and f.get("MDL") else ""
+
+
+def plan(devices, avahi, models, own=()):
+    """devices: lpinfo -l -v; avahi: parse_avahi; models: {match_id: lpinfo -m}; own: our queues'
+    names as announced. -> [printer], each {key, name, art, uri, model, kind, shared, ha} or with why"""
+    found = chosen(devices, own)
+    order = list(found)
     out = []
     for key in order:
-        f = found[key]
-        d, art = f["dev"], f["art"]
-        txt = f["txt"]
+        d, art = found[key]
+        txt = {}
         if art == "netz":   # the TXT of an IPP service, whichever service the queue uses
             name = key[5:]
-            txt = txt or next((avahi[(name, t)]["txt"] for t in TYPES[:2] if (name, t) in avahi), {})
-        model, kind = driver(models.get(d.get("device-id", ""), []), txt, art == "netz")
+            txt = next((avahi[(name, t)]["txt"] for t in TYPES[:2] if (name, t) in avahi), {})
+        model, kind = driver(models.get(match_id(d), []), txt, art == "netz")
         p = {"key": key, "name": readable(d, txt), "art": art, "uri": d["uri"]}
         if model is None:
             p["why"] = kind
@@ -250,8 +263,11 @@ def detail(printers):
 
 # --- the box -------------------------------------------------------------------------------
 
-def run(*cmd, timeout=60):
+def run(*cmd, timeout=60, none=None):
+    """a command's output; `none`: the answer that means nothing found (lpinfo's client-error-not-found)"""
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    if r.returncode and none and none in (r.stderr + r.stdout):
+        return ""
     if r.returncode:
         raise RuntimeError(f"{cmd[0]}: {(r.stderr or r.stdout).strip()[:300]}")
     return r.stdout
@@ -348,14 +364,15 @@ def runde():
     now = time.time()
     known = read_json("bekannt.json", {})
     try:
-        devices = parse_devices(run("lpinfo", "-l", "-v", "--include-schemes", "dnssd,usb", "--timeout", "15", timeout=60))
+        devices = parse_devices(run("lpinfo", "-l", "-v", "--timeout", "15", timeout=60))
         avahi = {}
         for t in TYPES[:2]:
             avahi |= parse_avahi(run("avahi-browse", "-rtpk", t, timeout=30))
         models = {}
-        for d in devices:
-            if d.get("device-id") and d["device-id"] not in models:
-                models[d["device-id"]] = parse_models(run("lpinfo", "--device-id", d["device-id"], "-m", timeout=60))
+        for d, _ in chosen(devices).values():   # only the printers: no PPD lookup for CUPS' own backends
+            i = match_id(d)
+            if i and i not in models:
+                models[i] = parse_models(run("lpinfo", "--device-id", i, "-m", timeout=60, none="not-found"))
     except (RuntimeError, subprocess.TimeoutExpired, OSError) as e:
         return status("nicht gemessen: die Suche nach Druckern lief nicht durch", [{
             "severity": "info", "unmeasured": True, "detail": "Die Druckersuche lief nicht durch.",

@@ -4,12 +4,18 @@
 # any of them ends, the container ends and Restart= brings all four back.
 #
 #   druck-start.sh          start
-#   druck-start.sh gesund   the HealthCmd: cupsd answers, avahi runs, the search ran lately
+#   druck-start.sh gesund   the HealthCmd: cupsd answers, avahi runs under the box's own name,
+#                           the search ran lately
 set -eu
-D=/data
+D=${DRUCK_DATA:-/data}
 if [ "${1:-}" = gesund ]; then
   lpstat -h /run/cups/cups.sock -r | grep -q "is running" || { echo "cupsd antwortet nicht"; exit 1; }
   avahi-daemon -c || { echo "avahi-daemon läuft nicht"; exit 1; }
+  # avahi's process title is its state and its name: „running [atHome-Server.local]“. Registering,
+  # or a name with -2, -3 … after it, is a name conflict; a loop of them is what the first day showed
+  want="running [$(cut -d. -f1 "${DRUCK_HOSTNAME_FILE:-/proc/sys/kernel/hostname}").local]"
+  have=$(ps -C avahi-daemon -o args= | sed -n 's/^avahi-daemon: //p' | head -n1)
+  [ "${have,,}" = "${want,,}" ] || { echo "avahi meldet „$have“ statt „$want“: Namenskonflikt im Heimnetz"; exit 1; }
   # the search writes its status every round (DRUCK_RUNDE, 2 min); 10 minutes without is a stuck search
   [ -n "$(find "$D/laib-status.json" -mmin -10 2>/dev/null)" ] || { echo "die Druckersuche lief seit 10 Minuten nicht"; exit 1; }
   exit 0
@@ -21,16 +27,19 @@ chown root:lp "$D/cups" "$D/cups/ppd" /var/spool/cups /var/spool/cups/tmp && chm
 chmod 0710 /var/spool/cups && chmod 1770 /var/spool/cups/tmp && chmod 0700 "$D/cups/ssl"
 for f in snmp.conf raw.types raw.convs; do [ -e /etc/cups/$f ] && [ ! -e "$D/cups/$f" ] && cp /etc/cups/$f "$D/cups/"; done
 
-# avahi only on the LAN interface (the default route's): never on podman's bridges. Its own
-# host name, so it never contends with another responder on the host for the box's name; the
-# other stacks keep 5353 too (disallow-other-stacks=no: SO_REUSEPORT, as Samba's avahi and Home
-# Assistant's zeroconf share it today).
+# avahi only on the LAN interface (the default route's), IPv4 only: never on podman's bridges.
+# It announces the queues as services and no address of its own (publish-addresses=no): their
+# target is the box's own name, whose address Samba's avahi and the router already answer. An own
+# host name (drucker.local) was a conflict every 20 seconds without end on the first day: the
+# FRITZ!Box answers mDNS for every name of the box's MAC with each IPv4 address it has leased to
+# it (.99 and .100), which avahi takes for another host claiming the name. With no address record
+# there is no unique host record to conflict. The other stacks keep 5353 too
+# (disallow-other-stacks=no: SO_REUSEPORT, as Samba's avahi and Home Assistant's zeroconf share it).
 dev=$(awk '$2 == "00000000" { print $1; exit }' /proc/net/route)
 cat > /etc/avahi/avahi-daemon.conf <<EOF
 [server]
-host-name=${DRUCK_HOSTNAME:-drucker}
 use-ipv4=yes
-use-ipv6=yes
+use-ipv6=no
 ${dev:+allow-interfaces=$dev}
 disallow-other-stacks=no
 ratelimit-interval-usec=1000000
@@ -38,6 +47,7 @@ ratelimit-burst=1000
 [wide-area]
 enable-wide-area=no
 [publish]
+publish-addresses=no
 publish-hinfo=no
 publish-workstation=no
 publish-aaaa-on-ipv4=no
