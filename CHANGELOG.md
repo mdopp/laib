@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.2](https://github.com/mdopp/laib/compare/v2.28.1...v2.28.2) (2026-11-14)
+
+
+### Bug Fixes
+
+* **template:** druck keeps the printer's queue as it is every round ([#1214](https://github.com/mdopp/laib/issues/1214)) ([0e511a5](https://github.com/mdopp/laib/commit/0e511a55a0177fe9a60ba14b302fc704bd77f1ca))
+
 ## [2.28.1](https://github.com/mdopp/laib/compare/v2.28.0...v2.28.1) (2026-11-14)
 
 
