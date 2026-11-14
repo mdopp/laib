@@ -928,7 +928,11 @@ class FrageAgent(Hook):
         p, handed, log = self.run_hook(frage=self.url, data_dir=self.tmp.name)
         self.assertEqual(p.returncode, 0, log)
         prompt = HA["subentries"]["e-f"][0]["data"]["prompt"]
-        self.assertTrue(prompt.endswith("\nSatellit: {{ llm_context.device_id or '' }}"), prompt)
+        line = prompt.rsplit("\n", 1)[1]
+        self.assertTrue(line.startswith("Satellit: {% set d = llm_context.device_id %}"), prompt)
+        # a phone's voice request carries a device too, but no satellite: no gate there, it could hear no tone
+        self.assertIn("device_entities(d) | select('match', 'assist_satellite[.]')", line)
+        self.assertTrue(line.endswith("else '' }}"), line)
         self.assertIn("Geräte: {{ states", prompt)
 
     def test_an_owners_own_prompt_stays(self):

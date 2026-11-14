@@ -37,8 +37,9 @@ whose agent is Frage gets `prefer_local_intents: true` (ADR 0015, #557):
 diag` lists „Frage als Gesprächsagent: fehlt“.
 
 **A wake nobody meant** (owner 2026-11-14). Frage's prompt has a third line,
-`Satellit: {{ llm_context.device_id or '' }}`: HA renders the asking device
-into it (empty when typed). Frage judges a sentence from a satellite
+`Satellit: …`: HA renders the asking device into it when that device has an
+`assist_satellite` entity (`device_entities`), else nothing (typed, or the
+phone app's voice, which could hear no tone). Frage judges a sentence from a satellite
 (frage/gate.go); when nobody meant it, it answers no words (HA skips the
 speech for an empty answer) and calls `assist_satellite.announce` on that
 device with `media_id: /local/laib/falsch.wav`, `preannounce: false`, as the

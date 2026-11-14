@@ -531,11 +531,13 @@ def main():
 # Assist switches as HA has them now; a device command HA's intents missed gets the nearest ones from Frage
 # („Meinst du „Sofalicht“?“). No LLM API on the agent: with one HA hands GetState and media to it, not its intents.
 SPOKEN = "['light', 'switch', 'fan', 'cover', 'climate', 'media_player', 'lock', 'vacuum', 'valve', 'scene']"
-# Its third line is the asking satellite's device (HA's llm_context.device_id, empty when typed): Frage judges
-# whether it was meant, and plays its tone there when not (frage/gate.go).
+# Its third line is the asking satellite's device (HA's llm_context.device_id), only when that device has an
+# assist_satellite entity: Frage judges whether it was meant and plays its tone there when not (frage/gate.go);
+# typed, or by voice from the phone app (no satellite, no tone possible), it is empty and Frage answers as before.
 FRAGE_PROMPT_760 = ("Antworte kurz, auf Deutsch, zum Vorlesen.\n"
                     "Geräte: {{ states | selectattr('domain', 'in', " + SPOKEN + ") | map(attribute='name') | join('; ') }}")
-FRAGE_PROMPT = FRAGE_PROMPT_760 + "\nSatellit: {{ llm_context.device_id or '' }}"
+FRAGE_PROMPT = FRAGE_PROMPT_760 + ("\nSatellit: {% set d = llm_context.device_id %}"
+                                   "{{ d if d and (device_entities(d) | select('match', 'assist_satellite[.]') | list) else '' }}")
 FRAGE_OLD_PROMPTS = ("Antworte kurz, auf Deutsch, zum Vorlesen.", FRAGE_PROMPT_760)   # Laib's own before: replaced; any other is the owner's
 
 
