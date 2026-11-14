@@ -337,6 +337,7 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 			d.Impact = append(d.Impact, Named(s)+" startet dafür kurz neu.")
 		}
 	}
+	d.Impact = append(d.Impact, consent(values)...)
 	// the review's human-only reasons are the visible consequences; the
 	// technical ones as one plain sentence (#687), each in Details, the one
 	// that only says the rules file changed told above in words
@@ -478,6 +479,15 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 		d.Details += "; im Einzelnen: " + strings.Join(p.Lines, "; ")
 	}
 	return d
+}
+
+// consent: approving HA's extensions is the owner's consent to the warning
+// HA's marketplace asks each user for, Laib's own user included (#1209).
+func consent(values []Change) []string {
+	if slices.ContainsFunc(values, func(v Change) bool { return v.Key == "HA_INSTALL" && v.New != "" }) {
+		return []string{"Mit deiner Freigabe bestätigt Laib in Home Assistant für seinen eigenen Benutzer den Warnhinweis des Marktplatzes: Erweiterungen kommen von Dritten, Home Assistant prüft sie nicht."}
+	}
+	return nil
 }
 
 // Undoing is how p is undone (#852), the one answer its card's text, its

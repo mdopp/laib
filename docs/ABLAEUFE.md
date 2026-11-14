@@ -64,9 +64,10 @@ Wenn der Owner freigibt, während die Box noch etwas anwendet,
 Dann antwortet die Karte sofort mit „wartet, bis die Box mit der Arbeit davor fertig ist“.
 Und drei Freigaben in dieser Zeit werden zusammen in einem einzigen weiteren Lauf angewandt.
 
-### L-9 Ein roter Lauf nimmt alles zurück und sagt es bei jeder Karte
+### L-9 Ein roter Lauf nimmt nur die rote Freigabe zurück
 Wenn ein Lauf mit mehreren Freigaben nicht grün endet,
-Dann nimmt Laib jede davon zurück und jede Karte sagt „zurückgenommen, mit dem ganzen Lauf #4, #5, #6“.
+Dann wendet Laib jede Freigabe noch einmal allein an, in ihrer Reihenfolge, und behält die grünen.
+Und nur die rote Karte sagt „zurückgenommen“, mit den Freigaben aus demselben Lauf, die angewendet sind; nur für sie kommen die Folgekarten.
 
 ### L-10 Ein roter Lauf mit Daten lässt die Daten stehen und bietet zwei Wege
 Wenn ein Update eines Dienstes mit Daten nicht richtig läuft,
@@ -77,6 +78,17 @@ Und sie bietet „Sicherung zurückspielen“ und „Nach vorne reparieren“, j
 Wenn eine Karte auf eine andere, einen Schlüssel oder eine Version wartet,
 Dann kann der Owner sie vorab freigeben, und sie läuft erst, wenn das da ist, in ihrer Reihenfolge.
 Und eine Karte, die auf einen Schlüssel wartet, verlinkt dessen Formular.
+
+### L-48 Eine Vorbedingung lässt die Karte warten statt rot werden
+Wenn beim Anwenden etwas fehlt, das nur der Owner tun kann,
+Dann wird die Freigabe nicht rot, sondern legt eine Box-Aufgabe an und wartet darauf, schon freigegeben.
+Und ist die Aufgabe erledigt, wendet Laib die Änderung von selbst an.
+
+### L-49 Erweiterungen installieren bestätigt den Warnhinweis des Marktplatzes
+Wenn der Owner eine Karte „Erweiterungen installieren“ für Home Assistant freigibt,
+Dann sagt die Karte vorher, dass diese Freigabe sein Einverständnis zum Warnhinweis des Marktplatzes ist.
+Und Laib bestätigt den Hinweis in Home Assistant für seinen eigenen Benutzer, nur wenn er neu ist, bevor es installiert.
+Und lässt Home Assistant das nicht zu, wartet die Karte auf eine Aufgabe für den Owner, statt rot zu werden.
 
 ### L-12 „Zurücknehmen“ gibt es nur, wo es etwas rückgängig macht
 Wenn eine Freigabe fertig ist,

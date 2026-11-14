@@ -50,6 +50,20 @@ func WithProgress(ctx context.Context, f Progress) context.Context {
 	return context.WithValue(ctx, progressKey{}, f)
 }
 
+type waitKey struct{}
+
+// WithWait makes the runs under ctx tell f a precondition a hook found not
+// met (#1209): its `laib-wartet: <Titel> | <warum>`, a task for the owner.
+func WithWait(ctx context.Context, f func(task string)) context.Context {
+	return context.WithValue(ctx, waitKey{}, f)
+}
+
+func heard(ctx context.Context, task string) {
+	if f, ok := ctx.Value(waitKey{}).(func(string)); ok {
+		f(task)
+	}
+}
+
 func say(ctx context.Context, red bool, format string, args ...any) {
 	if f, ok := ctx.Value(progressKey{}).(Progress); ok {
 		f(fmt.Sprintf(format, args...), red)

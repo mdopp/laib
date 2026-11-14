@@ -28,6 +28,10 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 22,560: the owner's #1209 (2026-11-14, „Eine rote Karte nimmt fremde Karten im selben Lauf mit
+# zurück“): a red run of several is applied again one proposal at a time, only the red one goes back,
+# and a hook's precondition holds its card for the owner's task; the kernel at 22,357 before, about
+# 190 lines asked, the request counts as the owner's yes.
 # 22,370: the owner's #1194 (2026-11-12, „Wir sollten Freigaben verketten können“): a proposal
 # names what it waits for, an approve holds it until then, a newer values card supersedes the older;
 # the kernel at 22,100 before, about 260 lines asked, the request counts as the owner's yes.
@@ -54,7 +58,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 22370 cmd internal
+budget kernel 22560 cmd internal
 budget operator 3300 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,

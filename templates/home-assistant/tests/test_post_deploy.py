@@ -40,7 +40,7 @@ def fresh(onboarded=None):
               http={"use_x_forwarded_for": True, "trusted_proxies": ["127.0.0.1/32", "::1/128"], "ip_ban_enabled": True,
                     "login_attempts_threshold": -1, "server_port": 8123, "cors_allowed_origins": ["https://cast.home-assistant.io"],
                     "created_at": "2026-08-06T18:47:33+00:00", "error": None, "error_message": None},
-              http_pending=None, http_calls=[])
+              http_pending=None, http_calls=[], marketplace=None)
     MA.clear()
     MA.update(tokens={"ma-tok": "laib"}, n=0, providers={}, flows={})
     if onboarded:
@@ -212,6 +212,8 @@ class FakeHA(BaseHTTPRequestHandler):
                 st["state"] = b["option"]
             if self.path == "/api/services/intent_script/reload" and HA.get("no_intent_script"):   # #933: HA set it up at start only
                 return self.reply(400, {"message": "Service intent_script.reload not found"})
+            if self.path == "/api/services/update/install" and HA.get("marketplace") is not None and self.user() not in HA["marketplace"]["accepted"]:
+                return self.reply(500, {"message": "Open the Marketplace and read the warning first"})   # update.py: warning_accepted(user_id), #1209
             if self.path == "/api/services/update/install":   # HA's REST call returns while HACS still downloads (#528)
                 st = HA["states"][b["entity_id"]]
                 st["attributes"]["in_progress"] = True
@@ -466,6 +468,16 @@ class FakeHA(BaseHTTPRequestHandler):
             return ok()
         if not is_admin(uid):
             return err("unauthorized", "Unauthorized")
+        if t.startswith("marketplace/") and HA.get("marketplace") is not None:   # @require_admin (marketplace/websocket/__init__.py)
+            mp = HA["marketplace"]
+            if t == "marketplace/info":   # warning_accepted: this user's acceptance of the current WARNING_VERSION
+                return ok({"stage": "running", "warning_accepted": uid in mp["accepted"]})
+            if t == "marketplace/warning/accept":
+                if mp.get("refuse"):
+                    return err("home_assistant_error", mp["refuse"])
+                mp["accepted"].add(uid)
+                mp["accepts"].append(username(uid))
+                return ok()
         if t == "config/auth/list":
             return ok([dict(u, username=username(u["id"])) for u in HA["users"].values()])
         if t == "config/auth/create":
@@ -1036,6 +1048,48 @@ class Extensions(Hook):
         HA["calls"].clear()
         p, _, log = self.run_hook(install="update.senec=2026.10.0", data_dir=self.d)
         self.assertEqual((p.returncode, HA["calls"]), (0, []), "installed is installed: no second install, no restart: " + log)
+
+    def test_the_owners_approval_is_the_marketplace_consent_for_laibs_user(self):
+        # Ablauf L-49. #1209: HA's marketplace asks each user to accept its warning; the box's update.install
+        # answered 500 "Open the Marketplace and read the warning first" for Laib's own administrator
+        HA["marketplace"] = {"accepted": set(), "accepts": []}
+        HA["unpack"] = lambda eid: unpack(self.d, "senec", "2026.10.0")
+        p, _, log = self.run_hook(install="update.senec=2026.10.0", data_dir=self.d)
+        self.assertEqual(p.returncode, 0, log)
+        installer = next(iter(HA["marketplace"]["accepted"]))
+        self.assertEqual(HA["marketplace"]["accepts"], [username(installer)], "accepted once, for the user that installs: " + log)
+        self.assertIn(("/api/services/update/install", {"entity_id": "update.senec", "version": "2026.10.0"}), HA["calls"], log)
+        self.assertIn("Warnhinweis des Marktplatzes für Laibs Benutzer bestätigt", log)
+        self.assertNotIn("laib-wartet", log)
+        HA["calls"].clear()
+        HA["states"]["update.senec"]["attributes"].update(installed_version="2026.10.0", latest_version="2026.11.0", in_progress=False)
+        HA["states"]["update.senec"]["state"] = "on"
+        p, _, log = self.run_hook(install="update.senec=2026.11.0", data_dir=self.d)
+        self.assertEqual(len(HA["marketplace"]["accepts"]), 1, "accepted already: not again: " + log)
+        HA["marketplace"]["accepted"].clear()   # a newer WARNING_VERSION: info says not accepted, so once more
+        HA["states"]["update.senec"]["state"] = "on"
+        HA["states"]["update.senec"]["attributes"].update(installed_version="2026.10.0", latest_version="2026.11.0", in_progress=False)
+        p, _, log = self.run_hook(install="update.senec=2026.11.0", data_dir=self.d)
+        self.assertEqual(len(HA["marketplace"]["accepts"]), 2, log)
+
+    def test_no_marketplace_asks_nobody(self):
+        HA["unpack"] = lambda eid: unpack(self.d, "senec", "2026.10.0")
+        p, _, log = self.run_hook(install="update.senec=2026.10.0", data_dir=self.d)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertNotIn("Warnhinweis", log)
+
+    def test_a_consent_home_assistant_refuses_installs_nothing_and_names_the_owners_task(self):
+        # Ablauf L-48, L-49. #1209: not red inside the run for HA's reason alone: the run holds the card for this task
+        HA["marketplace"] = {"accepted": set(), "accepts": [], "refuse": "Marketplace is disabled"}
+        p, out, log = self.run_hook(install="update.senec=2026.10.0,update.meross=1.2", data_dir=self.d)
+        self.assertEqual(p.returncode, 1, log)
+        self.assertNotIn("/api/services/update/install", [c[0] for c in HA["calls"]], log)
+        wait = [l for l in log.splitlines() if l.startswith("laib-wartet: ")]
+        self.assertEqual(len(wait), 1, log)
+        titel, warum = wait[0][len("laib-wartet: "):].split(" | ")
+        self.assertIn("Marktplatz", titel)
+        self.assertIn("Hake die Aufgabe dann ab", warum)
+        self.assertNotIn("disabled", wait[0], "HA's raw words stay in the hook's output, not in the owner's task")
 
     def test_an_extension_home_assistant_has_not_set_up_yet_is_waited_for(self):
         # the box (v0.26): approve snapshots HA stopped (quiesce, #40), HA starts again, the hook asks

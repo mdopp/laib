@@ -1,6 +1,6 @@
 # scripts/ratchet.py mutation: surviving mutants, the number is how many on that line's text
 # written by `scripts/ratchet.py --update`; lowered in the PR that fixes one, raised only with --accept
-# total 531
+# total 556
 3 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: Warum: "Der Bote kam bei " + svc.Name + " nicht weiter; was er wusste und der Stand liegen in " + p}, env.Actor, time.Now())
 2 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: bad = append(bad, c.What+" "+c.Detail)
 1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: case args[i] == "--container" && i+1 < len(args):
@@ -257,78 +257,104 @@
 1 internal/inbox/repair.go: not-covered INVERT_NEGATIVES: last := lines[len(lines)-1]
 1 internal/inbox/repair.go: not-covered INVERT_NEGATIVES: raw := cmp.Or(strings.TrimPrefix(lines[len(lines)-1], "laib: "), fmt.Sprintf("Code %d", c))
 1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: at, kept = "den Sicherungen von "+strings.Join(ats, ", "), "Die Sicherungen bleiben eine Woche lang bereit."
-1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: back := apply.ApplyHeld(ctx, env, st, "", "rollback "+run) == cli.ExitOK
-1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: because = "weil " + step
-2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: because = "weil die Sicherung von " + name + " nicht ging"
-1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "rollback", Result: "red", Detail: "revert failed: " + err.Error()})
-1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: code, ran = apply.ApplyHeld(ctx, env, st, "", "Freigaben "+run), true
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: back = apply.ApplyHeld(ctx, env, st, "", "rollback "+l.run) == cli.ExitOK
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "rollback", Result: "red", Detail: "revert failed: " + err.Error()})
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: code, ran = apply.ApplyHeld(ctx, env, st, "", "Freigaben "+l.run), true
 1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: detail += " Der Vorschlag, die Sicherung zurückzuspielen, ging nicht: " + rerr.Error()
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: detail += " angewendet " + strings.Join(ok, ", ")
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: detail += " zurückgenommen " + strings.Join(bad, ", ")
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: detail := "Lauf " + run + " war rot; jede Freigabe allein angewendet:"
 1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: detail := told + " Nichts wird von selbst zurückgespielt."
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: dropGone(ctx, env, whole, "rollback "+l.run)
 3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: each = append(each, names[i]+" ("+ats[i]+")")
 3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: f, _ = fileRepair(ctx, env, st, who+": nach vorne reparieren, die neue Version wieder aufspielen", "Das Update von "+who+" lief nicht. Statt die Sicherung zurückzuspielen, kommt die neue Version wieder auf die Daten nach dem Update.",
 1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: files, err := sysd.Run(ctx, "git", "-C", repo, "diff", "--name-only", sha+"^1", sha)
 1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: forwards = append(forwards, "laib rollback "+sha)
 1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: from, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-parse", "--short", batch[0].Merge+"^1")
-1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: if _, err := RevertProposal(ctx, env, st, p.ID, ", mit dem ganzen Lauf "+run); err != nil {
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: gitAs(ctx, env, "commit", "-q", "-m", why+": secrets of removed services dropped")
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: if _, err := RevertProposal(ctx, env, st, p.ID, ", mit dem Lauf "+l.run, !alone); err != nil {
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: if err != nil || p.Intent == nil || len(p.Intent.Set) == 0 || len(p.Intent.At)+len(p.Intent.Grant) > 0 || p.Intent.Update != "" {
 3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: journal.Append(env.Paths.Journal, journal.Entry{Actor: env.Actor, Verb: "rollback", Result: "info", Detail: subject + " (" + merge[:8] + ")"})
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: l.because = "weil " + step
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: l.because = "weil die Sicherung von " + name + " nicht ging"
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: l.say("sichert "+name, false)
 2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: merge, err := g("log", "--format=%H", "--grep=^approve #"+strconv.Itoa(id)+" by ", "-n", "1", "main")
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: p.Because += " – " + ok[0] + " aus demselben Lauf ist angewendet"
+6 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: p.Because += " – " + strings.Join(ok[:len(ok)-1], ", ") + " und " + ok[len(ok)-1] + " aus demselben Lauf sind angewendet"
 2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: p.Because = strings.TrimSuffix(p.Because, ".") + ". " + told
-1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: p.Outcome, p.Settled, p.Because = "rolled-back", time.Now().UTC(), because+others(batch, p)
-1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: p.Step = prefix + step
+1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: p.Step = l.prefix + step
 6 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: r, rerr := fileRepair(ctx, env, st, who+": Daten aus "+at+" zurückspielen", "Das Update von "+who+" lief nicht. "+told, "Die Daten von jetzt sichert Laib vorher; aus dieser Sicherung kommen sie zurück, nicht mit einem Tipp.", nil, restores)
 2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: ready := "die Sicherung von " + ats[0] + " liegt bereit"
 2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: ready = "die Sicherungen von " + strings.Join(each, ", ") + " liegen bereit"
 3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: restores = append(restores, "laib restore "+s.id+" "+s.svc)
-2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: return " – mit " + strings.Join(ids, ", ") + " im selben Durchgang"
 2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: return apply.ApplyHeld(ctx, env, st, "", "rollback "+subject)
 1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: return cli.Refused(env, env.Actor+" may not rollback")
-1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: say("sichert "+name, false)
+2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: sha, _ := gitAs(ctx, env, "log", "--format=%H", "--grep=^rollback #"+strconv.Itoa(id)+"$", "-n", "1", "main")
 2 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: sha, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "log", "--format=%H", "--grep=^rollback #"+strconv.Itoa(p.ID)+"$", "-n", "1", "main")
 1 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: sha, err := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-parse", "--verify", "--quiet", "--end-of-options", arg+"^{commit}")
 3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: told := old + " Die Daten sind auf dem Stand nach dem Update; " + ready + "."
 3 internal/inbox/rollback.go: not-covered ARITHMETIC_BASE: who, at, kept := strings.Join(names, ", "), "der Sicherung von "+ats[0], "Die Sicherung von "+ats[0]+" bleibt eine Woche lang bereit."
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: env, whole, alone := l.env, st, len(l.batch) > 1 && ran
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if err != nil || p.Intent == nil || len(p.Intent.Set) == 0 || len(p.Intent.At)+len(p.Intent.Grant) > 0 || p.Intent.Update != "" {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if len(args) > 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if len(bad) > 0 {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if len(forwards) > 0 {
-1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if len(gone) > 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if len(ok) > 0 {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if len(snaps) > 1 {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if parents, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-list", "--parents", "-n", "1", sha); len(strings.Fields(parents)) > 2 {
-1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if ran && len(snaps) > 0 { // the run touched services with data: their snapshots are there, nothing restores by itself (#853)
-1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: back := apply.ApplyHeld(ctx, env, st, "", "rollback "+run) == cli.ExitOK
-1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if _, err := RevertProposal(ctx, env, st, p.ID, ", mit dem ganzen Lauf "+run); err != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: if snaps = slices.DeleteFunc(snaps, func(s snap) bool { return !kept[s.svc] }); ran && len(snaps) > 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_BOUNDARY: } else if len(ok) > 1 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: back = apply.ApplyHeld(ctx, env, st, "", "rollback "+l.run) == cli.ExitOK
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: back = apply.ApplyHeld(ctx, env, st, "", fmt.Sprintf("rollback #%d", p.ID)) == cli.ExitOK && back
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: env, whole, alone := l.env, st, len(l.batch) > 1 && ran
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if _, err := RevertProposal(ctx, env, st, p.ID, ", allein angewendet", false); err != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if _, err := RevertProposal(ctx, env, st, p.ID, ", mit dem Lauf "+l.run, !alone); err != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if _, ok := after.Services[name]; !ok && err == nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if apply.ApplyHeld(ctx, env, st, "", fmt.Sprintf("Freigabe #%d allein, aus dem Lauf %s", p.ID, l.run)) == cli.ExitOK {
 2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if code != cli.ExitOK {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if code == cli.ExitLocked {
 2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if code == cli.ExitOK {
-8 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+10 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err != nil || len(sec) == n {
+5 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err != nil || p.Intent == nil || len(p.Intent.Set) == 0 || len(p.Intent.At)+len(p.Intent.Grant) > 0 || p.Intent.Update != "" {
 2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err != nil || strings.TrimSpace(files) != "aufgaben.yml" {
 2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err != nil || strings.TrimSpace(merge) == "" {
 2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err != nil || strings.TrimSpace(sha) == "" {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err := again(ctx, env, p.ID); err != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err := dropGone(ctx, env, st, fmt.Sprintf("rollback #%d", id)); err != nil {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err := secrets.Save(env.Paths.Secrets, env.Paths.Key, sec); err != nil {
-1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if err == nil {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if f != nil {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if id, code = backup.Pre(ctx, env, st, svc, "apply", "pre-update", true); code != cli.ExitOK {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(args) > 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(bad) > 0 {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(batch) == 0 { // carried meanwhile
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(forwards) > 0 {
-1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(gone) > 0 {
-1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(ids) == 0 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(ok) == 1 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(ok) > 0 {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(p.Snapshot) == 0 {
 2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(proposal.Waiting(cli.InboxDir(env))) == 0 {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if len(snaps) > 1 {
-1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if o != p {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if out, err := g("commit", "-q", "-m", fmt.Sprintf("rollback #%d", id)); err != nil {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if out, err := g("revert", "--no-commit", "-m", "1", merge); err != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if out, err := gitAs(ctx, env, "revert", "--no-edit", sha); err != nil {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if out, err := sysd.Run(ctx, "git", append(revert, sha)...); err != nil {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if p, err := proposal.Get(cli.InboxDir(env), id); err == nil { // what came of it (#544)
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if parents, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "rev-list", "--parents", "-n", "1", sha); len(strings.Fields(parents)) > 2 {
-1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if ran && len(snaps) > 0 { // the run touched services with data: their snapshots are there, nothing restores by itself (#853)
-1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if red && prefix == "" {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if red && l.prefix == "" {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if red, waits, back, code = l.alone(ctx); code != cli.ExitOK {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if rerr != nil {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if rerr == nil {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if sha = strings.TrimSpace(sha); sha != "" {
-1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if st, err = cli.LoadState(env); err != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if sha = strings.TrimSpace(sha); sha == "" {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if snaps = slices.DeleteFunc(snaps, func(s snap) bool { return !kept[s.svc] }); ran && len(snaps) > 0 {
 2 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if svc := st.Services[name]; svc != nil && code == cli.ExitOK {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: if waits[p.ID] != "" && waitFor(ctx, env, p, waits[p.ID]) {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: } else if code != cli.ExitOK {
 1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: } else if id != "" {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: } else if len(ok) > 1 {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: } else if st, err := cli.LoadState(env); err != nil {
+1 internal/inbox/rollback.go: not-covered CONDITIONALS_NEGATION: }) != nil {
+2 internal/inbox/rollback.go: not-covered INVERT_NEGATIVES: p.Because += " – " + strings.Join(ok[:len(ok)-1], ", ") + " und " + ok[len(ok)-1] + " aus demselben Lauf sind angewendet"
 1 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: body = strings.TrimRight(body, "\n") + fmt.Sprintf("%s%s\ngrund: %s\nam: %s\nvon: %s\n", statusMark, w.Status, w.Grund, w.Am.Format(time.RFC3339), w.Von)
 2 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "wish", Result: "info", Reason: w.Title, Detail: strings.TrimSuffix(status+": "+w.Grund, ": ")})
 1 internal/inbox/wishes.go: not-covered ARITHMETIC_BASE: fmt.Fprintf(env.W(), "%s  %-9s %s%s\n", w.ID, w.Status, w.Title, strings.TrimSuffix(" — "+w.Grund, " — "))
@@ -384,7 +410,6 @@
 1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: } else if len(p.Lines) > 0 {
 1 internal/proposal/card.go: lived CONDITIONALS_NEGATION: } else if p.Evidence != "" {
 4 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Changes = append(d.Changes, Line{"→", upper(word(ruleWords, r.Key)) + ": " + word(ruleWords, orUnset(r.Old)) + " → " + word(ruleWords, orUnset(r.New))})
-5 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Changes = append(d.Changes, Line{"−", Named(v.Service) + ": " + v.Key + " (bisher " + valueWord(strings.Split(v.Old, "@")[0]) + ")"})
 1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Details += "; im Einzelnen: " + strings.Join(p.Lines, "; ")
 1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Summary += " — " + p.Facts[0]
 1 internal/proposal/card.go: not-covered ARITHMETIC_BASE: d.Summary = "Neue Regeln, wer was darf: " + strings.Join(ns, ", ")

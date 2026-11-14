@@ -232,7 +232,9 @@ class WS:
             m = self.recv()
             if m.get("id") == self.n and m.get("type") == "result":
                 if not m.get("success"):
-                    raise RuntimeError(f"{type}: {(m.get('error') or {}).get('message', 'refused')}")
+                    e = RuntimeError(f"{type}: {(m.get('error') or {}).get('message', 'refused')}")
+                    e.code = (m.get("error") or {}).get("code")
+                    raise e
                 return m.get("result")
 
 
@@ -976,6 +978,40 @@ def straighten():
     return done, broken
 
 
+def consent():
+    """#1209: Home Assistant's marketplace installs only for a user who accepted its warning, each user
+    for themselves (components/marketplace/update.py: warning_accepted(user_id)), and this hook installs
+    as Laib's own administrator: the owner's click in HA's UI does not count for it. The owner's approval
+    of the card „Erweiterungen installieren“ is that consent; the card says so. Recorded here for Laib's
+    user with HA's own command, marketplace/warning/accept, as HA's UI does, and only while
+    marketplace/info says that user has not accepted the warning's current version (WARNING_VERSION).
+    HA's .storage is never written. None when it stands (or HA has no marketplace), else HA's reason."""
+    ws = WS(admin_session())
+    try:
+        try:
+            if (ws("marketplace/info") or {}).get("warning_accepted"):
+                return None
+        except RuntimeError as e:
+            if getattr(e, "code", None) == "unknown_command":
+                return None   # no marketplace: HACS as a custom integration asks nobody
+            raise
+        ws("marketplace/warning/accept")
+        if not (ws("marketplace/info") or {}).get("warning_accepted"):
+            return "marketplace/info: warning_accepted is still false after marketplace/warning/accept"
+        print("home-assistant: Warnhinweis des Marktplatzes für Laibs Benutzer bestätigt (die Freigabe des Besitzers)")
+        return None
+    except (RuntimeError, OSError) as e:
+        return str(e)
+    finally:
+        ws.close()
+
+
+WAIT_CONSENT = ("laib-wartet: Home Assistant: Marktplatz für Laib freigeben | Laib konnte den Warnhinweis des Marktplatzes "
+                "in Home Assistant für seinen eigenen Benutzer nicht bestätigen, deshalb sind die Erweiterungen nicht "
+                "installiert. Öffne in Home Assistant den Marktplatz; zeigt er einen Fehler oder ist er ausgeschaltet, behebe "
+                "das dort. Hake die Aufgabe dann ab: Laib installiert die Erweiterungen danach von selbst.")
+
+
 def install_updates():
     """HA_INSTALL (#528): the extensions a person approved, "update.a=1.2,update.b=3.0"
     as the Operator proposed them from home-assistant-check.py (laib snapshotted
@@ -984,10 +1020,12 @@ def install_updates():
     downloaded it (HA's service call returns before). Then every custom
     integration must lie where HA loads it (straighten); an approved one whose
     manifest says another version is said. Home Assistant restarts once, as a
-    custom integration needs. Device firmware is HA_FIRMWARE's (install_firmware). Returns what
+    custom integration needs. Before the first install the owner's consent to the marketplace's
+    warning is recorded for Laib's user (consent, #1209); where that is refused nothing is installed
+    and the hook names the owner's task (laib-wartet). Device firmware is HA_FIRMWARE's (install_firmware). Returns what
     is broken: the hook is red for it after the other steps ran."""
     want = [w.split("=", 1) for w in E.get("HA_INSTALL", "").split(",") if "=" in w]
-    installed, broken = [], []
+    installed, broken, refused = [], [], False
     for eid, ver in want:
         st, s = update_state(eid, time.monotonic() + WAIT, lambda s: s.get("state") not in GONE)
         a = (s or {}).get("attributes") or {}
@@ -1000,6 +1038,11 @@ def install_updates():
             continue
         if s.get("state") != "on" or a.get("latest_version") != ver:
             print(f"home-assistant: {eid} {ver}: nichts zu installieren (installiert: {a.get('installed_version')}, angeboten: {a.get('latest_version')})")
+            continue
+        if refused is False:   # once, before the first install (#1209)
+            refused = consent()
+        if refused:
+            broken.append(f"{eid} {ver}: nicht installiert, der Warnhinweis des Marktplatzes ist für Laibs Benutzer nicht bestätigt: {refused}")
             continue
         body = {"entity_id": eid}
         if int(a.get("supported_features") or 0) & 2:   # UpdateEntityFeature.SPECIFIC_VERSION
@@ -1014,6 +1057,8 @@ def install_updates():
             broken.append(f"{eid} {ver}: nach {WAIT:.0f} s lädt Home Assistant noch; laib apply home-assistant, wenn es fertig ist")
             continue
         installed.append((eid, ver))
+    if refused:
+        print(WAIT_CONSENT)   # the run holds the card for the owner's task instead of calling it red
     straightened, bad = straighten()
     broken += bad
     for eid, ver in installed:
