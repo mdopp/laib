@@ -9,7 +9,7 @@ when it has no administrator token that works, mints one token per consumer
 and hands each back (`laib-secret:`): Homes and the check get administrator
 tokens, the Automat too (HA's automation config API is admin-only), and the
 Bote's `ha` tool a token of a separate non-admin user "bote"."""
-import base64, hashlib, json, os, shutil, socket, struct, subprocess, tempfile, threading, unittest, urllib.parse
+import base64, hashlib, json, os, re, shutil, socket, struct, subprocess, tempfile, threading, unittest, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -1876,3 +1876,17 @@ class ProxyTrust(Hook):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheVmGrepsTheSentenceThePostDeployPrints(unittest.TestCase):
+    """vm-install greps the second apply for the token sentence; twice a consumer was added to the sentence and
+    not to the grep (94817391, the names user; #1218, Frage), and vm-install went red on main only."""
+
+    def test_every_token_sentence_the_vm_greps_is_printed(self):
+        workflow = (HOOK.parent.parent.parent / ".github" / "workflows" / "vm-install.yml").read_text()
+        printed = [l for l in HOOK.read_text().splitlines() if "tokens for the check" in l and "print(" in l]
+        self.assertEqual(len(printed), 1, printed)
+        grepped = re.findall(r'grep -q "(tokens for the check[^"]*)"', workflow)
+        self.assertTrue(grepped, "vm-install greps no token sentence any more")
+        for g in grepped:
+            self.assertIn(g, printed[0], "vm-install greps a token sentence the post-deploy does not print")

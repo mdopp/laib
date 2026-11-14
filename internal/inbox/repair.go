@@ -103,8 +103,8 @@ func RunRepairs(ctx context.Context, env *cli.Env, st *state.State, p *proposal.
 			if argv[0] == "rollback" && c == cli.ExitRed {              // #853: forward, and still red
 				p.Because = "Die neue Version ist wieder aufgespielt, läuft aber noch nicht richtig. " + onward(st, true) + " Die Sicherung liegt weiter bereit."
 			}
-			proposal.Save(cli.InboxDir(env), p)
 			cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "repair", Result: "red", Detail: fmt.Sprintf("#%d: %s fehlgeschlagen: %s", p.ID, last, raw)})
+			proposal.Save(cli.InboxDir(env), p) // after the journal: whoever sees the card's reason finds its line (#1224)
 		}
 	}
 	return code
