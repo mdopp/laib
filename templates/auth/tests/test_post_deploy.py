@@ -19,7 +19,7 @@ HOOK = Path(__file__).resolve().parent.parent / "post-deploy"
 STATE = {"users": [], "groups": [], "adds": [], "members": {}, "deleted": []}
 BASE_DN = "dc=vm,dc=test"
 SECRETS = {"LLDAP_ADMIN_PASSWORD": "-adm1n_x", "OPERATOR_PASSWORD": "-6op_pw", "RADICALE_LDAP_PASSWORD": "--rad-pw", "FILE_SHARE_LDAP_PASSWORD": "-fs_pw", "VAULTWARDEN_LDAP_PASSWORD": "-vw-ro-pw",
-           "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HOMES_RADICALE_PASSWORD": "-haus-cal-pw",
+           "JELLYFIN_LDAP_PASSWORD": "-jf-ro-pw", "HOMES_RADICALE_PASSWORD": "-homes-cal-pw",
            "KALENDER_RADICALE_PASSWORD": "-kal-pw", "HA_RADICALE_PASSWORD": "-ha-cal-pw", "AUDIOBOOKSHELF_LDAP_PASSWORD": "-abs-ro-pw"}   # #256: Jellyfin's LDAP plugin binds read-only, like radicale
 ADMIN_DN = "uid=admin,ou=people," + BASE_DN
 LDAP = {"pw": {}, "set": [], "binds": [], "modify": "take"}   # dn → password; dns whose password was set; (dn, ok) per bind;
@@ -218,14 +218,6 @@ class PostDeploy(unittest.TestCase):
         self.run_hook(["core", "homes"], ["admins", "family", "lldap_strict_readonly"])
         self.assertIn("uid=homes,ou=people," + BASE_DN, LDAP["set"], LDAP)
 
-    def test_the_old_calendar_account_haus_goes_once_homes_is_seeded(self):
-        # laib#1021, ADR 0031: the account was `haus`; the rename seeds `homes` with the same
-        # password (HOMES_RADICALE_PASSWORD was HAUS_RADICALE_PASSWORD) and removes `haus`
-        self.run_hook(["core", "haus"], ["admins", "family", "lldap_strict_readonly"])
-        self.assertIn(("uid=homes,ou=people," + BASE_DN, True), LDAP["binds"])
-        self.assertEqual(STATE["deleted"], ["haus"])
-        self.assertNotIn("haus", STATE["users"])
-
     def test_the_calendar_mirror_and_home_assistant_get_their_radicale_accounts(self):
         # laib#495: the mirror writes as `kalender`, Home Assistant reads as `homeassistant`: nobody's password
         self.run_hook([], [])
@@ -313,7 +305,7 @@ class PostDeploy(unittest.TestCase):
         self.assertIn("not taken over", err)
         self.assertNotIn("uid=archiv-anna,ou=people," + BASE_DN, LDAP["set"])
         # a name the hook keeps itself, one LDAP cannot address, an empty password: red before anything is created
-        for user, pw in (("homes", "-p-1009"), ("haus", "-p-1009"), ("core", "-p-1009"), ("a,ou=x", "-p-1009"), ("archiv-anna", "")):
+        for user, pw in (("homes", "-p-1009"), ("core", "-p-1009"), ("a,ou=x", "-p-1009"), ("archiv-anna", "")):
             with self.subTest(user=user):
                 self.accounts(tmp, [(user, "P")], [], [], ok=False, P=pw)
                 self.assertEqual((STATE["users"], LDAP["set"]), ([], []), "nothing may be created or set first")

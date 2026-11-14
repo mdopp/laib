@@ -218,7 +218,7 @@ that only post-deploy uses:
 | secret | HA user (login, password) | administrator | for |
 |---|---|---|---|
 | `HA_TOKEN` | „Laib-Prüfung“ (`laib-pruefung`, `HA_CHECK_PASSWORD`) | no | the checklist below: config entries and states, which every user may read |
-| `HOMES_HA_TOKEN` | „Homes“ (`homes`, `HA_HOMES_PASSWORD`; the user haus until ADR 0031, deleted once this token works) | yes: voice counting reads Assist's debug runs, admin-only (below) | Homes's pages and widgets, voice counting |
+| `HOMES_HA_TOKEN` | „Homes“ (`homes`, `HA_HOMES_PASSWORD`) | yes: voice counting reads Assist's debug runs, admin-only (below) | Homes's pages and widgets, voice counting |
 | `BOTE_AUTOMAT_HA_TOKEN` | „Bote-Automat“ (`bote-automat`, `HA_BOTE_AUTOMAT_PASSWORD`) | yes: HA's automation config API is admin-only | the Bote's Automat; every write it makes needs the admin's approval code |
 | `BOTE_HA_TOKEN` | „Bote“ (`bote`, `HA_BOTE_PASSWORD`) | no | the Bote's `ha` tool, on HA's Assist API: whoever chats with the Bote reaches no admin API |
 | `MUSIC_ASSISTANT_HA_TOKEN` | „Music Assistant“ (`music-assistant`, `HA_MUSIC_ASSISTANT_PASSWORD`) | yes: MA reads HA's users (`config/auth/list`) for the family's login | Music Assistant's Home Assistant plugin; only once Music Assistant is there |

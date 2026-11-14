@@ -662,27 +662,6 @@ class PostDeploy(Hook):
         self.assertEqual((username(bote), HA["users"][bote]["group_ids"]), ("bote", ["system-users"]))
         self.assertEqual(HA["creds"]["bote"][0], BOTE_PW)
 
-    def test_the_old_user_haus_goes_once_homes_has_its_token(self):
-        # laib#1021, ADR 0031: Homes's user was haus („Haus“); HOMES_HA_TOKEN is not carried over, it is
-        # minted for the new user homes („Homes“), and the user haus, with its token, is deleted after
-        fresh()
-        _, handed, _ = self.run_hook()
-        uid = HA["creds"]["homes"][1]
-        HA["users"][uid]["name"] = "Haus"   # the box before the rename: the same machine user under its old login
-        HA["creds"]["haus"] = HA["creds"].pop("homes")
-        old = handed.pop("HOMES_HA_TOKEN")
-        p, again, log = self.run_hook(tokens=handed)
-        self.assertEqual(p.returncode, 0, log)
-        self.assertEqual(list(again), ["HOMES_HA_TOKEN"])
-        self.assertOnItsOwnUser(again)
-        self.assertEqual(HA["users"][HA["creds"]["homes"][1]]["name"], "Homes")
-        self.assertNotIn("haus", HA["creds"])
-        self.assertNotIn(uid, HA["users"])
-        self.assertNotIn(old, HA["tokens"], "the old user's token still works")
-        self.assertIn("user haus deleted", log)
-        p, again, log = self.run_hook(tokens={**handed, **again})
-        self.assertEqual((p.returncode, again), (0, {}), log)
-
     def test_working_tokens_are_kept_and_nobody_logs_in(self):
         fresh()
         _, handed, _ = self.run_hook()

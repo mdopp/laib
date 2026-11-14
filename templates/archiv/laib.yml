@@ -29,7 +29,6 @@ routes:
 secrets:
   - name: ARCHIV_PROXY_SECRET
   - name: ARCHIV_HOMES_SECRET     # Homes's way to /intern/… (haus#209: a phone's restore); Homes gets each instance's through its instances: (laib#1016)
-    was: ARCHIV_HAUS_SECRET   # ADR 0031: the value moves along (#1021); goes once the box moved
   - name: ARCHIV_RADICALE_PASSWORD   # the archive's own Radicale login, archiv-<person> (laib#1009): the auth template seeds it, templates/radicale lets it read the person's contacts and calendars and write nothing
     account: archiv-${PERSON}
   - name: DOKUMENTE_MAIL_PASSWORD    # the household's document mailbox (Paperless' catch-all, PAPERLESS_MAIL_*) for this person's archive (archiv#34): the archive reads only mail to <person>+doc@<domain>, read-only. Per person (DOKUMENTE_MAIL_PASSWORD_<PERSON>), so the owner decides for whom; a read-only login of the provider where one exists, else the mailbox's own password

@@ -14,7 +14,7 @@ REITTI_PUBLIC_URL: ""                                    # where a person makes 
 ENERGY_STATS: ""                                         # bezug=sensor.…,einspeisung=…,solar=…: HA long-term statistics for the history (haus#65); empty: the counters Homes finds
 COVER_INVERTED: ""                                       # cover.…,…: covers wired the wrong way round, shown and set turned over (haus#64)
 RADICALE_URL: http://host.containers.internal:5232     # the Haushalt's calendar (haus#11)
-RADICALE_USER: homes                                   # the account Homes writes with (#418): `homes` (was `haus`, ADR 0031), seeded by the auth template; empty: no calendar tools
+RADICALE_USER: homes                                   # the account Homes writes with (#418): `homes`, seeded by the auth template; empty: no calendar tools
 RADICALE_PASSWORD: !secret HOMES_RADICALE_PASSWORD
 RADICALE_CALENDAR: ""                                  # the calendar written to; empty: "Haushalt" (created if missing)
 HAUSHALT_TOKEN: !secret HOMES_HAUSHALT_TOKEN

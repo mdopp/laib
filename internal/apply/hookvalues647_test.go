@@ -21,7 +21,7 @@ func TestHookGetsAValueWithItsBuiltinsRendered(t *testing.T) {
 	paths := boxfs.Paths{Home: home, Render: filepath.Join(home, "r")}
 	st := &state.State{Box: state.Box{Domain: "x.home", DataDir: filepath.Join(home, "d")}, Services: map[string]*state.Service{
 		"homes": {Name: "homes", Dir: dir, Values: map[string]state.Value{
-			"RADICALE_PUBLIC_URL": {Literal: "https://caldav.${DOMAIN}"}, "KEY": {Secret: "HAUS_KEY"}}},
+			"RADICALE_PUBLIC_URL": {Literal: "https://caldav.${DOMAIN}"}, "KEY": {Secret: "HOMES_KEY"}}},
 	}}
 	realHook := RunHook
 	defer func() { RunHook = realHook }()
@@ -31,7 +31,7 @@ func TestHookGetsAValueWithItsBuiltinsRendered(t *testing.T) {
 		env = string(b)
 		return "", nil
 	}
-	if c, ran := runHook(context.Background(), st, st.Services["homes"], paths, "post-deploy", map[string]string{"HAUS_KEY": "k-1"}, map[string]string{}); !ran || !c.OK {
+	if c, ran := runHook(context.Background(), st, st.Services["homes"], paths, "post-deploy", map[string]string{"HOMES_KEY": "k-1"}, map[string]string{}); !ran || !c.OK {
 		t.Fatalf("the hook did not run green: %+v", c)
 	}
 	for _, want := range []string{"\nRADICALE_PUBLIC_URL=https://caldav.x.home\n", "\nKEY=k-1\n"} {

@@ -97,15 +97,15 @@ What moved, and where it was:
 |---|---|---|
 | `haus.<domain>` | gone 2026-11-07 with `homes.<domain>` (amendment below) | ended |
 | `haus_device_` | the program accepts a paired phone's old tokens | the same |
-| `was:` lines | templates/homes, bote, scan, auth, archiv, audiobookshelf, media, home-assistant | the box moved (#1021 step 7) |
+| `was:` lines | templates/homes, bote, scan, auth, archiv, audiobookshelf, media | ended 2026-11-14 (#1021): removed; the mechanism stays for the next rename |
 | `X-Archiv-Haus`, `ARCHIV_HAUS_SECRET` | archiv reads them beside the new names | the box moved |
 | the hand `haus`'s token record | the state's tokens | revoked at #1021 step 9 |
 | `X-HAUS-*` iCal properties, PRODIDs | entries already stored in Radicale | kept: stored data, not a name in code |
-| the LDAP user `haus` deleted, `haus` kept reserved | templates/auth post-deploy | #1021 step 9 |
-| the HA user `haus` deleted once `homes` works | templates/home-assistant post-deploy | #1021 step 9 |
-| `haus/` moved to `homes/` | templates/radicale pre-start | #1021 step 9 |
-| a subscription for person `haus` read as `homes` | `laib calendar`, kalender.py | #1021 step 9 |
-| the user `haus` renamed `homes`, the keys „Haus (laib)“, „Haus (Gesehen)“ | audiobookshelf, media post-deploy | #1021 step 9 |
+| the LDAP user `haus` deleted, `haus` kept reserved | templates/auth post-deploy | ended 2026-11-14 (#1021): deleted on the box, the code removed |
+| the HA user `haus` deleted once `homes` works | templates/home-assistant post-deploy | ended 2026-11-14 (#1021): gone on the box since 2026-11-03, the code removed |
+| `haus/` moved to `homes/` | templates/radicale pre-start | ended 2026-11-14 (#1021): no `haus/` left on the box, the code removed |
+| a subscription for person `haus` read as `homes` | `laib calendar`, kalender.py | kept: the subscriptions are stored in a secret, written again only when one changes; it goes once none names `haus` |
+| the user `haus` renamed `homes`, the keys „Haus (laib)“, „Haus (Gesehen)“ | audiobookshelf, media post-deploy | ended 2026-11-14 (#1021): renamed on the box, the code removed |
 | `homeassistant/haus-<collection>` | HA's copies of the household's calendars (kalender.py) | kept: HA's entities hang on the path |
 
 `Haus` does not go on ADR 0021's retired names: it is an ordinary German
