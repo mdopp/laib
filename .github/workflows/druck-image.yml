@@ -1,0 +1,44 @@
+name: druck-image
+on:
+  push:
+    branches: [main]
+    paths: ["druck/**"]
+  pull_request:
+    paths: ["druck/**", ".github/workflows/druck-image.yml"]   # built, not pushed: the PR shows the image's size
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+  id-token: write # cosign signs keyless with this workflow's identity (ADR 0034)
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: druck
+          file: druck/Containerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: ghcr.io/mdopp/laib-druck:1,ghcr.io/mdopp/laib-druck:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/mdopp/laib
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: the image's size and the drivers CUPS has in it
+        if: github.event_name == 'pull_request'
+        run: |
+          docker image inspect --format 'size: {{.Size}} bytes' ghcr.io/mdopp/laib-druck:1
+          docker run --rm --entrypoint sh ghcr.io/mdopp/laib-druck:1 -c 'ls /usr/lib/cups/driver /usr/lib/cups/backend; cupsd -t -c /etc/cups/cupsd.conf'
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        if: github.event_name != 'pull_request'
+      - name: sign the image; Laib proposes a digest of ours only with this signature (ADR 0034)
+        if: github.event_name != 'pull_request'
+        run: cosign sign --yes --new-bundle-format=false --use-signing-config=false ghcr.io/mdopp/laib-druck@${{ steps.build.outputs.digest }}

@@ -250,3 +250,11 @@ Dann endet es sichtbar, wo es begann: fertig, rot mit Grund und nächstem Schrit
 Wenn in einem Raum ein Standard-Lautsprecher gewählt ist und jemand dort „Spiele Einslive“ oder „Spiele Musik von Queen“ sagt,
 Dann läuft die Musik auf diesem Lautsprecher, und die Antwort kommt weiter vom Sprachgerät.
 Und ohne gewählten Standard spielt sie wie bisher auf dem Lautsprecher im Raum.
+
+## Drucken
+
+### L-46 Jedes Gerät im Heimnetz findet den Drucker ohne App; von außen ist er nicht erreichbar
+Wenn im Heimnetz oder am USB der Box ein Drucker ist,
+Dann findet jedes Handy und jeder Rechner zu Hause ihn im eigenen Druckmenü und druckt ohne Hersteller-App, auch Android.
+Und ein Drucker, der das schon selbst kann, erscheint nicht doppelt; einer, der es nicht kann, heißt „… (über die Box)“.
+Und von außerhalb des Heimnetzes ist der Druckserver nicht erreichbar, und seine Verwaltung ist nur auf der Box selbst.

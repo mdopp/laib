@@ -83,6 +83,7 @@ laib.yml) belong to whichever account the owner made them in; the
 | home-assistant | per person, OIDC | yes: one house | admins group are HA admins | none |
 | media, audiobookshelf, music-assistant | per person (LDAP / OIDC / via HA) | no, per-person progress | admin keys read every person's progress | none |
 | usage-metrics | none | counts, no who; unanswered sentences 30 days | root: all | none |
+| druck | none | a job's name and owner only to that owner (`JobPrivateValues`); nothing kept after printing | root: a waiting job in memory | none |
 | kalender | none of its own (service account) | mirrors into the person's own read-only books | root: the subscription addresses | none |
 | abstimmung (registry mdopp/abstimmung) | none: invited guests from outside, one cookie id per browser | only the names of who took part, after voting; never another's choice | root: the votes file | none |
 
@@ -604,6 +605,21 @@ Keys: `PAPERLESS_TOKEN` (`dokumente`, sees every document — see
 paperless), `HOMES_HAUSHALT_TOKEN` (notice reminders and the address
 book), `BOTE_NOTIFY_TOKEN`.
 
+### druck
+
+No `private:` (templates/druck/laib.yml), no accounts, no secret. A print
+job from a device in the home network (631, `@LOCAL` only, no route) passes
+through the box to the printer: CUPS turns it into what the printer takes and
+sends it on. Nothing is kept after printing: no job history
+(`PreserveJobHistory No`), no job files (`PreserveJobFiles No`), no page log;
+the spool is a tmpfs, so a job waiting for a printer that is off lives only in
+memory, at most two hours (`JobRetryLimit` 120 × 60 s), and is gone on a
+restart. While a job waits, its name and its sender's name are shown only to
+that sender (`JobPrivateValues default`); root on the box can read the
+waiting job. `${DATA_DIR}/druck` holds the queues and which printers were
+seen, no job. `ha-drucker.json` there lists the printers (name, host, path,
+uuid) for Home Assistant: no person's data.
+
 ### home-assistant
 
 No `private:` (templates/home-assistant/laib.yml).
@@ -615,6 +631,11 @@ No `private:` (templates/home-assistant/laib.yml).
   `secrets:`): `homes` (administrator), `bote` (no administrator),
   `bote-automat` (administrator), `laib-pruefung`, `stimme`,
   `laib-namen` (administrator), `music-assistant` (administrator).
+- **Printers** (owner 2026-11-14): `home-assistant-drucker` adds an ipp
+  entry for every printer druck lists, with `HA_NAMES_TOKEN` (the user
+  `laib-namen`, already an administrator for the aliases; config flows are
+  admin-only), so HA's entry log names `laib-namen`. No new key between
+  services: HA's own helper reads druck's printer list from the host.
 - **Separation:** one house; every user sees the devices and the
   household's calendars (copied by `kalender`). Who switched what goes
   into HA's logbook under the consumer's user, never a person's

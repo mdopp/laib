@@ -77,6 +77,17 @@ box_config() {
     [ -z "$s" ] || { sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=usb --attr-match=idVendor=04c5 --attr-match=idProduct=114f; } || true
     echo "udev: a USB scanner (Fujitsu fi-6130) is core's, for the scan service"
   fi
+  # A printer at the box's USB (owner 2026-11-14): the druck container is core's (rootless), as the
+  # scan service's, so the printer's node must be core's too. Matched by its interface class 07
+  # (printer), not by model: any printer the household plugs in. Every other USB node stays root's.
+  want="$(printf '%s\n' '# laib (druck): a USB printer is core'"'"'s, for the rootless print server' \
+    'SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_USB_INTERFACES}=="*:0701*", OWNER="core"')"
+  if [ "$(cat "$etc/udev/rules.d/99-laib-printer.rules" 2>/dev/null)" != "$want" ]; then
+    $s mkdir -p "$etc/udev/rules.d"
+    printf '%s\n' "$want" | $s tee "$etc/udev/rules.d/99-laib-printer.rules" >/dev/null
+    [ -z "$s" ] || { sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=usb; } || true
+    echo "udev: a USB printer is core's, for the print server"
+  fi
   # inotify (#1052): every instance of uid core counts against one limit, checked in the host's
   # user namespace across all its containers (Paperless' consumer, conmon, the Werkstatt's
   # sessions); the default 128 ran out. A box in use gets it with its next self-update.
