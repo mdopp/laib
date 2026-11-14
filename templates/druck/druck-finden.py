@@ -168,6 +168,10 @@ def chosen(devices, own=()):
             key, art, r = "netz:" + name, "netz", TYPES.index(t)
         else:
             continue
+        # one device per printer, the same every round: cups lists a DNS-SD printer both as
+        # dnssd://… and as ipp://….local/, in no fixed order; a tie flipping the queue's URI made
+        # it re-add the queue every round, and phones saw the printer go offline (2026-11-14)
+        r = (r, 0 if uri.startswith("dnssd://") else 1, uri)
         if key not in found or r < rank[key]:
             found[key], rank[key] = (d, art), r
     return found
@@ -337,8 +341,12 @@ def apply(printers, known, now):
             findings.append({"severity": "gelb", "detail": f"{p['name']}: {p['why']}; er wird nicht angeboten.",
                              "fix": "laib logs druck"})
             continue
-        want = {"queue": p["queue"], "uri": p["uri"], "model": p["model"], "shared": p["shared"], "info": info(p)}
         old = known.get(p["key"], {})
+        uri = p["uri"]
+        if old.get("uri") and dnssd_name(old["uri"])[0] and dnssd_name(old["uri"])[0] == dnssd_name(uri)[0]:
+            uri = old["uri"]   # the same printer by another backend's name: keep the queue as it is
+        p["uri"] = uri
+        want = {"queue": p["queue"], "uri": uri, "model": p["model"], "shared": p["shared"], "info": info(p)}
         if {k: old.get(k) for k in want} != want or p["queue"] not in have:
             try:
                 run("lpadmin", "-p", p["queue"], "-v", p["uri"], "-m", p["model"], "-D", info(p), "-E",
