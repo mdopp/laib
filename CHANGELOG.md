@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.1](https://github.com/mdopp/laib/compare/v2.28.0...v2.28.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **template:** druck offers the Epson, and avahi keeps one name ([#1212](https://github.com/mdopp/laib/issues/1212)) ([bb64945](https://github.com/mdopp/laib/commit/bb64945a280c372e6f82ae79bda17fe0c3c03977))
+
 ## [2.28.0](https://github.com/mdopp/laib/compare/v2.27.0...v2.28.0) (2026-11-14)
 
 
