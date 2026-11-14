@@ -61,6 +61,7 @@ type Proposal struct {
 	Settled      time.Time `json:"settled,omitempty"`
 	Step         string    `json:"step,omitempty"`    // what the run that carries it does now, for the Inbox (#686)
 	Because      string    `json:"because,omitempty"` // why that run took it back, in the owner's words (#686)
+	Ursache      string    `json:"ursache,omitempty"` // the Operator's reading of that run's cause, plain German (laib note --karten)
 	// a red run with data (#853): laib's two proposals the card offers, the
 	// run's snapshot back („Sicherung zurückspielen“) and its change on
 	// again with the data as they are („Nach vorne reparieren“)

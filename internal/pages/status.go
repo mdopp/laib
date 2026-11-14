@@ -100,7 +100,8 @@ type ServiceStatus struct {
 	State        string            `json:"state"`                  // grün | gelb | rot
 	Units        map[string]string `json:"units"`
 	Detail       string            `json:"detail,omitempty"`
-	Red          []string          `json:"red,omitempty"` // why it is red beyond its units: "health: 502 Bad Gateway" (#856)
+	Red          []string          `json:"red,omitempty"`    // why it is red beyond its units: "health: 502 Bad Gateway" (#856)
+	Helfer       string            `json:"helfer,omitempty"` // a failed helper: it runs, gelb, the helper's last line (2026-11-14)
 	// Provides are its roles: laib-lease finds the units a window stops by them (ADR 0027)
 	Provides []string `json:"provides,omitempty"`
 	// Eigenes: the status file's own fields, for one named service (#688)
@@ -148,21 +149,24 @@ func CollectStatus(ctx context.Context, env *cli.Env, st *state.State) (Readines
 	for _, name := range names {
 		svc := st.Services[name]
 		row := ServiceStatus{Name: name, Title: svc.Contract.Title, Beschreibung: svc.Contract.Beschreibung, State: "grün", Units: map[string]string{}, Provides: svc.Contract.Provides}
+		yellow := func() string { return cmp.Or(map[string]string{"rot": "rot"}[row.State], "gelb") } // red stays red
 		for _, u := range svc.UnitNames() {
 			a := sysd.Active(ctx, u)
 			row.Units[u] = a
-			switch a {
-			case "active":
-			case "activating", "reloading":
-				if row.State == "grün" {
-					row.State = "gelb"
-				}
+			switch {
+			case a == "active":
+			case a == "activating" || a == "reloading":
+				row.State = yellow()
+			case svc.Helper(u): // a helper that does not run: the service does (2026-11-14)
+				row.State, row.Helfer = yellow(), diag.Helper(ctx, svc, u)
 			default:
 				row.State = "rot"
 			}
 		}
 		for _, u := range svc.Oneshots() {
-			if a := sysd.Active(ctx, u); a == "failed" { // a timer's run failed (#195)
+			if a := sysd.Active(ctx, u); a == "failed" && svc.Helper(u) { // a helper's run failed (#195, 2026-11-14)
+				row.Units[u], row.State, row.Helfer = a, yellow(), diag.Helper(ctx, svc, u)
+			} else if a == "failed" { // its check's run failed (#417)
 				row.Units[u], row.State = a, "rot"
 			}
 		}
@@ -312,8 +316,8 @@ func Status(ctx context.Context, env *cli.Env, args []string) int {
 				fmt.Fprintf(env.W(), " %s=%s", u, a)
 			}
 		}
-		if len(row.Red) > 0 {
-			fmt.Fprintf(env.W(), " %s", strings.Join(row.Red, "; "))
+		if len(row.Red) > 0 || row.Helfer != "" {
+			fmt.Fprintf(env.W(), " %s", strings.Trim(strings.Join(append(row.Red, row.Helfer), "; "), "; "))
 		}
 		if row.Detail != "" { // what the template says about itself, as the Box page shows it (#359)
 			fmt.Fprintf(env.W(), " %s", row.Detail)

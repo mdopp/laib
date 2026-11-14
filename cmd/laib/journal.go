@@ -13,6 +13,7 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/proposal"
 )
 
 // cmdJournal: --limit n is the newest n (without --since of any age),
@@ -75,15 +76,17 @@ func cmdJournal(_ context.Context, env *cliEnv, args []string) int {
 // `watch` a routine finding. Journaled as the hand; the webhook carries
 // reports and incidents.
 func cmdNote(_ context.Context, env *cliEnv, args []string) int {
-	kind := "watch"
+	kind, karten := "watch", ""
 	var words []string
 	for i := 0; i < len(args); i++ {
-		if args[i] == "--kind" && i+1 < len(args) {
-			kind = args[i+1]
-			i++
-			continue
+		switch {
+		case args[i] == "--kind" && i+1 < len(args):
+			kind, i = args[i+1], i+1
+		case args[i] == "--karten" && i+1 < len(args): // a red run's cards (Durchgang rot)
+			karten, i = args[i+1], i+1
+		default:
+			words = append(words, args[i])
 		}
-		words = append(words, args[i])
 	}
 	text := strings.TrimSpace(strings.Join(words, " "))
 	if len(text) > 4000 {
@@ -106,14 +109,46 @@ func cmdNote(_ context.Context, env *cliEnv, args []string) int {
 		go cli.PostEvent(env, st.Box.Notify.URL, e)
 		time.Sleep(50 * time.Millisecond)
 	}
+	on := onCards(env, karten, text)
 	if kind == "report" {
 		dir := filepath.Join(env.Paths.Home, "reports")
 		os.MkdirAll(dir, 0o755)
 		os.WriteFile(filepath.Join(dir, time.Now().Format("2006-01-02")+".md"), []byte(text+"\n"), 0o644)
 	}
 	if env.JSON {
-		return cli.Emit(env, e)
+		return cli.Emit(env, struct {
+			journal.Entry
+			Karten string `json:"karten,omitempty"`
+		}{e, on})
 	}
-	fmt.Fprintln(env.W(), "notiert:", kind)
+	fmt.Fprintln(env.W(), strings.TrimSpace("notiert: "+kind+" "+on))
 	return cli.ExitOK
+}
+
+// onCards puts a note on a red run's cards as its cause (Durchgang rot): the
+// run's rolled-back proposals and the two follow-ups laib filed for them.
+// Any other card keeps its words, and a technical text stays in the journal
+// (#855). Says on which cards it is, or why on none.
+func onCards(env *cliEnv, ids, text string) string {
+	if ids == "" {
+		return ""
+	} else if proposal.Technical(text) {
+		return "nicht auf den Karten: ein Satz für Menschen, ohne Befehl, Unit oder Fehlertext"
+	}
+	all, _ := proposal.List(cli.InboxDir(env), false)
+	red := func(p *proposal.Proposal) bool { return p.Outcome == "rolled-back" && p.Batch != "" }
+	var on []string
+	for _, f := range strings.Split(ids, ",") {
+		id, _ := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(f), "#"))
+		i := slices.IndexFunc(all, func(p *proposal.Proposal) bool { return p.ID == id })
+		if i >= 0 && (red(all[i]) || slices.ContainsFunc(all, func(q *proposal.Proposal) bool { return red(q) && (q.Restore == id || q.Forward == id) })) {
+			if all[i].Ursache = text; proposal.Save(cli.InboxDir(env), all[i]) == nil {
+				on = append(on, "#"+strconv.Itoa(id))
+			}
+		}
+	}
+	if len(on) == 0 {
+		return "auf keiner Karte: keine davon gehört zu einem roten Durchgang"
+	}
+	return "auf den Karten " + strings.Join(on, ", ")
 }

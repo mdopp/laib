@@ -1,0 +1,21 @@
+# Durchgang rot (owner, 2026-11-14): laib applies every waiting approval as
+# one run and takes a red run back as a whole, innocent approvals with it;
+# its cards said only „lief nicht“, and a helper read the logs, re-proposed
+# the innocent ones by hand and told the owner what only he could do. Its
+# script (run.py) does that: it waits for laib's rollback, reads the run's
+# journal line and the failing service's error lines, asks the model for the
+# cause in one sentence and for what only the owner can do, then writes the
+# cause onto the run's cards and their follow-ups (note karten), proposes
+# each approval that touches no failing service again on its own, as it was,
+# and files one Box-Aufgabe for the owner. It proposes only: nothing is
+# approved, rolled back or let past a consent, a lock or a proposal's class.
+description: Wenn ein Durchgang rot endet — die Ursache lesen und auf die Karten schreiben, Unbeteiligtes einzeln neu vorschlagen, dem Besitzer sagen, was nur er tun kann.
+trigger: {event: red}
+tools: [journal, inbox, logs, propose, aufgabe, note]
+run: run.py
+context: none
+modell: urteil   # the script reads, waits and files; the model judges the cause in two lines
+output: note
+limits: {propose: 5, aufgabe: 2}
+prompt: |
+  Ein Durchgang ist rot geendet und zurückgenommen. Der Ablauf liest Journal und Log selbst; das Modell sagt in einem Satz die Ursache und was nur der Besitzer tun kann.

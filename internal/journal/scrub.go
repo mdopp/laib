@@ -60,7 +60,8 @@ func Scrub(s string, known map[string]string) string {
 	return secretKey.ReplaceAllString(s, "${1}"+Redacted)
 }
 
-func knownNow() map[string]string {
+// KnownNow is Known's values, or nil before the binary set it.
+func KnownNow() map[string]string {
 	if Known == nil {
 		return nil
 	}
@@ -90,7 +91,7 @@ func ScrubOnce(dir string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	known, total := knownNow(), 0
+	known, total := KnownNow(), 0
 	for _, file := range files {
 		n, err := scrubFile(file, known)
 		total += n

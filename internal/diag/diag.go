@@ -13,6 +13,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -63,6 +65,8 @@ type Finding struct {
 	// Wartet: why a unit or health red is expected now (#907, #908); it is
 	// then info (an apply, a pause) or gelb (busy), and offers no repair.
 	Wartet string `json:"wartet,omitempty"`
+	// Helfer: a failed helper's sentence, its own last log line in it (2026-11-14): gelb, the service runs
+	Helfer string `json:"helfer,omitempty"`
 	// NeueAufgabe: the task a status file asks for (#1168); the Operator's look adds it (cover)
 	NeueAufgabe *aufgaben.Aufgabe `json:"neue_aufgabe,omitempty"`
 }
@@ -133,12 +137,12 @@ func Service(ctx context.Context, env *cli.Env, st *state.State, name string) []
 	var own []Finding // its unit and health reds
 	for _, u := range svc.UnitNames() {
 		if a := sysd.Active(ctx, u); a != "active" {
-			own = append(own, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist " + a, Fix: "laib logs " + name, Repair: []string{"restart", name}})
+			own = append(own, unitFinding(ctx, svc, u, a))
 		}
 	}
 	for _, u := range svc.Oneshots() {
 		if sysd.Active(ctx, u) == "failed" { // a timer's run failed (#195)
-			own = append(own, Finding{Severity: "rot", Probe: "unit", Service: name, Detail: u + " ist failed", Fix: "laib logs " + name, Repair: []string{"restart", name}})
+			own = append(own, unitFinding(ctx, svc, u, "failed"))
 		}
 	}
 	// what the service says about itself (#309); a stale one is re-checked
@@ -152,6 +156,37 @@ func Service(ctx context.Context, env *cli.Env, st *state.State, name string) []
 		own = append(own, *f)
 	}
 	return append(out, hold(own, held(env, st, name), apply.Busy(ctx, st, svc, time.Now()))...)
+}
+
+// unitFinding is a unit that is not active: red, or gelb with Helfer for
+// a helper (2026-11-14), which leaves the service running. Its repair stays.
+func unitFinding(ctx context.Context, svc *state.Service, u, a string) Finding {
+	f := Finding{Severity: "rot", Probe: "unit", Service: svc.Name, Detail: u + " ist " + a, Fix: "laib logs " + svc.Name, Repair: []string{"restart", svc.Name}}
+	if f.Helfer = Helper(ctx, svc, u); f.Helfer != "" {
+		f.Severity = "gelb"
+	}
+	return f
+}
+
+// ownLine is a journal line of short-iso: its identifier and message.
+var ownLine = regexp.MustCompile(`^\S+ \S+ ([^\s\[:]+)(?:\[\d+\])?: (.*)$`)
+
+// Helper is what a failed helper of svc says (2026-11-14): that the service
+// runs, the unit, and the helper's own last log line (not systemd's or
+// podman's), secrets scrubbed; "" for a unit that is no helper.
+func Helper(ctx context.Context, svc *state.Service, u string) string {
+	if !svc.Helper(u) {
+		return ""
+	}
+	say := cmp.Or(proposal.Named(svc.Name), svc.Name) + " läuft; ein Helfer meldet einen Fehler: " + u
+	text, _ := sysd.Run(ctx, "journalctl", "--user", "-u", u, "-n", "40", "--no-pager", "-o", "short-iso")
+	for _, l := range slices.Backward(strings.Split(strings.TrimSpace(text), "\n")) {
+		if m := ownLine.FindStringSubmatch(l); m != nil && !slices.Contains([]string{"systemd", "podman", "conmon", "pasta"}, m[1]) {
+			line := []rune(journal.Scrub(strings.TrimSpace(m[2]), journal.KnownNow()))
+			return say + ": „" + string(line[:min(len(line), 200)]) + "“"
+		}
+	}
+	return say
 }
 
 func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []Finding {

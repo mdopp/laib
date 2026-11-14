@@ -231,6 +231,8 @@ func progress(p *proposal.Proposal, decision string, locked bool) (text, class s
 		return p.Because, "gelb", false
 	case p.Outcome == "rolled-back" && p.Because == "": // taken back on request: done, not red
 		return "zurückgenommen", "info", false
+	case p.Outcome == "rolled-back" && p.Ursache != "": // the Operator read the run (Durchgang rot)
+		return "zurückgenommen, " + strings.TrimSuffix(p.Because, ".") + ". Der Operator hat nachgesehen: " + p.Ursache, "rot", false
 	case p.Outcome == "rolled-back" && strings.Contains(p.Because, "Journal"):
 		return "zurückgenommen, " + p.Because, "rot", false
 	case p.Outcome == "rolled-back": // and the next step (#854)
@@ -257,6 +259,9 @@ func card(r *http.Request, env *cli.Env, p *proposal.Proposal, domain string, bo
 			fmt.Fprintf(b, ` <a href="%s">Dorthin ›</a>`, html.EscapeString(w.Link))
 		}
 		b.WriteString("</p>")
+	}
+	if p.Ursache != "" { // a red run's follow-up: what the Operator read as its cause (Durchgang rot)
+		fmt.Fprintf(b, "<p>Der Operator hat nachgesehen: %s</p>", html.EscapeString(p.Ursache))
 	}
 	if p.Freigabe != "" && len(waits) > 0 {
 		b.WriteString("<p>Freigegeben: Laib wendet ihn von selbst an, sobald nichts mehr fehlt.</p>")

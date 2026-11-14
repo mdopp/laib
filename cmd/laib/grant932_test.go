@@ -95,7 +95,7 @@ func TestTheUpdateRunProposesPlannedForTheKraftwerksOps(t *testing.T) {
 		t.Fatalf("updates --run: exit %d", code)
 	}
 	open, _ := proposal.List(cli.InboxDir(env), true)
-	if len(open) != 1 || !strings.Contains(open[0].Reason, "+planned (Fähigkeit durchsicht)") || !strings.Contains(open[0].Reason, "ops +aufgabe (Fähigkeit routineblick)") {
-		t.Fatalf("want one proposal granting ops planned for durchsicht and aufgabe for routineblick: %+v", open)
+	if len(open) != 1 || !strings.Contains(open[0].Reason, "+planned (Fähigkeit durchsicht)") || !strings.Contains(open[0].Reason, "ops +aufgabe (Fähigkeit durchgang, routineblick)") {
+		t.Fatalf("want one proposal granting ops planned for durchsicht and aufgabe for durchgang and routineblick: %+v", open)
 	}
 }

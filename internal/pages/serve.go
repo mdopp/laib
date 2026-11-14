@@ -541,7 +541,8 @@ func serviceCard(row ServiceStatus, checking map[string]bool) string {
 	sort.Strings(bad)
 	note, units := row.Detail, "" // which unit is how, and what diag found: under Details (#855)
 	if len(bad) > 0 || len(row.Red) > 0 {
-		note = strings.TrimSuffix(map[bool]string{true: "startet gerade", false: "läuft nicht richtig; sieh in der Inbox nach, ob eine Reparatur wartet"}[row.State == "gelb"]+" · "+note, " · ")
+		say := map[bool]string{true: cmp.Or(row.Helfer, "startet gerade"), false: "läuft nicht richtig; sieh in der Inbox nach, ob eine Reparatur wartet"}[row.State == "gelb"] // a helper's error: it runs (2026-11-14)
+		note = strings.TrimSuffix(say+" · "+note, " · ")
 		units = details(strings.Join(append(bad, row.Red...), " "))
 	}
 	check, run := "", ""
