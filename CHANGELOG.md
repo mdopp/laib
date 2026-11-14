@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.28.3](https://github.com/mdopp/laib/compare/v2.28.2...v2.28.3) (2026-11-14)
+
+
+### Bug Fixes
+
+* **template:** the HA printer helper no longer asks for HA's flow list ([#1216](https://github.com/mdopp/laib/issues/1216)) ([0f59b5c](https://github.com/mdopp/laib/commit/0f59b5ccbfc758e8c7cf01202f3a3571cd9d66a7))
+
 ## [2.28.2](https://github.com/mdopp/laib/compare/v2.28.1...v2.28.2) (2026-11-14)
 
 
