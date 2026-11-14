@@ -1,0 +1,24 @@
+name: druck
+title: Drucken
+beschreibung: Jeder Drucker für jedes Gerät, ohne App
+template: {registry: builtin, name: druck, version: 1}
+provides: [print]
+upstream: [https://github.com/OpenPrinting/cups, https://github.com/OpenPrinting/cups-filters, https://github.com/OpenPrinting/libcupsfilters]   # where the Operator's web search looks first (#544)
+# The household's print server (owner 2026-11-14): CUPS finds every printer announced in the home
+# network (DNS-SD) and every printer at the box's USB, gives each a queue with the best driver CUPS
+# matches (driverless where the printer takes PDF or PWG raster, else the bundled vendor driver), and
+# shares on the LAN as IPP Everywhere / AirPrint / Mopria every printer that does not already reach
+# every device by itself, as „<Name> (über die Box)“, with PDF. druck-finden.py holds the rule, README.md
+# says it. Host network: DNS-SD is multicast on the LAN, both ways. Home Assistant's ipp entries come
+# from home-assistant-drucker (the home-assistant template), from /data/ha-drucker.json.
+hostNetwork: true
+routes: []                           # nothing through Caddy: printing is the home network's, never public
+secrets: []
+data:
+  - path: ${DATA_DIR}/druck          # CUPS' config and queues, the search's record (bekannt.json), its status, ha-drucker.json
+    backup: false                    # made again by the search: every printer is found again within minutes
+health: {none: "IPP is no web page; the container's HealthCmd (druck-start.sh gesund: cupsd answers, avahi runs, the search ran within 10 minutes) ends it on red, so the unit state is the check"}
+status:                              # „2 Drucker eingerichtet, über die Box angeboten: Epson WF-3540“, every round of the search
+  file: ${DATA_DIR}/druck/laib-status.json
+ports:
+  - {port: 631, lan: true}           # IPP: every phone and computer at home prints here; the web interface is off and every administration is local (cupsd.conf in druck-start.sh)

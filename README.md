@@ -122,7 +122,7 @@ The part the house trusts: it must work when everything else is broken. **21,999
 
 ### Services from templates
 
-28 templates in [`templates/`](templates/); Laib sets each up, checks it and backs it up. Name and description are the household's, from each `laib.yml`; the software is each `values.example.yml`'s images, without the small Python helpers.
+29 templates in [`templates/`](templates/); Laib sets each up, checks it and backs it up. Name and description are the household's, from each `laib.yml`; the software is each `values.example.yml`'s images, without the small Python helpers.
 
 | Service | Beschreibung | Runs |
 |---|---|---|
@@ -133,6 +133,7 @@ The part the house trusts: it must work when everything else is broken. **21,999
 | [Musik ordnen](templates/beets/) `beets` | Erkennt und sortiert neue Musik | [beets](https://hub.docker.com/r/linuxserver/beets) |
 | [Bote](templates/bote/) `bote` | Der Assistent in Signal und Co. | [hermes-agent](https://hub.docker.com/r/nousresearch/hermes-agent), [signal-cli-rest-api](https://hub.docker.com/r/bbernhard/signal-cli-rest-api), [laib-automat](automat/), [laib-directory](directory/) |
 | [Webadressen](templates/caddy/) `caddy` | Adressen und Zertifikate der Box | [laib-caddy](caddy/) |
+| [Drucken](templates/druck/) `druck` | Jeder Drucker für jedes Gerät, ohne App | [laib-druck](druck/) |
 | [ESPHome](templates/esphome/) `esphome` | Firmware für Sprachgeräte und Sensoren | [esphome](https://github.com/esphome/esphome) |
 | [Netzlaufwerk](templates/file-share/) `file-share` | Gemeinsame Ordner im Heimnetz | [syncthing](https://hub.docker.com/r/syncthing/syncthing), [samba](https://hub.docker.com/r/servercontainers/samba), [filebrowser](https://hub.docker.com/r/filebrowser/filebrowser) |
 | [Fragen](templates/frage/) `frage` | Websuche mit Zusammenfassung | [laib-frage](frage/), [searxng](https://hub.docker.com/r/searxng/searxng) |
@@ -187,6 +188,7 @@ skills/              the Operator's built-in skills, a folder each: skill.yml, e
 templates/           built-in templates (Quadlet files + laib.yml + hooks)
 usb/                 the box's Butane and the live-install scripts laib-stick embeds
 werkstatt/           the dev image: repos, pi, Claude Code, autoloop
+druck/               the print server's image: CUPS, cups-filters, avahi and the bundled printer drivers (templates/druck)
 qmd/                 the memory library's image: qmd as released, CPU only (#195), served by the Vermittler (#198)
 scripts/             install-box.sh, e2e.sh, loc.sh, ratchet.py, drift.sh, architektur.sh
 docs/                KONZEPT, ZIELBILD, DESIGN, INTERFACE, STATE, TESTING, INSTALL, BACKUP, adr/
@@ -207,7 +209,7 @@ on the box now: `laib status`, and `docs/ZIELBILD.md`):
 | Operator (admin agent), lease, Frage | `operator/`, `lease/`, `frage/` | e2e with a scripted model; against the box's model: the Operator runs and its last morning report is green <!-- box: laib status ~ "operator": "läuft" ~ "morgenbericht": \{[^}]*"outcome": "green" --> *(box 2026-11-11: yes)* |
 | Bote (Hermes on Signal, Matrix and/or Telegram) with the `ha` and `automat` tools; approvals only in the Inbox (#778) | `templates/bote`, `automat/` | config rendered and checked against Hermes' source; automat unit-tested against a fake HA |
 | Homes (the surface): Box page, pairing, companion API for the widgets | `mdopp/homes`, `templates/homes` | unit tests against a fake Laib; installed on the Kraftwerk by hand after migration day (#379) |
-| 28 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
+| 29 templates for every unit the box runs today | `templates/` | lint + render; caddy, auth, adguard and radicale installed in the VM |
 
 The NUC trial (#23, #27) was the first real run; `docs/INSTALL.md` has the
 pre-flight. The Kraftwerk runs Laib since migration day (2026-10-19); what

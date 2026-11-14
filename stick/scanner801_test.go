@@ -36,3 +36,21 @@ func TestBoxConfigMakesTheUSBScannerCores(t *testing.T) {
 		t.Errorf("the scanner is core's, not everybody's: %s", rule)
 	}
 }
+
+// The print server (druck, owner 2026-11-14) is rootless like the scan service: a printer at the
+// box's USB is core's by its interface class 07, whatever its model; nothing else changes owner.
+func TestBoxConfigMakesAUSBPrinterCores(t *testing.T) {
+	etc := boxConfigTo(t, false)
+	b, err := os.ReadFile(filepath.Join(etc, "udev", "rules.d", "99-laib-printer.rules"))
+	if err != nil {
+		t.Fatalf("no printer rule: %v", err)
+	}
+	for _, want := range []string{`SUBSYSTEM=="usb"`, `ENV{DEVTYPE}=="usb_device"`, `ENV{ID_USB_INTERFACES}=="*:0701*"`, `OWNER="core"`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("the rule lacks %s: %s", want, b)
+		}
+	}
+	if strings.Contains(string(b), "MODE") || strings.Count(string(b), "SUBSYSTEM") != 1 {
+		t.Errorf("one rule, the printer core's, not everybody's: %s", b)
+	}
+}

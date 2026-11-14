@@ -1,0 +1,40 @@
+[Unit]
+Description=Druck: jeder Drucker im Heimnetz und am USB für jedes Gerät, ohne App (owner 2026-11-14)
+After=network-online.target
+
+[Container]
+Image=${DRUCK_IMAGE}
+# DNS-SD: announcing the queues and finding the printers is multicast on the LAN (hostNetwork carve-out)
+Network=host
+Environment=TZ=${TZ}
+# the name the queues are announced under, drucker.local: avahi's own, never the box's
+Environment=DRUCK_HOSTNAME=${DRUCK_HOSTNAME}
+Environment=DRUCK_VERGESSEN_TAGE=${DRUCK_VERGESSEN_TAGE}
+# CUPS' config and queues (printers.conf, the PPDs), the search's record and status
+Volume=${DATA_DIR}/druck:/data:z
+# what runs is the template's: a change reaches the box without a new image
+Volume=./druck-start.sh:/laib/druck-start.sh:ro
+Volume=./druck-finden.py:/laib/druck-finden.py:ro
+# a job's file only in memory, gone once printed or at the latest at a restart (docs/DATA.md)
+Tmpfs=/var/spool/cups
+# a printer at the box's USB: libusb opens /dev/bus/usb/<bus>/<device>, whose numbers change when it
+# is switched on again, so the whole tree goes in (as the scan service's, #801). The host's udev rule
+# (install-box.sh, 99-laib-printer.rules) makes only printers (interface class 07) core's.
+AddDevice=/dev/bus/usb
+# labelling off: a container_t process may not open the USB node (#417), and the scripts above lie
+# in laib's config folder
+SecurityLabelDisable=true
+# cupsd answers, avahi runs, the search wrote its status within 10 minutes; else the container ends
+HealthCmd=/bin/bash /laib/druck-start.sh gesund
+HealthInterval=60s
+HealthStartPeriod=120s
+HealthRetries=3
+HealthOnFailure=kill
+AutoUpdate=registry
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

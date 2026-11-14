@@ -1,0 +1,19 @@
+# The print server of the druck template (owner 2026-11-14): CUPS with cups-filters'
+# driverless PPDs, the dnssd and usb backends, avahi for DNS-SD, and the bundled vendor
+# drivers CUPS matches by IEEE 1284 device ID: Epson ESC/P-R (escpr), HP's hpcups (without
+# hplip's toolbox, ~120 MB more) and Gutenprint. Nothing is installed at run time. Epson's
+# escpr2 is not in Debian and has no source Epson keeps at a fixed address to pin; the
+# printers it serves (Epson since ~2019) speak IPP Everywhere and take the driverless queue.
+# What runs in it (the start script, the printer search) is the template's, mounted from
+# templates/druck: a change there reaches the box without a new image.
+FROM docker.io/library/debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      cups cups-client cups-bsd cups-filters cups-filters-core-drivers \
+      printer-driver-escpr printer-driver-hpcups printer-driver-gutenprint \
+      avahi-daemon avahi-utils libnss-mdns dbus python3 ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && for b in dnssd usb socket lpd; do ln -sf ../backend-available/$b /usr/lib/cups/backend/$b; done \
+ && sed -i 's/^hosts:.*/hosts: files mdns4_minimal [NOTFOUND=return] dns/' /etc/nsswitch.conf
+EXPOSE 631
+CMD ["/bin/bash", "/laib/druck-start.sh"]

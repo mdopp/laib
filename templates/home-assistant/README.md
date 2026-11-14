@@ -75,6 +75,22 @@ lokale Befehle aktiv (HassGetCurrentTime in 40 ms) · Weckwort nur am Gerät,
 bis hey_mycroft da ist“. It does not measure the microphone, the end of
 speech or Whisper: a spoken test on the device does.
 
+## The household's printers (owner 2026-11-14)
+
+HA's `ipp` integration finds IPP printers by zeroconf, but a discovery is
+an entry only once someone confirms it. `home-assistant-drucker.py` (timer
+every 15 minutes, inside HA's container, with `HA_NAMES_TOKEN`: config
+flows are admin-only) reads the druck service's `ha-drucker.json` and, for
+every printer on it that no ipp entry has yet (by uuid, else host and path;
+an ignored one counts as had), confirms its waiting discovery or starts a
+flow with its host, port and path. A network printer goes in by its own
+name (its ink levels are its own), a printer only the box reaches by the
+box's queue (`127.0.0.1:631/printers/<queue>`); the box's re-share of a
+network printer is never on the list, so nothing goes in twice. A printer
+that does not answer leaves no flow behind, and no entry is ever deleted:
+one whose printer is gone for good is the owner's to remove. Without the
+druck service it does nothing.
+
 ## Radio and music by voice (#933)
 
 The first box result of ADR 0015's five intents was 3 of 5: „Spiele

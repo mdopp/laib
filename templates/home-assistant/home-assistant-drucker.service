@@ -1,0 +1,17 @@
+# The household's printers as ipp entries (owner 2026-11-14): home-assistant-drucker.py runs inside the
+# running Home Assistant container and confirms, or starts, an ipp config flow for every printer the
+# druck service lists in its ha-drucker.json: a network printer by its own name (its ink levels), a
+# printer only the box reaches by the box's queue; never the box's re-share of a network printer. With
+# the token of HA's user „Laib-Namen“ (an administrator: config flows are admin-only). No druck service,
+# or Home Assistant not running: nothing to do. The list and the token reach podman through the
+# environment, never on argv.
+[Unit]
+Description=Home Assistant: die gefundenen Drucker als IPP-Geräte
+After=home-assistant.service
+
+[Service]
+Type=oneshot
+Environment=HA_TOKEN=${NAMES_TOKEN}
+StandardInput=file:%h/.config/containers/systemd/home-assistant/home-assistant-drucker.py
+ExecStart=/bin/sh -c 'systemctl --user -q is-active home-assistant.service || { echo "Home Assistant is not running: the printers wait"; exit 0; }; DRUCKER=$$(cat ${DATA_DIR}/druck/ha-drucker.json 2>/dev/null); export DRUCKER; exec /usr/bin/podman exec -i -e HA_TOKEN -e DRUCKER systemd-home-assistant python3 -'
+TimeoutStartSec=300

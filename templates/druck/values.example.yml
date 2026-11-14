@@ -1,0 +1,3 @@
+DRUCK_IMAGE: ghcr.io/mdopp/laib-druck:1     # druck/Containerfile in this repo, built and signed by druck-image.yml (ADR 0034); the box pins the digest it runs („Images festhalten“)
+DRUCK_HOSTNAME: drucker                     # the box's queues are announced as drucker.local: avahi's own name, never the box's own
+DRUCK_VERGESSEN_TAGE: "30"                  # a queue whose printer was not seen this many days is removed; until then it waits for the printer

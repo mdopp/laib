@@ -1,0 +1,9 @@
+[Unit]
+Description=Home Assistant: die gefundenen Drucker, alle 15 Minuten (ein neuer Drucker ist binnen dieser Zeit da)
+
+[Timer]
+OnCalendar=*:9/15
+Persistent=true
+
+[Install]
+WantedBy=timers.target
