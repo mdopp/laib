@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.29.0](https://github.com/mdopp/laib/compare/v2.28.3...v2.29.0) (2026-11-14)
+
+
+### Features
+
+* **frage:** a wake nobody meant gets a tone, not an answer ([#1218](https://github.com/mdopp/laib/issues/1218)) ([7ab9ee1](https://github.com/mdopp/laib/commit/7ab9ee1b924616849e323daaa30eb3fac066399e))
+* **operator:** a red run is read, its cause on its cards; a failed helper is gelb ([#1222](https://github.com/mdopp/laib/issues/1222)) ([56dc428](https://github.com/mdopp/laib/commit/56dc428b3a25a7462e8a08803ee7ba87e82c0ba1))
+
+
+### Bug Fixes
+
+* durable Operator writes, parallel aufgabe reads, Werkstatt image vs release assets, autoloop 409, template exception reasons ([#1220](https://github.com/mdopp/laib/issues/1220)) ([3dabd15](https://github.com/mdopp/laib/commit/3dabd1527f10e514775897c9b6658d53c0d648d3))
+* **inbox:** a red run takes back only the red proposal; HA marketplace consent is the owner's approval ([#1221](https://github.com/mdopp/laib/issues/1221)) ([b49f256](https://github.com/mdopp/laib/commit/b49f25661e70ebc86933854dc6db105bf9305468))
+* main red after [#1218](https://github.com/mdopp/laib/issues/1218) and [#1222](https://github.com/mdopp/laib/issues/1222), a repair's journal line before its card, the VM's token sentence ([#1224](https://github.com/mdopp/laib/issues/1224)) ([f7b8f27](https://github.com/mdopp/laib/commit/f7b8f278a9cc38cf2825b8c6db09cd5a1f7a2030))
+
 ## [2.28.3](https://github.com/mdopp/laib/compare/v2.28.2...v2.28.3) (2026-11-14)
 
 
