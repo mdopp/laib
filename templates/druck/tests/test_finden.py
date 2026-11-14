@@ -64,15 +64,15 @@ AVAHI = r"""+;wlp2s0;IPv4;EPSON\032WF-3540\032Series;_ipp._tcp;local
 """
 
 MODELS = {
-    "MFG:EPSON;MDL:WF-3540 Series;CMD:ESCPL2,BDC,D4,D4PX,ESCPR7,END4,GENEP,URF;": finden.parse_models(
+    "MFG:EPSON;MDL:WF-3540 Series;": finden.parse_models(
         "gutenprint.5.3://escp2-wf3540/expert Epson WF-3540 - CUPS+Gutenprint v5.3.5\n"
         "escpr:0/cups/model/epson-inkjet-printer-escpr/Epson-WF-3540_Series-epson-escpr-en.ppd Epson WF-3540 Series, Epson Inkjet Printer Driver (ESC/P-R) for Linux\n"),
-    "MFG:HP;MDL:OfficeJet Pro 9010 series;CMD:PCL,PCLXL,PostScript,PDF,PWG,URF;": finden.parse_models(
+    "MFG:HP;MDL:OfficeJet Pro 9010 series;": finden.parse_models(
         "drv:///hpcups.drv/hp-officejet_pro_9010_series.ppd HP OfficeJet Pro 9010 Series, hpcups 3.25.2\n"
         "driverless:ipp://HP%20OfficeJet%20Pro%209010%20series%20%5B4B2A1C%5D._ipp._tcp.local/ HP OfficeJet Pro 9010 series, driverless, cups-filters 1.28.17\n"),
-    "MFG:Brother;CMD:GDI;MDL:HL-1110 series;CLS:PRINTER;": finden.parse_models(
+    "MFG:Brother;MDL:HL-1110 series;": finden.parse_models(
         "gutenprint.5.3://brother-hl-1110/expert Brother HL-1110 - CUPS+Gutenprint v5.3.5\n"),
-    "MFG:Hewlett-Packard;MDL:HP LaserJet 1320 series;CMD:PJL,PCL,POSTSCRIPT;": finden.parse_models(
+    "MFG:Hewlett-Packard;MDL:HP LaserJet 1320 series;": finden.parse_models(
         "drv:///sample.drv/generic.ppd Generic PostScript Printer\n"
         "drv:///hpcups.drv/hp-laserjet_1320.ppd HP LaserJet 1320 Series, hpcups 3.25.2\n"),
 }
@@ -137,6 +137,84 @@ class Rule(unittest.TestCase):
         known = {"a": {"gesehen": 0}, "b": {"gesehen": 0}}
         self.assertEqual(finden.forget(known, {"a"}, 29 * 86400), [])
         self.assertEqual(finden.forget(known, {"a"}, 31 * 86400), ["b"])
+
+
+# What the box's CUPS said on 2026-11-14 (lpinfo -l -v, abridged): CUPS' bare backends, the
+# virtual BRF printer, the Epson under its DNS-SD name „EPSON“ from three backends, and snmp's address
+BOX_V = """Device: uri = beh
+        class = network
+        info = Backend Error Handler
+        make-and-model = Unknown
+        device-id = 
+        location = 
+Device: uri = cups-brf:/
+        class = file
+        info = CUPS-BRF
+        make-and-model = Virtual Braille BRF Printer
+        device-id = MFG:Generic;MDL:CUPS-BRF Printer;DES:Generic CUPS-BRF Printer;CLS:PRINTER;CMD:BRF;
+        location = 
+Device: uri = ipp
+        class = network
+        info = Internet Printing Protocol (ipp)
+        make-and-model = Unknown
+        device-id = 
+        location = 
+Device: uri = dnssd://EPSON._pdl-datastream._tcp.local/
+        class = network
+        info = EPSON
+        make-and-model = EPSON WF-3540 Series
+        device-id = MFG:EPSON;MDL:WF-3540 Series;
+        location = 
+Device: uri = ipp://EPSON._ipp._tcp.local/
+        class = network
+        info = EPSON WF-3540 Series (driverless)
+        make-and-model = EPSON WF-3540 Series
+        device-id = MFG:EPSON;MDL:WF-3540 Series;CMD:AppleRaster,URF,JPEG;
+        location = 
+Device: uri = lpd://192.168.178.87:515/PASSTHRU
+        class = network
+        info = EPSON WF-3540 Series
+        make-and-model = EPSON WF-3540 Series
+        device-id = MFG:EPSON;CMD:ESCPL2,BDC,D4,D4PX,ESCPR1;MDL:WF-3540 Series;CLS:PRINTER;DES:EPSON WF-3540 Series;
+        location = 
+Device: uri = dnssd://EPSON._printer._tcp.local/
+        class = network
+        info = EPSON
+        make-and-model = EPSON WF-3540 Series
+        device-id = MFG:EPSON;MDL:WF-3540 Series;
+        location = 
+"""
+BOX_AVAHI = r"""=;eno1;IPv4;EPSON;_ipp._tcp;local;EPSON0A36A8.local;192.168.178.87;631;"UUID=7c47f900-67ff-11d4-9a7f-b0e8920a36a8" "URF=CP1,MT1-3-8-10-11-12,PQ4-5,OB9,OFU0,RS360,SRGB24,W8,DM3,IS1-2-18" "rp=Epson_IPP_Printer" "pdl=application/octet-stream,image/urf,image/jpeg" "product=(EPSON WF-3540 Series)" "usb_MDL=WF-3540 Series" "usb_MFG=EPSON" "ty=EPSON WF-3540 Series" "txtvers=1"
+"""
+BOX_M = ("escpr:0/cups/model/epson-inkjet-printer-escpr/Epson-WF-3540_Series-epson-escpr-en.ppd Epson WF-3540 Series, Epson Inkjet Printer Driver (ESC/P-R) for Linux\n"
+         "driverless:ipp://EPSON._ipp._tcp.local/ EPSON WF-3540 Series, driverless, cups-filters 1.28.17\n")
+
+
+class TheBox(unittest.TestCase):
+    """the first day on the box: no queue, because the round asked CUPS for the BRF printer's PPDs,
+    got „not found“ and gave up, and the Epson's IPP service came as ipp://EPSON._ipp._tcp.local/"""
+
+    def test_only_the_printers_are_looked_up_by_mfg_and_mdl(self):
+        devs = finden.parse_devices(BOX_V)
+        ids = sorted({finden.match_id(d) for d, _ in finden.chosen(devs).values()})
+        self.assertEqual(ids, ["MFG:EPSON;MDL:WF-3540 Series;"], "no lookup for cups-brf, beh or snmp's address")
+
+    # Ablauf L-46
+    def test_the_epson_gets_escpr_over_its_ipp_name(self):
+        devs = finden.parse_devices(BOX_V)
+        ps = finden.plan(devs, finden.parse_avahi(BOX_AVAHI), {"MFG:EPSON;MDL:WF-3540 Series;": finden.parse_models(BOX_M)})
+        self.assertEqual([p["key"] for p in ps], ["netz:EPSON"])
+        p = ps[0]
+        self.assertEqual(p["uri"], "ipp://EPSON._ipp._tcp.local/", "IPP by its DNS-SD name, never 192.168.178.87")
+        self.assertTrue(p["model"].startswith("escpr:"))
+        self.assertTrue(p["shared"])
+        self.assertEqual(p["name"], "Epson WF-3540")
+        self.assertEqual((p["ha"]["host"], p["ha"]["pfad"]), ("EPSON0A36A8.local", "/Epson_IPP_Printer"))
+
+    def test_no_ppd_found_is_an_empty_list_not_a_failed_round(self):
+        self.assertEqual(finden.run("sh", "-c", "echo 'lpinfo: client-error-not-found' >&2; exit 1", none="not-found"), "")
+        with self.assertRaises(RuntimeError):
+            finden.run("sh", "-c", "echo 'lpinfo: server-error-internal-error' >&2; exit 1", none="not-found")
 
 
 class HomeAssistant(unittest.TestCase):

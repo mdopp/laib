@@ -7,8 +7,6 @@ Image=${DRUCK_IMAGE}
 # DNS-SD: announcing the queues and finding the printers is multicast on the LAN (hostNetwork carve-out)
 Network=host
 Environment=TZ=${TZ}
-# the name the queues are announced under, drucker.local: avahi's own, never the box's
-Environment=DRUCK_HOSTNAME=${DRUCK_HOSTNAME}
 Environment=DRUCK_VERGESSEN_TAGE=${DRUCK_VERGESSEN_TAGE}
 # CUPS' config and queues (printers.conf, the PPDs), the search's record and status
 Volume=${DATA_DIR}/druck:/data:z
@@ -24,7 +22,7 @@ AddDevice=/dev/bus/usb
 # labelling off: a container_t process may not open the USB node (#417), and the scripts above lie
 # in laib's config folder
 SecurityLabelDisable=true
-# cupsd answers, avahi runs, the search wrote its status within 10 minutes; else the container ends
+# cupsd answers, avahi runs under the box's own name (no conflict), the search wrote its status within 10 minutes; else the container ends
 HealthCmd=/bin/bash /laib/druck-start.sh gesund
 HealthInterval=60s
 HealthStartPeriod=120s
