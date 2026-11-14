@@ -1,1 +1,1 @@
-IMAGE: ghcr.io/alangrainger/immich-public-proxy:4.1.2   # AGPL-3.0; needs Immich 3.0 or newer
+IMAGE: ghcr.io/alangrainger/immich-public-proxy:4.1.2@sha256:d6480d1e6beb3da661cb895e1b368340df48904ecbfe53ece2d5da343e78b857   # AGPL-3.0; needs Immich 3.0 or newer

@@ -1,2 +1,2 @@
-DRUCK_IMAGE: ghcr.io/mdopp/laib-druck:1     # druck/Containerfile in this repo, built and signed by druck-image.yml (ADR 0034); the box pins the digest it runs („Images festhalten“)
+DRUCK_IMAGE: ghcr.io/mdopp/laib-druck:1@sha256:75d52f3120ad791e9f028eb158986ec0613f4dee995116823bb6d8a7755db1fb     # druck/Containerfile in this repo, built and signed by druck-image.yml (ADR 0034); the box pins the digest it runs („Images festhalten“)
 DRUCK_VERGESSEN_TAGE: "30"                  # a queue whose printer was not seen this many days is removed; until then it waits for the printer

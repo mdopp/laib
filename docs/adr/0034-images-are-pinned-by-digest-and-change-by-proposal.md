@@ -123,11 +123,20 @@ verified own (the recommendation); (c) everything human. The owner chose
   built before the signing step, and those of other repositories
   (Homes, Dokumente) until their workflows sign, are refused as new
   digests: they stay on what runs until a signed build arrives.
-- `laib template lint` warns of a floating image; the templates' defaults
-  still float and are pinned on the box by the „Images festhalten“ card.
+- `laib template lint` warns of a floating image; the templates' floating
+  defaults (`:latest`, `:stable`, a bare major) are pinned on the box by the
+  „Images festhalten“ card. A default named by a version is pinned by
+  digest in the template itself (`templates/pins1130_test.go`), the card
+  pins a version tag without a digest as it pins a floating one, and a
+  patch proposal carries the patch's digest (#1130).
 - Laib's own binary still follows its releases nightly (`updates.laib`,
-  `scripts/self-update.sh`, `SHA256SUMS`); checking the release assets'
-  attestations is not done yet.
+  `scripts/self-update.sh`). Since #1130 the release signs `SHA256SUMS`
+  keyless in `release.yml` (`SHA256SUMS.bundle`, cosign's bundle), and
+  self-update checks that signature with the pinned cosign
+  (`registry.Cosign`) against `release.yml` on main before it trusts the
+  sums, then hands those very sums to the installer (`LAIB_SUMS`). A
+  release without the bundle, or signed by another identity, is refused:
+  `laib diag` says so in German and the box stays on what runs.
 - The kernel grew by the signature check, `--notes`, `--note`, the
   grouped `sets` and the card's lines — within its cap (21,994 of 22,000);
   laib-haushalt by the changelog read (1,318 of 1,320).

@@ -315,7 +315,7 @@ class PostDeploy(unittest.TestCase):
     def test_hermes_is_pinned(self):
         """#471, ADR 0019: a stock update must not change how Hermes treats tool output unseen."""
         vals = (HOOK.parent / "values.example.yml").read_text()
-        self.assertIn("HERMES_IMAGE: docker.io/nousresearch/hermes-agent:v0.22.2", vals)
+        self.assertIn("HERMES_IMAGE: docker.io/nousresearch/hermes-agent:v0.22.2@sha256:", vals)   # and by digest (ADR 0034, #1130)
 
     def test_the_welcome_line_names_homes_and_the_app(self):
         """Owner, 2026-11-09: a new chat starts with Homes's address and the app's download; laib-directory

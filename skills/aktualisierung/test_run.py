@@ -41,6 +41,15 @@ class Aktualisierung(unittest.TestCase):
         for bad in [{"service": "whoami", "key": "IMAGE", "value": "docker.io/traefik/whoami:v1.11.2"}, {"service": "whoami", "key": "IMAGE"}, {}]:
             self.assertIn("nur die Patch-Versionen", run.check(s, "laib_propose", bad))
 
+    def test_a_patch_is_offered_pinned(self):
+        # #1130: reitti went from 5.9.0@sha256:… to a bare 5.9.1 by a patch proposal; with the digest it stays pinned
+        ups = [{"service": "reitti", "key": "IMAGE", "image": "docker.io/dedicatedcode/reitti", "current": "5.9.0", "patch": "5.9.1", "patchDigest": "sha256:r591"}]
+        s = Fake({"laib_updates": json.dumps(ups), "laib_inbox": "[]", "laib_diag": "[]"})
+        r = run.run(s)
+        self.assertIn("- service reitti, key IMAGE, value docker.io/dedicatedcode/reitti:5.9.1@sha256:r591 (jetzt 5.9.0)", r["context"])
+        self.assertEqual(run.check(s, "laib_propose", {"service": "reitti", "key": "IMAGE", "value": "docker.io/dedicatedcode/reitti:5.9.1@sha256:r591"}), "")
+        self.assertIn("nur die Patch-Versionen", run.check(s, "laib_propose", {"service": "reitti", "key": "IMAGE", "value": "docker.io/dedicatedcode/reitti:5.9.1"}))
+
     def test_nothing_to_propose_is_idle(self):
         s = Fake({"laib_updates": "error: registry", "laib_inbox": "[]"})
         r = run.run(s)

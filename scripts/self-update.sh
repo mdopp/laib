@@ -5,7 +5,10 @@
 # the newest release that has its binaries, or the version box.yml
 # updates.laib holds; off only looks, and auto never goes back to an older
 # version. It installs through that release's own install-box.sh, verified
-# against the release's SHA256SUMS, and only while no backup runs, nobody
+# against the release's SHA256SUMS, whose signature from laib's release
+# workflow on main it checks first (ADR 0034 §3, #1130: the sums come from
+# the same place as the files, the signature does not), and hands those
+# verified sums to the installer; only while no backup runs, nobody
 # holds laib's lock and laib is green. Afterwards /ready must report the new
 # version green; else the binaries that ran before come back, the old laib
 # converges the box back to its own rendering, and that release is not tried
@@ -20,6 +23,9 @@ READY="${LAIB_READY_URL:-http://127.0.0.1:5900/ready}"
 WAIT="${LAIB_SELF_UPDATE_WAIT:-180}"         # seconds for /ready to be green on the new version
 LIMIT="${LAIB_SELF_UPDATE_TIMEOUT:-1200}"    # seconds the installer may take; a stalled download must not hold the night
 MODE="${LAIB_UPDATE:-auto}"                  # box.yml updates.laib: auto, off, or the version to hold
+# who may sign a release (keyless, GitHub's OIDC), and the pinned cosign that checks it: registry.Cosign
+SIGNER="https://github.com/mdopp/laib/.github/workflows/release.yml@refs/heads/main"
+COSIGN="ghcr.io/sigstore/cosign/cosign:v2.4.1@sha256:b03690aa52bfe94054187142fba24dc54137650682810633901767d8a3e15b31"
 REC="$HOME_DIR/self-update.json"
 say() { echo "laib-self-update: $*"; }
 laib() { LAIB_HOME="$HOME_DIR" LAIB_ACTOR=laib "$BIN/laib" "$@"; }
@@ -62,6 +68,13 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 for f in SHA256SUMS laib-install-box.sh; do
   curl -fsSL --max-time 120 -o "$tmp/$f" "$DL/$target/$f" || { record skipped "$target: $f lässt sich nicht laden"; exit 0; }
 done
+# a release from before #1130 carries no signature: it is refused, never installed unverified
+curl -fsSL --max-time 120 -o "$tmp/SHA256SUMS.bundle" "$DL/$target/SHA256SUMS.bundle" ||
+  { failed="$target"; record failed "$target trägt keine Signatur (SHA256SUMS.bundle): nicht installiert, von Hand aktualisieren"; exit 0; }
+if ! sig="$(timeout 300 podman run --rm -v "$tmp:/w:ro,Z" "$COSIGN" verify-blob --bundle /w/SHA256SUMS.bundle \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com --certificate-identity "$SIGNER" /w/SHA256SUMS 2>&1)"; then
+  failed="$target"; record failed "$target: die Signatur von SHA256SUMS stammt nicht aus Laibs Release auf main, nicht installiert ($(tail -1 <<<"$sig" | cut -c1-200))"; exit 0
+fi
 want="$(grep ' laib-install-box.sh$' "$tmp/SHA256SUMS" | cut -d' ' -f1)"
 [ -n "$want" ] || { failed="$target"; record failed "$target trägt kein install-box.sh in SHA256SUMS: von Hand aktualisieren"; exit 0; }
 [ "$want" = "$(sha256sum "$tmp/laib-install-box.sh" | cut -d' ' -f1)" ] || { failed="$target"; record failed "$target: install-box.sh passt nicht zu SHA256SUMS"; exit 0; }
@@ -75,7 +88,7 @@ mkdir "$tmp/keep"
 for b in laib laib-disk; do [ ! -f "$BIN/$b" ] || cp -p "$BIN/$b" "$tmp/keep/"; done
 changed() { for f in "$tmp/keep"/*; do cmp -s "$f" "$BIN/$(basename "$f")" || return 0; done; return 1; }
 say "$running → $target"
-LAIB_SELF_UPDATE=1 LAIB_BIN_DIR="$BIN" timeout "$LIMIT" bash "$tmp/laib-install-box.sh" --version "$target" >"$HOME_DIR/self-update.log" 2>&1
+LAIB_SELF_UPDATE=1 LAIB_SUMS="$tmp/SHA256SUMS" LAIB_BIN_DIR="$BIN" timeout "$LIMIT" bash "$tmp/laib-install-box.sh" --version "$target" >"$HOME_DIR/self-update.log" 2>&1
 rc=$?
 if [ "$rc" != 0 ] && ! changed; then
   record skipped "install-box.sh brach ab, bevor es ein Binary tauschte (Exit $rc): $(tail -2 "$HOME_DIR/self-update.log" | tr '\n' ' ')"; exit 0

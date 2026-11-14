@@ -344,7 +344,12 @@ for BIN in laib; do
   curl -fsSL "${get[@]}" -o "$TMPD/$BIN" "$(asset_url "$BIN-linux-amd64")"
 done
 # SHA256SUMS is required: an unverified build is refused, release or --source (#37)
-curl -fsSL "${get[@]}" -o "$TMPD/SHA256SUMS" "$(asset_url SHA256SUMS)" || { echo "no SHA256SUMS for $TAG: refusing an unverified build" >&2; exit 1; }
+# self-update.sh hands over the sums whose signature it checked (#1130): the same file, not a second download
+if [ -n "${LAIB_SUMS:-}" ]; then
+  cp "$LAIB_SUMS" "$TMPD/SHA256SUMS"
+else
+  curl -fsSL "${get[@]}" -o "$TMPD/SHA256SUMS" "$(asset_url SHA256SUMS)" || { echo "no SHA256SUMS for $TAG: refusing an unverified build" >&2; exit 1; }
+fi
 [ -s "$TMPD/SHA256SUMS" ] || { echo "empty SHA256SUMS for $TAG: refusing an unverified build" >&2; exit 1; }
 # The boot check (#368) is part of a release when SHA256SUMS lists it; then it
 # must download and match. A release from before #368 has none: its binaries
