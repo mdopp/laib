@@ -88,6 +88,17 @@ ldap.example.home {
 	import lanonly
 }
 
+karte.example.home {
+	request_header -Remote-*
+	import down
+	@lan remote_ip private_ranges
+	handle @lan {
+		import authelia
+		reverse_proxy 127.0.0.1:8495
+	}
+	import lanonly
+}
+
 leser.example.home {
 	request_header -Remote-*
 	import down

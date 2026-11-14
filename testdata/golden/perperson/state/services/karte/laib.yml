@@ -1,0 +1,15 @@
+name: karte
+title: Karte
+beschreibung: Ein Dienst für alle, für laib#1037
+# A test template, not shipped (testdata): one plain service the leser
+# reaches by its first route's address (instances: with value:).
+template: {registry: builtin, name: karte, version: 1}
+routes:
+  - host: karte
+    port: 8495
+    exposure: internal
+    auth: one_factor
+health:
+  http: http://127.0.0.1:8495/health
+ports:
+  - {port: 8495, lan: false}

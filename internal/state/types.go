@@ -311,12 +311,15 @@ func (p *Privacy) UnmarshalYAML(n *yaml.Node) error {
 // host.containers.internal:<port>" separated by blanks, the port the
 // instance's first route's; Secret, which the template declares, reaches
 // the container as Env_<PERSON>, each instance's under its own name only.
+// With Value, Template is a plain one (laib#1037): URL is the one service's
+// address, the value of that name when values.yml sets it, else empty.
 type Reach struct {
 	Template string `yaml:"template"`
 	Unit     string `yaml:"unit"`
 	URL      string `yaml:"url"`
 	Secret   string `yaml:"secret"`
 	Env      string `yaml:"env"`
+	Value    string `yaml:"value"`
 }
 
 // TemplateRef says where a service's files came from.
