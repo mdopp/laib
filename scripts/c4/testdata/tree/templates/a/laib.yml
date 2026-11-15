@@ -1,0 +1,14 @@
+name: a
+title: Alpha
+beschreibung: Fotos der Familie
+private: approval
+routes:
+  - host: fotos
+    port: 1000
+    exposure: internal
+    auth: one_factor
+    group: family
+ports:
+  - {port: 1000, lan: true}
+secrets:
+  - name: A_DB_PASSWORD

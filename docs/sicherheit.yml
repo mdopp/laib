@@ -1,0 +1,244 @@
+# The hand-written half of docs/SICHERHEIT.md, the box's security concept
+# (owner, 2026-11-15). scripts/c4.sh puts it together with the facts it reads
+# from the code: routes, ports, hands, secrets, the #1166 exceptions and the
+# layer-2 ties to the OS (#1245). Edit this file, never docs/SICHERHEIT.md;
+# then run scripts/c4.sh.
+#
+# This is judgment, the agent's who makes a change (CLAUDE.md): the CI gate
+# (scripts/c4.sh --gate) fails a PR whose facts change in a way that matters
+# for security when this file does not change with it. A change with no
+# effect on the concept is acknowledged under aenderungen: with the fact's
+# name and why, so the pass leaves a trace.
+#
+# stand: status läuft, geplant, Lücke or offen; anything but läuft names its
+# issues ("1245" in mdopp/laib, "archiv#68" elsewhere). The daily
+# scripts/c4.sh --issues opens an issue when a named issue is closed and the
+# point still is not läuft.
+#
+# grundsaetze are the owner's: a PR that changes them needs the label
+# besitzer-entscheidung, or CI fails.
+
+einleitung: >-
+  Wie die Box Zugriffe und Daten schützt, von Laib über die Bausteine bis zu
+  Homes, dem Archiv und fremden Apps. Grundlage ist ADR 0035 (drei
+  Schichten), dazu der Tresor und die Plugins. Jeder Punkt ist markiert, ob er
+  schon so läuft, geplant ist oder eine bekannte Lücke ist; die Tabellen mit
+  Adressen, Ports, Händen, Geheimnissen und Ausnahmen sind aus dem Code
+  erzeugt.
+
+grundsaetze:
+  - titel: Abhängigkeiten nur nach unten.
+    text: Mehrwert-Programme brauchen Bausteine und Laib, Bausteine brauchen Laib, Laib braucht niemanden. Wer weiter oben steht, bekommt nie mehr Rechte als die Schicht darunter ihm gibt.
+    en: Dependencies point down only; a higher layer never gets more rights than the one below grants it.
+  - titel: Nur ein Mensch ändert Unumkehrbares.
+    text: Agenten und Programme schlagen vor; öffentliche Adressen, Löschen, Neustart der Box und Rechte gibt ein Mensch frei. Niemand gibt seinen eigenen Vorschlag frei.
+    en: Only a human changes what cannot be undone; agents and programs propose, nobody approves their own proposal.
+  - titel: Jedes Programm hat eine eigene Identität mit genau seinen Rechten.
+    text: Hände mit Token und Stufe, Dienste mit eigenen Konten, keine gemeinsamen Admin-Zugänge.
+    en: Every program has its own identity with exactly its rights; no shared admin logins.
+  - titel: Persönliche Daten gehören der Person.
+    text: Familie, Admin und Agenten sehen sie nur, wenn die Person sie freigibt; das Archiv ist ohne die Person nicht lesbar, auch nicht für Laib.
+    en: Personal data belong to the person; the archive is unreadable without them, for Laib too.
+  - titel: "Standard: nur im Heimnetz."
+    text: Was von außen erreichbar ist, ist eine bewusste Entscheidung mit eigener Anmeldung.
+    en: Home network only by default; anything reachable from outside is a deliberate decision with its own login.
+  - titel: Was läuft, ist geprüft.
+    text: Images per Prüfsumme festgehalten, eigene nur mit Signatur, Laibs Updates signiert.
+    en: What runs is verified; images pinned by digest, own images and Laib's updates signed.
+  - titel: Alles hinterlässt eine Spur.
+    text: Laibs Journal für die Box, das Protokoll des Tresors für persönliche Daten.
+    en: Everything leaves a trace; Laib's journal for the box, the vault's log for personal data.
+
+zonen:
+  text: >-
+    Durchgezogene Pfeile sind die einzigen erlaubten Wege. Kein Programm der
+    Schicht 2 erreicht das Betriebssystem; der Tresor ist nur über
+    Sitzungs-Schlüssel erreichbar.
+  mermaid: |
+    flowchart TB
+      classDef aussen fill:#8a918c,stroke:#8a918c,color:#fff
+      classDef kern fill:#1f4d38,stroke:#1f4d38,color:#fff
+      classDef helfer fill:#2f6f4f,stroke:#2f6f4f,color:#fff
+      classDef bau fill:#e2efe7,stroke:#2f6f4f,color:#1c1f1d
+      classDef wert fill:#cfe3d6,stroke:#2f6f4f,color:#1c1f1d
+      classDef tresor fill:#5a3a12,stroke:#5a3a12,color:#fff
+      inet((Internet)):::aussen
+      lan((Heimnetz)):::aussen
+      caddy["Caddy + Authelia<br/>einzige Tür für Web-Zugriffe"]:::helfer
+      subgraph L0["Schicht 0 · Laib"]
+        k["0a Kern<br/>Freigabe · Schlüssel · Apply · Journal"]:::kern
+        h["0b Helfer<br/>Operator · Updater · Beobachter · Notify"]:::helfer
+      end
+      subgraph L1["Schicht 1 · Bausteine"]
+        b1["Immich · Paperless · Home Assistant<br/>Radicale · Vaultwarden · Jellyfin …"]:::bau
+        tr["Tresor je Person<br/>verschlüsselt, nur offen mit der Person"]:::tresor
+      end
+      subgraph L2["Schicht 2 · Mehrwert (eigenständige Programme)"]
+        homes["Homes<br/>Kern + Module + Plugins"]:::wert
+        apps["Archiv-Programme<br/>Stammbaum · Importe · Datenpfleger"]:::wert
+        third["eigene Apps<br/>Abstimmung · Frage · Bote …"]:::wert
+      end
+      inet -->|"nur freigegebene Adressen"| caddy
+      lan --> caddy
+      caddy --> homes & third & b1
+      h -->|"Tür: lesen, vorschlagen"| k
+      homes -->|"Tür, eigenes Token"| k
+      homes -->|"API, eigenes Konto"| b1
+      apps -->|"Sitzungs-Schlüssel je Bereich"| tr
+      homes -.->|"Plugin-Vertrag"| apps
+      third -->|"API"| b1
+
+identitaeten:
+  - wer: Familienmitglied
+    wie: Konto in LLDAP, Anmeldung über Authelia, zweiter Faktor von außen
+    darf: Homes, die eigenen Bausteine-Konten, eigene Daten
+    stand: {status: läuft}
+  - wer: Admin (Besitzer)
+    wie: wie oben, Gruppe admins, Box-Seite nur im Heimnetz, zweiter Faktor
+    darf: "freigeben, Schlüssel eintragen, Einblicke erteilen; nicht: fremde Archive lesen"
+    stand: {status: läuft}
+  - wer: Gast
+    wie: Einladungslink mit geheimem Wort oder geteiltes Album
+    darf: genau die eine App oder das eine Album
+    stand: {status: läuft}
+  - wer: Hand (Agent oder Programm)
+    wie: eigenes Token mit Ablauf, Stufe in policy.yml (Tabelle „Hände und Stufen“)
+    darf: "bis zu ihrer Stufe: lesen, vorschlagen, im Rahmen anwenden; nie sich selbst freigeben"
+    stand: {status: läuft}
+  - wer: Dienst (Baustein)
+    wie: eigenes Dienstkonto beim anderen Dienst, Schlüssel nur in secrets.age (Tabelle „Geheimnisse“)
+    darf: nur was er fachlich braucht (z. B. Homes liest Paperless nur lesend)
+    stand: {status: läuft}
+  - wer: Programm in einer Tresor-Sitzung
+    wie: kurzlebiger Schlüssel, den die Person beim Öffnen pro Programm erteilt
+    darf: "nur seine Bereiche (z. B. Stammbaum: Beziehungen lesen und schreiben), endet beim Sperren"
+    stand: {status: geplant, issues: ["archiv#68"]}
+
+netz:
+  - weg: Von außen
+    schutz: nur über Caddy, nur freigegebene Namen (eine Karte je öffentlicher Adresse), TLS; Familien-Apps hinter Authelia mit zweitem Faktor, Gast-Apps mit eigener Sperre (Einladungswort, Prüfung „antwortet 403 ohne“)
+    stand: {status: läuft}
+  - weg: Im Heimnetz
+    schutz: Dienste hinter Caddy; direkte Ports nur, wo ein Gerät sie braucht (Tabelle „Direkte Ports“), sonst von nftables auf den Host begrenzt
+    stand: {status: läuft}
+  - weg: Laibs Tür (MCP)
+    schutz: nur vom Host und den eigenen Containern, nie aus dem WLAN; jedes Verb prüft Hand und Stufe; jede Antwort ohne Geheimnisse
+    stand: {status: läuft}
+  - weg: Box-Seite
+    schutz: nur im Heimnetz, Admins, zweiter Faktor; hier allein werden Freigaben und Schlüssel angenommen
+    stand: {status: läuft}
+  - weg: Host
+    schutz: nur Laibs eigene Host-Programme; Laibs Helfer sind Container ohne age-Schlüssel und State-Repo; Schicht 2 ohne Host-Zugriff (Liste „Schicht 2 am Betriebssystem“)
+    stand: {status: geplant, notiz: teils, issues: ["1245"]}
+
+daten:
+  - daten: Schlüssel und Passwörter der Box
+    liegen: secrets.age, nur beim Apply entschlüsselt
+    wer: nur der Kern; nie in ein Repo, nie in eine Antwort
+    stand: {status: läuft}
+  - daten: Zustand der Box
+    liegen: Git-Repo auf der Box
+    wer: Kern schreibt, Hände lesen über Verben
+    stand: {status: läuft}
+  - daten: Familiendaten (Fotos, Dokumente, Kalender, Passwörter)
+    liegen: in den Bausteinen, jeder mit eigenen Konten und Rechten
+    wer: die Person und wen sie im Baustein freigibt; Agenten nur mit Einblick-Karte (eine Stunde)
+    stand: {status: läuft}
+  - daten: Persönliches (Nachrichten, Beziehungen, Notizen)
+    liegen: im Tresor der Person, verschlüsselt mit ihrem Passwort oder Passkey
+    wer: nur die Person; Programme nur in ihrer Sitzung und nur für ihre Bereiche; kein Admin, kein Agent
+    stand: {status: geplant, notiz: "Tresor läuft, Rechte je Bereich geplant", issues: ["archiv#68"]}
+  - daten: Handy-Sicherungen (WhatsApp, Signal, Facebook)
+    liegen: schon auf dem Handy für den Tresor verschlüsselt, Homes reicht nur weiter
+    wer: erst der geöffnete Tresor entschlüsselt
+    stand: {status: läuft}
+  - daten: Sicherung
+    liegen: restic jede Nacht auf der Datenplatte, mit Probe
+    wer: Kern; Kopie außer Haus nur anhängend (ADR 0033)
+    stand: {status: Lücke, notiz: Kopie außer Haus fehlt, issues: ["1128", "438"]}
+
+schichtregeln:
+  - titel: Schicht 0 · Laib
+    punkte:
+      - "0a Kern: nur Freigabe, Schlüssel, Rechte, Apply, Journal, Kartentexte"
+      - 0a spricht nicht mit dem Internet außer zum Prüfen (Updater #1233)
+      - "0b Helfer: Container, eigenes Token, lesen und vorschlagen"
+      - Eingriffsbudget je Hand und Stunde
+      - steht ohne Homes (#1236)
+  - titel: Schicht 1 · Bausteine
+    punkte:
+      - fremde Programme in Containern, rootless, keine Host-Rechte außer begründeten Ausnahmen (Liste #1166 unten)
+      - Image per Prüfsumme, neue Version nur per Karte
+      - eigene Dienstkonten statt Admin-Zugang
+      - "Tresor ist ein Baustein: Entsperren, Sitzung, Rechte je Bereich, Protokoll"
+  - titel: Schicht 2 · Homes
+    punkte:
+      - "keine Bindung ans Betriebssystem: nur Tür und APIs, nur der eigene Ordner (#1245, Liste unten)"
+      - "Homes-Kern klein: Anmeldung, Start, Aufgaben, App-Kopplung, Plugin-Vertrag"
+      - Module nur, wenn der Baustein da ist
+      - sieht vom Archiv nur Zählwerte
+  - titel: Schicht 2 · Archiv-Programme
+    punkte:
+      - eigenständig, jedes mit genau seinen Bereichen im Tresor
+      - arbeiten nur in einer offenen Sitzung der Person
+      - was den Tresor verlässt, tippt die Person an
+      - Sprachmodell nur lokal, nie ins Internet
+  - titel: Schicht 2 · eigene und fremde Apps
+    punkte:
+      - eigenes Repo, eigene Adresse, eigene Programmquelle (eine Karte)
+      - eigene Anmeldung oder Authelia; öffentlich nur per Karte
+      - "als Plugin in Homes nur über den Vertrag: Name, Symbol, Link, Karte, Aufgaben"
+      - keine Familiendaten ohne Dienstkonto beim Baustein
+  - titel: Agenten (Claude, Operator, pi)
+    punkte:
+      - schlagen vor, wenden nur im Rahmen ihrer Stufe an
+      - "private Dienste: Einblick-Karte, eine Stunde, je Dienst"
+      - "Tresor: nie"
+      - "geplant: Auftrag mit Rahmen statt Einblick plus Budget (#1237)"
+
+wasPassiert:
+  - fall: ein Baustein hat eine Sicherheitslücke
+    folge: er sieht nur seine eigenen Daten und Ordner; kein Host, keine fremden Schlüssel, kein Tresor
+  - fall: Homes wird übernommen
+    folge: der Angreifer hat Homes' Dienstkonten (meist lesend) und Homes' Hand (vorschlagen, nicht freigeben); keine Tresore, kein Host (nach #1245)
+  - fall: ein Archiv-Programm hat einen Fehler
+    folge: nur seine Bereiche, nur solange die Person den Tresor offen hat; Nachrichten bleiben für den Stammbaum unerreichbar
+  - fall: eine Registry oder ein Changelog ist manipuliert
+    folge: der Updater schlägt höchstens etwas vor; der Kern prüft Prüfsumme und Signatur selbst und lehnt ab (#1233)
+  - fall: ein Agent irrt sich
+    folge: er kann nur vorschlagen oder im Budget anwenden; jede Änderung hat einen Snapshot und läuft zurück, wenn sie rot wird
+  - fall: jemand stiehlt die Box
+    folge: Tresore bleiben verschlüsselt; die übrigen Daten liegen unverschlüsselt auf der Platte (Lücke, #1249); ohne Kopie außer Haus sind sie dann weg (Lücke, #1128)
+
+offen:
+  - titel: Sicherung außer Haus
+    stand: {status: Lücke, issues: ["1128", "438"]}
+    punkte:
+      - bisher nur auf der Datenplatte
+      - "geplant: anhängende Kopie (S3 mit Object Lock), Wiederherstellung einmal üben"
+  - titel: Datenplatte unverschlüsselt
+    stand: {status: Lücke, issues: ["1249"]}
+    punkte:
+      - Fotos, Dokumente, Kalender liegen im Klartext
+      - "Option: Plattenverschlüsselung mit Schlüssel beim Start (TPM oder Eingabe); noch nicht besprochen"
+  - titel: Tresor-Rechte je Bereich
+    stand: {status: geplant, issues: ["archiv#68"]}
+    punkte:
+      - Sitzungs-Schlüssel je Programm, Protokoll je Zugriff
+      - dann Stammbaum, Importe, Datenpfleger als eigene Programme
+  - titel: Homes ohne Host
+    stand: {status: geplant, issues: ["1245"]}
+    punkte:
+      - Host-Units, fremde Ordner und Label-Ausnahmen entfernen; was heute noch da ist, zeigt die Liste „Schicht 2 am Betriebssystem“
+  - titel: WhatsApp-Medien bei Wiederherstellung
+    stand: {status: Lücke, issues: ["1250"]}
+    punkte:
+      - laufen aus dem offenen Tresor im Klartext durch Homes aufs neue Handy
+  - titel: Agenten mit Daueraufträgen
+    stand: {status: offen, issues: ["1237"]}
+    punkte:
+      - "die Frage „Ständiger Zugriff, auch bei zuem Archiv“ ist noch nicht entschieden; das Konzept sagt heute: nein"
+
+# The trace of PRs whose facts changed with no effect on the concept: fakt is
+# the name the gate prints, grund why nothing here changes.
+aenderungen: []

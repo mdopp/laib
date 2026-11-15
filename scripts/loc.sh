@@ -136,6 +136,11 @@ budget lease 1430 lease         # laib-lease: the policy proxy and the GPU lease
 # may not import the kernel. A leaf imports nothing of laib; anyone may import it. Each: its size
 # then, plus a quarter; owner, 2026-11-04, the cleanup train: shared by the programs instead of copies
 budget atomicfile 115 atomicfile # the durable write (#148): the kernel's boxfs, laib-haushalt's and laib-lease's copies, 91
+# c4 2,100: the owner, 2026-11-15 („Die sollten Teil der Dokumentation sein. Und die Aktualisierung Teil
+# der Pipeline. Sie muss erfolgen!“): the generator of docs/C4.md, docs/SICHERHEIT.md and README.md's c4
+# section, their --check and the judgment gate; it reads the kernel's types (internal/state) so the pages
+# say what the code says, and nothing in laib imports it. 1,710 lines with its fixture, plus a quarter
+budget c4 2100 scripts/c4      # the overview pages' generator and gate (scripts/c4.sh)
 
 # the boundary: the Operator's code is not in the kernel's tree, and
 # neither program imports the other
@@ -154,6 +159,8 @@ for prog in stick frage automat directory mcpserver disk notify haushalt lease; 
   down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal || true)
   [ -z "$down" ] || { echo "the kernel imports $prog: $down"; bad=1; }
 done
+down=$(grep -rlE '"github.com/mdopp/laib/scripts/' --include='*.go' cmd internal || true)
+[ -z "$down" ] || { echo "the kernel imports the pages' generator: $down"; bad=1; }
 for leaf in atomicfile; do
   up=$(grep -rlE '"github.com/mdopp/laib/' --include='*.go' "$leaf" || true)
   [ -z "$up" ] || { echo "the leaf $leaf imports laib: $up"; bad=1; }

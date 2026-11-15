@@ -1,0 +1,3 @@
+package helper
+
+func H() {}

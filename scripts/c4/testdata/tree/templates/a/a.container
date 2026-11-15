@@ -1,0 +1,3 @@
+[Container]
+Image=alpha
+Volume=${DATA_DIR}/a:/data:Z

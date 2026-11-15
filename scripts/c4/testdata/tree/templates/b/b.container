@@ -1,0 +1,5 @@
+[Container]
+Image=beta
+Volume=${DATA_DIR}/b:/data:Z
+Volume=${DATA_DIR}/a:/fotos
+SecurityLabelDisable=true
