@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.31.1](https://github.com/mdopp/laib/compare/v2.31.0...v2.31.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* **template:** druck keeps a finished job's entry 30 minutes, so Android does not call the printer offline ([#1254](https://github.com/mdopp/laib/issues/1254)) ([40fabe9](https://github.com/mdopp/laib/commit/40fabe9f1c1b1592a3c6118b0fc682e19570294d))
+
 ## [2.31.0](https://github.com/mdopp/laib/compare/v2.30.1...v2.31.0) (2026-11-15)
 
 
