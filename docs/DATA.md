@@ -625,8 +625,10 @@ book), `BOTE_NOTIFY_TOKEN`.
 No `private:` (templates/druck/laib.yml), no accounts, no secret. A print
 job from a device in the home network (631, `@LOCAL` only, no route) passes
 through the box to the printer: CUPS turns it into what the printer takes and
-sends it on. Nothing is kept after printing: no job history
-(`PreserveJobHistory No`), no job files (`PreserveJobFiles No`), no page log;
+sends it on. After printing only the job's entry stays for 30 minutes
+(`PreserveJobHistory 1800`: its name, its sender, its state; Android's print
+service asks for it once the job is done and calls the printer „offline“ when
+the job is gone), never its content (`PreserveJobFiles No`), no page log;
 the spool is a tmpfs, so a job waiting for a printer that is off lives only in
 memory, at most two hours (`JobRetryLimit` 120 × 60 s), and is gone on a
 restart. While a job waits, its name and its sender's name are shown only to
