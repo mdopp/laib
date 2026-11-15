@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.32.0](https://github.com/mdopp/laib/compare/v2.31.1...v2.32.0) (2026-11-15)
+
+
+### Features
+
+* **skills:** durchsicht collects its log wishes and files one a week, a row per finding ([#1257](https://github.com/mdopp/laib/issues/1257)) ([63cdce2](https://github.com/mdopp/laib/commit/63cdce2fa3892e0eed779780a0e10aab730b231d)), closes [#1241](https://github.com/mdopp/laib/issues/1241)
+* **template:** homes registers each person's archive as its first plugin; DATA.md records the tasks' text flow (homes[#375](https://github.com/mdopp/laib/issues/375)) ([#1263](https://github.com/mdopp/laib/issues/1263)) ([4aa10b1](https://github.com/mdopp/laib/commit/4aa10b1ea5b272fa93f6a8a1907af250201a13ab))
+
 ## [2.31.1](https://github.com/mdopp/laib/compare/v2.31.0...v2.31.1) (2026-11-15)
 
 
