@@ -52,6 +52,15 @@ func TestHomesReachesEveryPersonsArchive(t *testing.T) {
 	if !strings.Contains(unit, "\n"+`Environment="HOMES_ARCHIV_INTERN=anna=http://host.containers.internal:18540 max-moritz=http://host.containers.internal:18541"`+"\n") {
 		t.Errorf("HOMES_ARCHIV_INTERN does not name both archives with their ports:\n%s", unit)
 	}
+	// homes#375 (homes ADR 0003): the same archives registered as Homes' plugin, each with its key
+	if !strings.Contains(unit, "\n"+`Environment="HOMES_PLUGIN_ARCHIV=anna=http://host.containers.internal:18540 max-moritz=http://host.containers.internal:18541"`+"\n") {
+		t.Errorf("HOMES_PLUGIN_ARCHIV does not register both archives with Homes:\n%s", unit)
+	}
+	for _, key := range []string{"HOMES_PLUGINKEY_ARCHIV_ANNA", "HOMES_PLUGINKEY_ARCHIV_MAX_MORITZ"} {
+		if !strings.Contains(unit, "\nSecret="+podmanSecretName("homes", "homes", key)+",type=env,target="+key+"\n") {
+			t.Errorf("Homes's %s is no podman secret:\n%s", key, unit)
+		}
+	}
 	if !strings.Contains(out["quadlet/archiv-max-moritz/archiv-max-moritz.container"], "\nPublishPort=18541:8080\n") {
 		t.Errorf("max-moritz's archive is not on 18541 for Homes's pod to reach:\n%s", out["quadlet/archiv-max-moritz/archiv-max-moritz.container"])
 	}
@@ -66,7 +75,8 @@ func TestHomesReachesEveryPersonsArchive(t *testing.T) {
 	}
 	for name, val := range sec {
 		for key, v := range want {
-			if val == v && name != podmanSecretName("homes", "homes", key) && !strings.HasPrefix(name, "laib.archiv-") {
+			plugin := podmanSecretName("homes", "homes", strings.Replace(key, "HOMES_ARCHIV_SECRET_", "HOMES_PLUGINKEY_ARCHIV_", 1)) // the same key in the same container, the plugin's name for it (homes#375)
+			if val == v && name != podmanSecretName("homes", "homes", key) && name != plugin && !strings.HasPrefix(name, "laib.archiv-") {
 				t.Errorf("%s carries %s too", name, key)
 			}
 		}
@@ -93,5 +103,19 @@ func TestHomesReachesEveryPersonsArchive(t *testing.T) {
 	}
 	if one["quadlet/homes/homes.container"] == unit || strings.Contains(one["quadlet/homes/homes.container"], "max-moritz") {
 		t.Errorf("one archive less renders the same Homes:\n%s", one["quadlet/homes/homes.container"])
+	}
+	// no archive: no plugin registered, no trace of it in Homes's unit (homes#375)
+	repo := shippedBox(t).Dir
+	os.RemoveAll(filepath.Join(repo, "services", "archiv-anna"))
+	none, err := state.Load(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zero, err := Render(none, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u := zero["quadlet/homes/homes.container"]; u == "" || strings.Contains(u, "HOMES_PLUGINKEY_ARCHIV_") || strings.Contains(u, "archiv=") || strings.Contains(u, "host.containers.internal:1854") {
+		t.Errorf("without an archive Homes's unit still registers one:\n%s", u)
 	}
 }

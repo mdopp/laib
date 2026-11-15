@@ -451,21 +451,25 @@ subscriptions). Its data folder holds only the status and the last run.
   this alone uses `SELECT`, `\Deleted` + `UID EXPUNGE`, on Gmail a `MOVE`
   to its Trash (archiv apps/archiv/aufraeumen.go). Irreversible at the
   provider; the archive keeps the mail.
-- **Counts for Homes (homes#362, owner 2026-11-12: „nur eine Zahl“):**
-  how many things wait for the person in their archive, never what they
-  are. Homes asks `GET /intern/aufgaben` with that person's
-  `ARCHIV_HOMES_SECRET` and gets `{offen, am, fragen, aufraeumen,
-  schluessel_fehlt}`: the number of open questions and suggestions on the
-  workplace („Wie steht … zu …?“, „Kennen sich …?“, a group's name, what
-  was recognised), the number of the Datenpfleger's findings (archiv#58),
-  whether a key the archive waits for is missing (Signal, WhatsApp,
-  Immich), and when this was counted. No name, no kind, no text. Counted
-  only while the vault is open; the last count stays outside it in
-  `/data/aufgaben.json` (mode 0600, root can read it, as the status
-  files), so Homes can show it while the vault is closed (`offen: false`).
-  Not in `laib-status.json`, which reaches `laib_status` and the admins.
-  Homes shows it only to the archive's own person, on „Deine Aufgaben“
-  and Start (archiv apps/archiv/aufgaben.go, intern.go; flow 27).
+- **Tasks for Homes, with their text (homes#375, homes ADR 0003, archiv
+  ADR 0001 point 4; owner 2026-11-15, knowingly: the text names people and
+  so lies outside the vault):** the archive is Homes' first plugin. Laib
+  registers each person's instance with Homes (templates/homes
+  `instances:` → `HOMES_PLUGIN_ARCHIV`, its key
+  `HOMES_PLUGINKEY_ARCHIV_<PERSON>`, the same `ARCHIV_HOMES_SECRET`); Homes
+  asks `GET /homes/v1?person=<person>` and the archive answers only for its
+  own person. While the vault is open the program „Aufgaben für Homes“
+  works the tasks out with its own key, reading only Beziehungen, Kontakte
+  and Notizen (granted per session like every program; the grant says the
+  text leaves the vault): a key it waits for, *Im Archiv: N Fragen offen*
+  and *N Dinge zum Aufräumen im Archiv*, each with the next one's text
+  („Als Nächstes: Wie steht <Name> zu <Name>?“, a group's title, the first
+  finding's title, which may name a contact). Closed, the answer has no
+  tasks; the archive keeps nothing of them outside the vault (the counts
+  file `/data/aufgaben.json` of homes#362 is gone, removed at start).
+  Homes keeps them (homes below, `plugins.json`) and shows them only to
+  that person, on „Deine Aufgaben“, Start's Braucht dich and the app's
+  list (archiv apps/archiv/homes.go, programme.go; flow 27).
 - **Keys it holds:** the person's Immich key (in the vault, read only),
   the box's model key (`MODEL_KEY`, the household's, for the model's
   proxy), `archiv-<person>` in Radicale (read only), the person's IMAP app
@@ -536,6 +540,7 @@ and the app's API (`/napi/`); references below are to mdopp/homes.
 | `musikwuensche.json`, `podcasts.json` | wishes and subscriptions, each naming who | household, tagged by person |
 | `papierkorb/` | household items deleted, 30 days | household |
 | `kontakte-quelle/` | one-time copies of household firm cards | household |
+| `plugins.json` (0600) | each registered plugin's last answer per person (homes ADR 0003): name, link, and the tasks it handed over with their text, the archive's naming people (flow 27); an entry of a plugin Laib no longer registers is dropped at start | per person |
 | `zugang.json` | access requests from the teaser, taken only from the home network (homes#365): name, contact, message, time, salted address hash; ticked off, never deleted by itself | visitors at home |
 
   Beside it: `homes-dokumente` (the Paperless mirror, below),
@@ -569,6 +574,9 @@ and the app's API (`/napi/`); references below are to mdopp/homes.
     progress, podcast subscriptions, internal/abs/).
   - `BOTE_API_KEY` (as `HOMES_BOTE_KEY`) — speaks to the Bote as the
     signed-in person (internal/bote/bote.go).
+  - `HOMES_PLUGINKEY_ARCHIV_<PERSON>` — the same secret as below, under
+    the plugin contract's name: each archive's `/homes/v1`, that person's
+    tasks with their text (flow 27; internal/plugin).
   - `HOMES_ARCHIV_SECRET_<PERSON>` — each archive's `/intern/`
     (internal/napi/sicherung_letzte.go); the same secret checks the
     answers that archive posts to Homes' `POST /intern/uebernahme`
@@ -777,7 +785,7 @@ design and not listed again.
 | 24 | The mail a person sends to their own document address (`<login>+doc@`) also goes into their archive, read from the household's document mailbox with its login, only mail whose recipient is exactly that address (owner 2026-11-11); Paperless keeps the link to it as a note on the document | the household's document mailbox → the person's archive; the Message-ID → a note on the person's document | archiv apps/archiv/dokumentenpost.go `Passt`, mail.go; templates/archiv (`DOKUMENTE_MAIL_*`); templates/paperless/paperless-quittung.py `notiz` |
 | 25 | The photo on each household contact card (Homes' own address books only; never a person's `handy-kontakte` or archive; firms and faces Homes wrote aside) goes into the owner's Immich, one upload per photo hash, archived (out of the timeline), in one album Homes keeps; Immich's own face detection runs on it, Homes runs no ML. When its one face lands in an unnamed Immich person, Homes' „Wer ist das?“ offers that contact's name, and only the owner's tap names the person. A changed photo replaces the upload, a photo on no card any more deletes it. **Owner-decided 2026-11-11**, accepting that faces of people outside the family then live in the owner's Immich. | household book → owner's Immich (and its face recognition) | homes internal/gesichter/kontaktfotos.go, internal/immich/immich.go `Album`, `InsAlbum`; internal/pages/kontakte_wer.go (homes#352) |
 | 26 | Which owner's keys are missing that something on the box waits for: the key's name, its service, the template's label, why and help text, and its form's link — never a value, never whether an optional key is set. Every hand with `aufgabe` reads it in `laib_aufgabe list` (homes#362); Homes shows it only to admins in „Deine Aufgaben“ | secrets.age's key names (set or not) → the admins' Homes view | laib cmd/laib/aufgabe.go `missingKeys`, internal/diag/keys.go `MissingKeys`; homes „Deine Aufgaben“ |
-| 27 | How many questions, suggestions and cleanup findings wait in a person's archive, and whether a key it waits for is missing: counts, a flag and the time they were counted, nothing else (owner 2026-11-12). Counted only while the vault is open, the last count kept outside it; Homes reads it with that person's archive secret and shows it only to that person | the person's archive → Homes (service) → that person; root on the box can read the file | archiv apps/archiv/aufgaben.go, intern.go `/intern/aufgaben`; homes „Deine Aufgaben“ (homes#362) |
+| 27 | A person's archive hands its tasks to Homes with their text: how many questions, suggestions and cleanup findings wait, the next question („Wie steht <Name> zu <Name>?“) and the first finding's title, whether a key is missing. **Owner-decided 2026-11-15** (archiv ADR 0001 point 4: the text names people and so lies outside the vault). Worked out only while the vault is open, by the program „Aufgaben für Homes“ (reads Beziehungen, Kontakte, Notizen; the person can withhold it at each opening); Homes keeps the last ones in `plugins.json` and shows them only to that person; removing the archive removes them | the person's archive → Homes (service, its data folder) → that person; root on the box can read the file | archiv apps/archiv/homes.go `/homes/v1`, programme.go; homes internal/plugin, internal/pages/plugins.go (homes#375) |
 | 28 | The name an invited guest of the poll chose to type (optional; an anonymous vote otherwise) is shown as „Abgestimmt haben: …“; the votes only summed, never beside a name | an invited guest → the other invited guests who have voted | mdopp/abstimmung apps/abstimmung/vote.go (`teilnehmer`), web.go (`ergebnis`) |
 
 Not crossings, checked: location goes to the person's own Reitti with
