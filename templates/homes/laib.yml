@@ -18,6 +18,10 @@ instances:                       # each person's open archive gives a new phone 
     url: HOMES_ARCHIV_INTERN       # "<person>=http://host.containers.internal:<port> …"
     secret: ARCHIV_HOMES_SECRET    # that archive's own, as HOMES_ARCHIV_SECRET_<PERSON>; Homes sends it as X-Archiv-Homes to /intern/
     env: HOMES_ARCHIV_SECRET
+  - template: reitti               # the Standortverlauf (laib#1037): Reitti's address when it is installed, empty without it;
+    unit: homes.container          # REITTI_URL set by hand wins (a box from before keeps its own)
+    url: HOMES_REITTI_URL
+    value: REITTI_URL
 routes:
   # Homes is the family's entry, so it lives on www.<domain> (owner 2026-11-07, ADR 0031 amendment); the
   # domain itself leads here. Its first route is the family's entry for Laib too (render.HomesURL): the

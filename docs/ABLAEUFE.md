@@ -277,6 +277,11 @@ Und einen Admin einladen darf nur ein Mensch.
 Wenn jemand auf der Box-Seite einen Knopf tippt,
 Dann endet es sichtbar, wo es begann: fertig, rot mit Grund und nächstem Schritt, oder wartend mit Grenze.
 
+### L-54 Homes findet die Zeitleiste von selbst
+Wenn die Zeitleiste (Reitti) auf der Box eingerichtet ist,
+Dann schaltet Homes den Standortverlauf ein, ohne dass jemand eine Adresse einträgt.
+Und wird sie entfernt, ist der Standortverlauf wieder aus; eine von Hand eingetragene Adresse gilt weiter.
+
 ## Haus
 
 ### L-45 Musik per Sprache läuft auf dem Standard-Lautsprecher des Raums

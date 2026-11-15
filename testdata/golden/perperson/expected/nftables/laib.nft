@@ -4,6 +4,6 @@ delete table inet laib
 table inet laib {
 	chain input {
 		type filter hook input priority -10; policy accept;
-		iifname { "en*", "eth*", "wl*" } tcp dport { 9091, 17170, 3890, 8481, 8480 } drop
+		iifname { "en*", "eth*", "wl*" } tcp dport { 9091, 17170, 3890, 8495, 8481, 8480 } drop
 	}
 }

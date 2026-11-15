@@ -10,6 +10,14 @@ instances:
     url: LESER_NOTIZBUECHER
     secret: NOTIZBUCH_KEY
     env: LESER_KEY
+  - template: karte                # laib#1037: one plain service, found; values.yml leaves KARTE_URL empty
+    unit: leser.container
+    url: LESER_KARTE
+    value: KARTE_URL
+  - template: fehlt                # not installed: the address is empty
+    unit: leser.container
+    url: LESER_FEHLT
+    value: FEHLT_URL
 routes:
   - host: leser
     port: 8490

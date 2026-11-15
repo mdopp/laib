@@ -1,0 +1,12 @@
+[Unit]
+Description=Karte, one service for everyone
+
+[Container]
+Image=docker.io/example/karte:1.0
+PublishPort=8495:8080
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

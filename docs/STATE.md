@@ -340,6 +340,7 @@ perPerson: false                 # true: installed once per person (#986), below
 private: approval                # the family's data (ADR 0032): sealed = no look/read/exec/write for anyone; approval = an agent only for an hour after a human's Einblick; the journal keeps no output
 instances:                       # every person's instance of a per-person template, in one container (laib#1016), below
   - {template: archiv, unit: homes.container, url: HOMES_ARCHIV_INTERN, secret: ARCHIV_HOMES_SECRET, env: HOMES_ARCHIV_SECRET}
+  - {template: reitti, unit: homes.container, url: HOMES_REITTI_URL, value: REITTI_URL}   # one plain service, a typed REITTI_URL wins (laib#1037)
 ```
 
 `status` is a file the template keeps about itself. laib reads it fresh on
@@ -460,6 +461,13 @@ loader puts right after that unit's `[Container]`:
   declares. It is a value of the service like a `!secret` (`values.laib`
   names it, a hook gets it): it reaches the container as a podman secret,
   never in a file, and a new value applies the service again.
+
+With `value: <KEY>` instead of `secret`/`env`, the entry names one service
+of a plain template (not `perPerson`, laib#1037): the loader puts
+`Environment=<url>=http://host.containers.internal:<port>` there, the port
+its first route's, or `<url>=` when it is not installed; when values.yml
+sets `<KEY>`, `<url>=${<KEY>}` instead, so an address typed by hand keeps
+working (#215). Homes finds Reitti this way (`HOMES_REITTI_URL`).
 
 Adding or removing an instance changes that unit, so the service applies
 again with it. Each one more is another service's secret: the content

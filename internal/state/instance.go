@@ -157,10 +157,13 @@ func (st *State) reach() []error {
 	for _, name := range st.ServiceNames() {
 		svc := st.Services[name]
 		for _, r := range svc.Contract.Instances {
-			unit, ok := svc.Units[r.Unit]
-			if r.Template == "" || !envName.MatchString(r.URL) || (r.Secret == "") != (r.Env == "") || r.Env != "" && !envName.MatchString(r.Env) ||
-				!ok || !strings.HasSuffix(r.Unit, ".container") || !strings.Contains(unit, "\n[Container]\n") {
-				errs = append(errs, fmt.Errorf("services/%s/laib.yml: instances: %s wants a template, a .container of the service as unit, url as an environment name, and secret with env or neither (laib#1016)", name, r.Template))
+			unit := svc.Units[r.Unit]
+			if !r.wirable(svc.Units) {
+				errs = append(errs, fmt.Errorf("services/%s/laib.yml: instances: %s wants a template, a .container of the service as unit, url as an environment name, and secret with env, or value, or neither (laib#1016, laib#1037)", name, r.Template))
+				continue
+			}
+			if r.Value != "" { // one service of a plain template (laib#1037)
+				svc.Units[r.Unit] = st.reachOne(svc, r, unit)
 				continue
 			}
 			var urls, lines []string
@@ -190,4 +193,31 @@ func (st *State) reach() []error {
 		}
 	}
 	return errs
+}
+
+// wirable: a template, a .container of the service with its [Container]
+// as unit, url an environment name, and secret with env, or value, or
+// neither.
+func (r Reach) wirable(units map[string]string) bool {
+	unit, ok := units[r.Unit]
+	return r.Template != "" && envName.MatchString(r.URL) && (r.Secret == "") == (r.Env == "") && (r.Env == "" || envName.MatchString(r.Env)) &&
+		(r.Value == "" || r.Secret == "" && envName.MatchString(r.Value)) &&
+		ok && strings.HasSuffix(r.Unit, ".container") && strings.Contains(unit, "\n[Container]\n")
+}
+
+// reachOne wires the one service of a plain template into unit (laib#1037):
+// the value of r.Value when values.yml sets it (a typed address keeps
+// working, #215), else the service's first route's address, else empty.
+// Adding or removing the service changes the unit: it applies again.
+func (st *State) reachOne(svc *Service, r Reach, unit string) string {
+	found := ""
+	if svc.Set(r.Value) {
+		found = "${" + r.Value + "}"
+	}
+	for _, other := range st.ServiceNames() {
+		if c := st.Services[other].Contract; found == "" && c.Person == "" && c.Template.Name == r.Template && len(c.Routes) > 0 {
+			found = fmt.Sprintf("http://host.containers.internal:%d", c.Routes[0].Port)
+		}
+	}
+	return strings.Replace(unit, "\n[Container]\n", "\n[Container]\n# "+r.Template+" (laib#1037: instances: with value:)\nEnvironment="+r.URL+"="+found+"\n", 1)
 }
