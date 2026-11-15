@@ -143,7 +143,6 @@
 1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: text, adds = b, append(adds, "ops "+strings.Join(why, " "))
 2 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: text, adds = b, append(adds, hand+" +"+strings.Join(miss[hand], " +"))
 1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: tpl, err := TemplateFS(env, args[i+1])
-2 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: why = "Stufe " + p.Tier + " verlangt einen Menschen (policy.yml approvals)"
 4 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: why = append(why, "+"+t+" (Fähigkeit "+strings.Join(by[t], ", ")+")")
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: case args[i] == "--limit" && i+1 < len(args):
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: case args[i] == "--name" && i+1 < len(args):
@@ -189,7 +188,6 @@
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := judgeImage(&r.Changes[i]); err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, "laib", stateLoads, recomputeFor(env, st, p)); err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, stateLoads, recomputeFor(env, st, p)); err != nil {
-1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := proposal.Reject(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, why); err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := yaml.Unmarshal([]byte(v), &doc); !ok || !strings.Contains(k, ":") || err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if hand != "human" {
 3 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if i+1 >= len(args) {
@@ -216,8 +214,6 @@
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if st, err = cli.LoadState(env); err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if svc, ok := st.Services[add.Name]; ok && svc.Contract.Template.Name == args[0] {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if why := VerifyImage(c.New); why != "" {
-1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if why == "" {
-1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: ps, err := proposal.List(cli.InboxDir(env), openOnly && id == 0)
 3 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: return (p.Status == "open" && strings.HasPrefix(p.Reason, defaultsReason)) || (p.Status == "rejected" && p.Reason == reason)
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: return id != 0 && p.ID != id
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: return limit > 0 && decided > limit

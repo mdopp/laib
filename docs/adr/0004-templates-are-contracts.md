@@ -53,3 +53,48 @@ service's own containers — nothing else, and never with a secret on its
 argv (#214). `laib template lint` refuses a
 hook whose interpreter the image lacks and a `Volume=` source that is not a
 declared data path or a rendered file.
+
+## Amendment 2026-11-15 (#1239): one card per release, none for comments
+
+Part of ADR 0035's rethinks (#1232). A pure comment change across the
+templates would have filed 13 cards, each with a restart, titled by the
+command („template update home-assistant“).
+
+- **What runs as before is no proposal.** A template update whose every
+  changed file is a unit equal but for its comment and blank lines (`#`,
+  `;`: systemd's own rule), a `laib.yml` equal as YAML, the README, the
+  news or a `.template/` copy files nothing (`proposal.ErrInert`) and
+  leaves main as it is, so the next apply restarts nothing; one journal
+  line says so, at most once in 30 days per service. A hook or any other
+  file counts byte by byte: a comment in a script, where a `#` line can be
+  part of a heredoc, stays a card. The comments reach the box with the
+  next change that runs differently.
+- **The drift check agrees** (`scripts/drift.sh` check 7): comment and
+  blank lines of a unit (`#`, `;`) or of `laib.yml` (`#`) need no news
+  line; everything else in a template still does. The check is the
+  kernel's rule read on the diff, so a change that needs no line is one
+  the box files no card for; the one gap is a `#` line inside a YAML block
+  scalar of `laib.yml`, which the check lets through and the box shows as
+  a card without a sentence.
+- **One card per release, still one proposal per service.** The box's
+  own sync (`template sync --propose`, actor `laib`) marks its template
+  updates `karte: "Laib <version>"`, and an older one still open joins
+  the newest. The Inbox page, „Alle freigeben“, `laib inbox` (so the chat
+  and Homes) and `laib context` fold them into one card (`proposal.Fold`),
+  German throughout: „Neue Vorlagen aus Laib 2.31.0 für …“, each
+  template's news by service. One approve or reject decides all members.
+  They stay separate proposals underneath because the run-isolation of
+  #1209 works per proposal: approved together they are one run, and a red
+  service goes back alone while the others stay. One proposal for all
+  would have taken every service back with the red one.
+
+Weighed against before (#246): the owner taps once per release instead of
+once per service and reads what each brings in one place; nothing gets
+worse — the per-service rollback, the dial and the human-only reasons are
+the same, and a person's or an agent's `laib template update <svc>` is
+still its own card. ServiceBay offered an upgrade only when a template
+bumped its schema version, as a badge per service with its CHANGELOG's
+section headers (`packages/backend/src/lib/templateUpgrades.ts`): a comment
+never reached anyone, but every upgrade was its own decision and a forgotten
+bump hid a real change. Laib keeps measuring the content instead of trusting
+a number, and now measures what runs.

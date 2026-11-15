@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -148,6 +149,9 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 			return fail(err)
 		}
 		return fail(errors.New("nothing to propose: only the template's news or names, taken over"))
+	}
+	if e.Update != nil && !slices.ContainsFunc(p.Files, func(f string) bool { return !inert(repo, wt, "services/"+e.Update.Name+"/", f) }) {
+		return fail(ErrInert) // only comments: the box keeps its copy, nothing restarts (#1239)
 	}
 	if _, err := git(ctx, wt, "commit", "-q", "-m", "proposal: "+reason, "--author", actor+" <"+actor+"@laib>"); err != nil {
 		return fail(err)
@@ -517,6 +521,36 @@ func onlyNames(repo, wt, f string) bool {
 		})
 	}
 	return slices.Equal(strip(repo), strip(wt))
+}
+
+// ErrInert: a template update that runs as before (#1239), only comments,
+// blank lines, its README or its news changed. No card and no restart; the
+// box keeps its copy until a change that runs differently brings them along.
+var ErrInert = errors.New("nothing to propose: the template changes only comments, nothing runs differently")
+
+// inert: the update's file f (in the service folder dir) runs as before. A
+// unit (Quadlet or a host unit) without its comment and blank lines — `#`
+// and `;` start one, systemd's rule — laib.yml as YAML, the news, README
+// and base copies always; a hook, a script or any other file byte by byte.
+func inert(repo, wt, dir, f string) bool {
+	read := func(root string) []byte { b, _ := os.ReadFile(filepath.Join(root, f)); return b }
+	name, _ := strings.CutPrefix(f, dir)
+	switch filepath.Ext(name) {
+	case ".container", ".pod", ".volume", ".network", ".kube", ".image", ".build", ".service", ".timer":
+		if strings.HasPrefix(name, state.BaseDir+"/") {
+			return true
+		}
+		code := func(b []byte) []string {
+			return slices.DeleteFunc(strings.Split(strings.ReplaceAll(string(b), "\r", ""), "\n"), func(l string) bool {
+				l = strings.TrimSpace(l)
+				return l == "" || l[0] == '#' || l[0] == ';'
+			})
+		}
+		return !strings.Contains(name, "/") && slices.EqualFunc(code(read(repo)), code(read(wt)), func(a, b string) bool { return strings.TrimSpace(a) == strings.TrimSpace(b) })
+	}
+	var a, b any
+	return name == NewsFile || name == "README.md" || strings.HasPrefix(name, state.BaseDir+"/") ||
+		name == "laib.yml" && yaml.Unmarshal(read(repo), &a) == nil && yaml.Unmarshal(read(wt), &b) == nil && reflect.DeepEqual(a, b)
 }
 
 // NewsFile is a template's news (#687): one German sentence per change for

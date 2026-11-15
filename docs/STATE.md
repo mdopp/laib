@@ -536,6 +536,16 @@ proposal carries a warning that names the files, so nothing auto-approves
 it and the diff shows what an approve would undo. A proposal that would
 only record `.template/` is not made.
 
+A template update that runs as before is no proposal either (#1239,
+`proposal.ErrInert`): every file it changes is a unit (Quadlet or host
+unit) equal but for its comment and blank lines (`#` and `;`, systemd's
+rule), a `laib.yml` equal as YAML, the README, the news or a `.template/`
+copy. The box keeps its copy, so nothing restarts; the journal says so
+once (`template`, „die Vorlage von <svc> ändert nur Kommentare: keine
+Karte, kein Neustart“), and the comments come along with the next change
+that runs differently. A hook, a script or any other file counts byte by
+byte: a comment there is a card, as before.
+
 Without secrets (`laib template lint`, a review) a secret renders as
 `${secret:NAME}`. Plan and apply render with the real values, and journal
 and diffs show each one redacted back to that placeholder.

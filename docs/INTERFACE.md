@@ -663,6 +663,23 @@ the classified change (`proposal.Card`), never by a model. What the
 proposer saw (`evidence`) follows its reason, and its way back (`undo`)
 follows laib's own.
 
+**One card for the box's template updates** (#1239). The template
+updates the box's own sync files (`template sync --propose`, actor `laib`)
+stay one proposal per service, each with its branch, and carry `karte:
+"Laib <version>"`; one still open from an earlier release joins the
+newest. Every surface folds the open ones of a `karte` into the lowest
+number (`proposal.Fold`: the Inbox page, „Alle freigeben“, `laib inbox`
+and so the chat and Homes, `laib context`): „Neue Vorlagen aus Laib
+2.31.0 für Jellyfin, Paperless und 3 weitere Dienste“, each template's news
+by service under „Was sich ändert“, the members' reasons, warnings and
+snapshots together, class `human` when one member is. `laib approve` or
+`reject` of any member decides all open members, the ones only a human may
+approve first, so an agent's approve is refused before anything merges.
+The approvals are then one run (#609), and a red service is taken back
+alone (#1209); after the decision each member shows its own outcome.
+A template update a person or an agent asks for (`laib template update
+<svc>`) stays its own card.
+
 **What came of it** (#544) is recorded by laib, never by the proposer,
 on the inbox entry (`outcome`) and, when measured, as a journal line with
 verb `outcome`: a whole-box `laib diag` settles every approved proposal

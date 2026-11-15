@@ -65,7 +65,7 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 		domain, box = st.Box.Domain, st.Warnings
 	}
 	dir, locked := cli.InboxDir(env), apply.LockHolder(env.Paths) != ""
-	all = slices.Clone(all)
+	all = proposal.Fold(all) // the box's template updates as one card (#1239)
 	slices.SortFunc(all, func(a, b *proposal.Proposal) int { return a.ID - b.ID })
 	var top, ended strings.Builder
 	type past struct {
@@ -364,7 +364,7 @@ func oneByOne(may []*proposal.Proposal) ([]*proposal.Proposal, string) {
 func ApproveAll(env *cli.Env) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		open, _ := proposal.List(cli.InboxDir(env), true)
-		may, left := oneByOne(approvable(env, open))
+		may, left := oneByOne(approvable(env, proposal.Fold(open)))
 		if r.Method != http.MethodPost {
 			if len(may) == 0 {
 				page(w, "Inbox", "<p>Keine Vorschläge, die du gemeinsam freigeben kannst.</p>"+left+"<p><a href=/inbox>Inbox</a></p>")

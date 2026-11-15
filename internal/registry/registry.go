@@ -113,11 +113,15 @@ func Update(ctx context.Context, env *cli.Env, st *state.State, svcName string) 
 	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, "template update "+svcName,
 		proposal.Edit{Update: &proposal.UpdateService{Name: svcName, From: tplName, Template: tpl}}, inbox.JudgeFor(st, env.Actor))
 	if err != nil {
+		if errors.Is(err, proposal.ErrInert) {
+			inbox.Inert(env, svcName)
+		}
 		if strings.Contains(err.Error(), "nothing to propose") {
 			return cli.ExitUsage // up to date; the caller's loop skips it
 		}
 		return env.Fail(err)
 	}
+	inbox.OnCard(env, p)
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s)", p.ID, strings.Join(p.Files, " "), p.Class)})
 	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
 		return inbox.AutoApprove(ctx, env, p)
