@@ -43,6 +43,7 @@ func cmdContext(ctx context.Context, env *cliEnv, args []string) int {
 		es, omitted = shortJournal(es)
 	}
 	open, _ := proposal.List(cli.InboxDir(env), true)
+	open = proposal.Fold(open)
 	for _, p := range open {
 		p.Reasons, p.Warnings, p.Facts = nil, nil, nil
 	}

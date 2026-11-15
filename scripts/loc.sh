@@ -28,6 +28,11 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 22,650: the owner's #1239 (2026-11-15, ADR 0035's rethink „eine Karte pro Laib-Version, keine
+# Karte ohne Änderung am Dienst“): the box's template updates of one release fold into one card on
+# every surface and are decided with one tap, and a template that changes only comments files
+# nothing; the card text a human approves stays in ring 0 (ADR 0035). The kernel at 22,462 before,
+# about 150 lines asked, the request counts as the owner's yes; the ring-1 moves lower it again.
 # 22,500: lowered on the Kern-Diät #1047 (2026-11-14): laib auslastung's measuring (/proc, /sys,
 # statfs, nvidia-smi, the lease's holder) moved to laib-disk, the program that already reads the
 # host's hardware (ADR 0027); the kernel keeps the verb, its 4 s and the call. The kernel 22,649 →
@@ -66,7 +71,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 22500 cmd internal
+budget kernel 22650 cmd internal
 budget operator 3300 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,

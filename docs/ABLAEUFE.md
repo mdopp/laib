@@ -172,6 +172,16 @@ Wenn ein Template ein Update hat,
 Dann sagt die Karte in wenigen Zeilen, was es dem Haushalt bringt, das Technische unter „Details“.
 Und ein Update, das nur Neuigkeiten oder Namen ändert, übernimmt Laib ohne Karte.
 
+### L-55 Neue Vorlagen einer Laib-Version kommen als eine Karte
+Wenn eine neue Laib-Version neue Vorlagen für mehrere Dienste mitbringt,
+Dann sieht der Owner eine Karte „Neue Vorlagen aus Laib 2.31.0 für …“, darauf je Dienst in einem Satz, was er dem Haushalt bringt.
+Und ein Tipp auf „Freigeben“ gibt alle frei; läuft ein Dienst danach nicht, nimmt Laib nur ihn zurück, die anderen bleiben.
+Und eine noch offene Karte einer früheren Version geht in der neuen auf.
+
+### L-56 Eine Vorlage, die nur Kommentare ändert, bringt keine Karte
+Wenn sich an einer Vorlage nur Kommentare oder Leerzeilen ändern,
+Dann gibt es keine Karte und keinen Neustart, nur eine Zeile im Journal.
+
 ### L-26 Die Box startet für ein System-Update nur im Fenster nach der Sicherung neu
 Wenn ein Update des Betriebssystems bereitliegt,
 Dann startet die Box nur zwei bis vier Stunden nach der Sicherung neu, nie während einer, und nur wenn alles grün ist.

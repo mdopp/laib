@@ -187,6 +187,64 @@ type handChange struct {
 	ceiling, verbs       *Change
 }
 
+// Fold puts the open proposals of one card (#1239) into the one with the
+// lowest number, on every surface the same: the news by service, every
+// member's reasons, files and changes; the others leave the list. The
+// stored proposals stay one per service, so a red run takes back only the
+// red one (#1209).
+func Fold(ps []*Proposal) []*Proposal {
+	members, cards := map[string][]*Proposal{}, map[string]*Proposal{}
+	for _, p := range ps {
+		if p.Karte != "" && p.Status == "open" {
+			members[p.Karte] = append(members[p.Karte], p)
+		}
+	}
+	for k, m := range members {
+		slices.SortFunc(m, func(a, b *Proposal) int { return a.ID - b.ID })
+		c := *m[0]
+		c.Reason, c.News, c.Files, c.Reasons, c.Warnings, c.Snapshot, c.Changes, c.Lines, c.Facts, c.Mints = "Neue Vorlagen aus "+k, nil, nil, nil, nil, nil, nil, nil, nil, nil
+		for _, p := range m {
+			for _, n := range p.News {
+				c.News = append(c.News, Named(strings.Join(servicesOf(p), ", "))+": "+n)
+			}
+			c.Files, c.Reasons, c.Warnings, c.Snapshot = append(c.Files, p.Files...), append(c.Reasons, p.Reasons...), append(c.Warnings, p.Warnings...), append(c.Snapshot, p.Snapshot...)
+			c.Changes, c.Lines, c.Facts, c.Mints = append(c.Changes, p.Changes...), append(c.Lines, p.Lines...), append(c.Facts, p.Facts...), append(c.Mints, p.Mints...)
+			if p.Class == "human" {
+				c.Class = "human"
+			}
+		}
+		cards[k] = &c
+	}
+	var out []*Proposal
+	for _, p := range ps {
+		switch c := cards[p.Karte]; {
+		case c == nil || p.Status != "open":
+			out = append(out, p)
+		case p.ID == c.ID:
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// karte is the card of the box's template updates of one release (#1239):
+// its headline names the release, each template's news by service is a
+// line of what changes, and one tap is all of them.
+func (d *Decision) karte(p *Proposal, names []string) {
+	if p.Karte == "" {
+		return
+	}
+	d.Summary = "Neue Vorlagen aus " + p.Karte + " für " + strings.Join(names, ", ")
+	if len(names) > 3 {
+		d.Summary = fmt.Sprintf("Neue Vorlagen aus %s für %s, %s und %d weitere Dienste", p.Karte, names[0], names[1], len(names)-2)
+	}
+	if len(p.News) == 1 { // more than one are lines already
+		d.Changes = append([]Line{{"+", p.News[0]}}, d.Changes...)
+	}
+	d.Impact = append(d.Impact, "Ein Tipp gibt alle frei: jeder Dienst startet dafür kurz neu; läuft einer danach nicht, nimmt Laib nur ihn zurück.")
+	d.Why = p.Karte + " bringt neue Vorlagen mit; was jede euch bringt, steht oben unter „Was sich ändert“."
+}
+
 // Card builds the decision card of a proposal. box are the box's own
 // warnings (state.Warnings): on a card only when they name a service the
 // proposal touches; the others belong to the status page (#616).
@@ -478,6 +536,7 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	} else if len(p.Lines) > 0 {
 		d.Details += "; im Einzelnen: " + strings.Join(p.Lines, "; ")
 	}
+	d.karte(p, names)
 	return d
 }
 

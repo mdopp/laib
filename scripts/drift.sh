@@ -53,14 +53,20 @@ found "release manifest" "$stale"
 # 7. a template change brings a new line in its news (#687): the sentence a
 # template update's card shows the household. Its tests and README are no
 # change of the template, nor is laib.yml's title or beschreibung alone: the
-# Box page's name, which the box takes over without a card (#785). Against
-# main's merge base; on main itself, nothing.
+# Box page's name, which the box takes over without a card (#785); nor a
+# comment or blank line of a unit (# or ;) or of laib.yml (#): the box files
+# no card for it either (#1239, proposal.ErrInert). Against main's merge
+# base; on main itself, nothing.
 base=$(git merge-base HEAD "${DRIFT_BASE:-origin/main}" 2>/dev/null || true)
 silent=""
 for t in $( [ -n "$base" ] && git diff --name-only "$base" -- 'templates/*/*' | grep -vE '^templates/[^/]+/(tests/|README\.md$|news$)' | cut -d/ -f2 | sort -u); do
   [ -d "templates/$t" ] || continue
-  [ "$(git diff -U0 "$base" -- "templates/$t" ":(exclude)templates/$t/tests" ":(exclude)templates/$t/README.md" ":(exclude)templates/$t/news" |
-    grep -E '^([+-]|Binary)' | grep -vE '^(\+\+\+|---) ' | grep -cvE '^[+-](title|beschreibung):')" -gt 0 ] || continue
+  [ "$(git diff -U0 "$base" -- "templates/$t" ":(exclude)templates/$t/tests" ":(exclude)templates/$t/README.md" ":(exclude)templates/$t/news" | awk '
+    /^diff --git/ { unit = $NF ~ /\.(container|pod|volume|network|kube|image|build|service|timer)$/; yml = $NF ~ /\/laib\.yml$/; next }
+    /^(\+\+\+|---) / { next }
+    /^Binary/ { n++; next }
+    /^[+-]/ { if ((unit || yml) && /^[+-][ \t]*(#|$)/ || unit && /^[+-][ \t]*;/ || /^[+-](title|beschreibung):/) next; n++ }
+    END { print n + 0 }')" -gt 0 ] || continue
   [ "$(git diff "$base" -- "templates/$t/news" | grep -cE '^\+[^+#]')" -gt 0 ] || silent="${silent}templates/$t changed without a new line in templates/$t/news
 "
 done

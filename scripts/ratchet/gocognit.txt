@@ -19,7 +19,7 @@
 56 internal/backup/backup.go: backup.Restore
 44 internal/diag/diag.go: diag.Probes
 32 internal/envelope/envelope.go: envelope.units
-44 internal/inbox/inbox.go: inbox.List
+43 internal/inbox/inbox.go: inbox.List
 79 internal/inbox/inbox.go: inbox.Propose
 72 internal/mcp/schema.go: mcp.Argv
 34 internal/pages/status.go: pages.CollectStatus

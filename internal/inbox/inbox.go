@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
@@ -304,6 +305,32 @@ func reasonsSuffix(p *proposal.Proposal) string {
 	return ": " + strings.Join(p.Reasons, "; ")
 }
 
+// OnCard puts a template update of the box's own sync on the one open card
+// of its kind (#1239), named by the Laib release that brought it; one still
+// open from an earlier release joins it, so the owner decides them at once.
+func OnCard(env *cli.Env, p *proposal.Proposal) {
+	if env.Actor != "laib" || p.Kind != "template-update" {
+		return
+	}
+	p.Karte = "Laib " + cli.Version
+	open, _ := proposal.List(cli.InboxDir(env), true)
+	for _, q := range open {
+		if q.Kind == "template-update" && q.Actor == "laib" && q.Karte != p.Karte {
+			q.Karte = p.Karte
+			proposal.Save(cli.InboxDir(env), q)
+		}
+	}
+}
+
+// Inert journals a template update of svc that runs as before (#1239):
+// only comments changed, so no card and no restart; once in 30 days.
+func Inert(env *cli.Env, svc string) {
+	e := journal.Entry{Actor: env.Actor, Verb: "template", Service: svc, Result: "info", Detail: "die Vorlage von " + svc + " ändert nur Kommentare: keine Karte, kein Neustart"}
+	if seen, _ := journal.Newest(env.Paths.Journal, time.Now().AddDate(0, 0, -30), 1, func(o journal.Entry) bool { return o.Detail == e.Detail }); len(seen) == 0 {
+		journal.Append(env.Paths.Journal, e)
+	}
+}
+
 // AutoApprove is the "canary by rollback": laib merges, and the run that
 // applies it reverts the merge when its verify is red (#609: with the rest
 // of that run); the journal carries both so the human sees what was tried.
@@ -344,6 +371,22 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 	if err != nil {
 		return env.Fail(err)
 	}
+	ps := []*proposal.Proposal{p}
+	if open, _ := proposal.List(cli.InboxDir(env), true); p.Karte != "" && p.Status == "open" { // one card, decided once (#1239)
+		ps = slices.DeleteFunc(open, func(q *proposal.Proposal) bool { return q.Karte != p.Karte })
+		// in their order, but one only a human may approve ("human" sorts first) refuses before any is merged
+		slices.Reverse(ps)
+		slices.SortStableFunc(ps, func(a, b *proposal.Proposal) int { return strings.Compare(a.Class, b.Class) })
+	}
+	for _, p := range ps {
+		if code := decide(ctx, env, st, p, args, approve); code != cli.ExitOK {
+			return code
+		}
+	}
+	return cli.ExitOK
+}
+
+func decide(ctx context.Context, env *cli.Env, st *state.State, p *proposal.Proposal, args []string, approve bool) int {
 	if !policy.Allowed(st.Policy, proposal.Hand(env.Actor), p.Tier) {
 		return cli.Refused(env, fmt.Sprintf("%s may not decide a %s-tier proposal", env.Actor, p.Tier))
 	}
@@ -380,7 +423,8 @@ func Decide(ctx context.Context, env *cli.Env, args []string, approve bool) int 
 	if p.Recomputed && !env.JSON {
 		fmt.Fprintf(env.W(), "#%d neu berechnet auf dem aktuellen Stand\n", p.ID)
 	}
-	if st, err = cli.LoadState(env); err != nil {
+	st, err := cli.LoadState(env)
+	if err != nil {
 		return env.Fail(err)
 	}
 	FileWishes(ctx, env, st, p)
@@ -498,7 +542,7 @@ func List(_ context.Context, env *cli.Env, args []string) int {
 			id = n
 		}
 	}
-	ps, err := proposal.List(cli.InboxDir(env), openOnly && id == 0)
+	ps, err := listed(env, openOnly, id)
 	if err != nil {
 		return env.Fail(err)
 	}
@@ -572,6 +616,16 @@ func List(_ context.Context, env *cli.Env, args []string) int {
 		}
 	}
 	return 0
+}
+
+// listed: the proposals `laib inbox` shows, the box's template updates of
+// one release as one card (#1239); one by its number as it is.
+func listed(env *cli.Env, openOnly bool, id int) ([]*proposal.Proposal, error) {
+	ps, err := proposal.List(cli.InboxDir(env), openOnly && id == 0)
+	if id != 0 {
+		return ps, err
+	}
+	return proposal.Fold(ps), err
 }
 
 // recomputeFor is what approve computes p again with when its branch no
