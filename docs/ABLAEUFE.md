@@ -262,6 +262,11 @@ Wenn `laib diag` etwas findet, das sich reparieren lässt,
 Dann liegt eine Reparatur-Karte in der Inbox, die in Worten sagt, was sie tut.
 Und sie läuft erst, wenn ein Mensch freigibt; dieselbe Reparatur liegt nur einmal da.
 
+### L-57 Wünsche zu Protokollzeilen kommen einmal pro Woche als eine Karte
+Wenn die tägliche Protokoll-Durchsicht Fehlermuster findet,
+Dann legt der Operator dafür nicht täglich je eine Karte an, sondern sammelt sie über die Woche, ein Fund je Muster.
+Und in der folgenden Woche liegt eine Karte „Protokoll-Funde der Woche“ in der Inbox, je Fund eine Zeile; ein „Freigeben“ gilt für alle Zeilen der Karte.
+
 ### L-40 Was Menschen lesen, ist ein Satz, kein Fehlertext
 Wenn eine Mail, eine Karte oder die Status-Seite einen Fehler zeigt,
 Dann steht dort ein deutscher Satz, der rohe Text nur unter „Details“.

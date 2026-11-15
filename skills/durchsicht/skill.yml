@@ -25,6 +25,10 @@
 # certificate obtained after its failures is resolved. The note lists what
 # was dropped once, with the reason; the morning report repeats that
 # sentence; a wish must say what was checked. docs/SKILLS.md.
+# #1241: no wish a day. The script keeps the checked patterns of the week
+# in its state, one row per pattern; the first run of a later week shows
+# them all as „Wochenkarte“ and the model files one wish with a row per
+# finding that needs a human. On any other day the script refuses a wish.
 description: Jeden Morgen die Fehlerzeilen der Dienste nach Muster — wiederkehrende echte Fehler als Notiz oder Vorschlag, Rauschen nicht.
 trigger: {daily: "06:30"}
 tools: [status, logs, state, planned, wish, note]
@@ -32,8 +36,8 @@ run: run.py
 context: none
 modell: urteil   # the script read the logs; the model judges the patterns
 output: note
-limits: {wish: 3}
+limits: {wish: 1}   # one card a week (#1241)
 prompt: |
   Auslöser: Protokoll-Durchsicht. Unten stehen die Fehlermuster der letzten 24 Stunden, die neu, wiederkehrend oder gewachsen sind. laib hat sie nach Inhalt gruppiert; Rauschen (normale Meldungen auf stderr) ist schon aussortiert und nur gezählt. Jedes Muster ist schon geprüft wie von einem Menschen (geplante Neustarts, vorbei, behoben); was dabei herausfiel, steht nicht unten und bekommt keinen Vorschlag.
   Schreib eine note mit kind watch: je Muster eine Zeile mit Unit, Muster, Anzahl und der Beispielzeile, das Wichtigste zuerst, und was es für die Familie heißt, wenn die Zeile das hergibt. Erfinde keine Ursache.
-  Braucht ein Muster einen Menschen (eine Einstellung im Template, kaputte Dateien), dann höchstens drei Vorschläge mit wish: text nennt Dienst und Muster, saw die Anzahl, die Beispielzeile und die Zeile „geprüft: …“ des Musters. Du änderst nichts selbst.
+  Wünsche kommen einmal pro Woche als eine Karte. Nur wenn unten „Wochenkarte“ steht, legst du genau einen wish an, für die Funde darunter, die einen Menschen brauchen (eine Einstellung im Template, kaputte Dateien): text beginnt mit der Zeile „Protokoll-Funde der Woche“, darunter je Fund eine Zeile mit Dienst, Muster und was es heißt; saw je Fund eine Zeile mit Unit, Anzahl, Beispielzeile und der Zeile „geprüft: …“. Braucht keiner einen Menschen, kein wish. Steht „Wochenkarte“ nicht da, kein wish. Du änderst nichts selbst.

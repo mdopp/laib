@@ -1,13 +1,9 @@
 """durchsicht: the log review (#550, #551, #839), the deterministic part.
 
-Groups every service's warnings and errors of a day by pattern, by content,
-never by the journal's priority. A pattern is checked as a person would
-(#975): a line in the window of a maintenance marker of its service or of
-one it depends on — announced before the restart (laib planned, #978) —
-is only counted; a new pattern quiet for six hours or gone since a planned
-restart of a green service is over; a certificate obtained after its
-failures is resolved.
-The model sees what is left: new, recurring or growing. docs/SKILLS.md.
+Groups every service's warnings and errors of a day by pattern, by content, never by the
+journal's priority, and checks each as a person would (#975, laib planned #978): planned
+stops, over, resolved. The model sees what is left; its wishes come once a week, as one
+card with a row per pattern (#1241). docs/SKILLS.md.
 """
 
 import re
@@ -21,34 +17,12 @@ from lib import logzeilen
 REVIEW_LINES, QUIET = 5000, timedelta(hours=6)  # lines per unit and day ("mindestens" when reached); a new pattern this quiet is over
 IDENT, OBTAINED = re.compile(r'"identifier":"([^"]+)"'), "certificate obtained successfully"
 MARK = "Aussortiert, kein Wunsch:"  # the morning report finds the sentence by it
+WEEK = "_woche"  # #1241: the week's checked patterns, the rows of one wish a week
 Window = namedtuple("Window", "svc label stop start frm to")
 
 
-def harmless(s):
-    """ignore.yml's logs (laib ignore --log, #915): the shapes the owner or a
-    ticket answered as harmless, per service; and what to say about it."""
-    r = s.call("laib_state", args="ignore.yml")
-    if r.error and "is not a file on main" in r.text:
-        return {}, ""
-    d = r.json()
-    if not isinstance(d, dict) or not isinstance(d.get("data", {}), (dict, type(None))):
-        return {}, "ignore.yml nicht lesbar (" + laibskill.first_line(r.text) + "); als harmlos Vermerktes ist mitgezählt."
-    marks, bad = {}, 0
-    for e in ((d.get("data") or {}).get("logs") or []):
-        try:
-            rx = re.compile(e["match"]) if isinstance(e, dict) and e.get("match") and str(e.get("reason", "")).strip() else None
-        except (re.error, TypeError):
-            rx = None
-        if rx is None:
-            bad += 1
-            continue
-        marks.setdefault(str(e.get("service", "")), []).append((rx, str(e["reason"])))
-    return marks, (f"ignore.yml: {bad} Einträge unter logs ohne gültiges Muster oder Grund; sie gelten nicht." if bad else "")
-
-
 class Plan:
-    """The maintenance markers that held a service — its own and those of what
-    it depends on — as Laib answers them (laib planned, #978), asked once per service."""
+    """The maintenance markers of a service and of what it depends on (laib planned, #978), asked once."""
 
     def __init__(self, s):
         self.s, self.now, self.asked, self.unread, self.expected = s, when(s.now) or datetime.now(timezone.utc), {}, set(), {}
@@ -102,11 +76,27 @@ def told(dropped, plan):
     return f"{MARK} {'; '.join(items)}." if items else ""
 
 
+def week(s, last, checked, now):
+    """#1241: the week's checked patterns, a row each; the first run of a later week shows them (rows, state)."""
+    kw, w = "%d-W%02d" % now.isocalendar()[:2], last.get(WEEK) or {}
+    rows = dict(w.get("rows") or {})
+    since = w.get("seit") if rows else kw
+    for c, _, said in checked:
+        old = rows.get(c["unit"] + "\t" + c["pattern"]) or {}
+        rows[c["unit"] + "\t" + c["pattern"]] = {"svc": c["svc"], "unit": c["unit"], "pattern": c["pattern"], "example": c["example"][:200],
+                                              "count": old.get("count", 0) + c["count"], "said": said, "seen": max(c["times"], default=now).isoformat()}
+    if rows and since != kw:
+        return sorted(rows.values(), key=lambda r: (-r["count"], r["unit"])), {}
+    return [], {"seit": since, "rows": rows} if rows else {}
+
+
 def check(s, tool, args):
     """The model's wish names what was checked and one of the shown patterns' services."""
     services, saw, text = getattr(s, "services", set()), str(args.get("saw", "")), str(args.get("text", ""))
     if tool != "laib_wish":
         return ""
+    if not getattr(s, "rows", None):
+        return "Wünsche zu Protokollzeilen sammelt laib und legt sie einmal pro Woche als eine Karte vor: heute nur die Notiz"
     if "geprüft" not in saw:
         return "saw nennt, was geprüft wurde: übernimm die Zeile „geprüft: …“ des Musters"
     if not any(svc.lower() in (text + " " + saw).lower() for svc in services):
@@ -117,8 +107,7 @@ def check(s, tool, args):
 
 
 def recheck(s, plan, kept, quiet, read):
-    """#978: the Operator's open log wishes, a day after they were filed: no error line of their
-    services → erledigt; only lines today's checks drop → verworfen, with why. Two calls."""
+    """#978: the Operator's open log wishes a day on: no error line → erledigt; only dropped lines → verworfen."""
     ws, out = s.call("laib_wish", args="list").json(), []
     for w in ws if isinstance(ws, list) else []:
         svcs, since = field(w, "services", []) or [], when(field(w, "since"))
@@ -137,7 +126,7 @@ def run(s):
     if not isinstance(services, list):
         return laibskill.done(context="Protokoll-Durchsicht: laib status nicht lesbar (" + laibskill.first_line(st.text) + "). Schreib das in die Notiz.")
     counts, noise, full, unread, runtime, known_harmless, obtained, green, quiet = {}, {}, {}, [], {}, {}, {}, {}, {}
-    (marks, marks_said), plan = harmless(s), Plan(s)
+    (marks, marks_said), plan = logzeilen.harmless(s), Plan(s)
     for name in (field(x, "name") for x in services):
         green[name] = any(field(x, "name") == name and field(x, "state") == "grün" for x in services)
         units = s.call("laib_logs", args=f"{name} --since 24h --lines {REVIEW_LINES} --priority warning").json()
@@ -198,12 +187,14 @@ def run(s):
     aside = told(dropped, plan)
     kept = {c["svc"] for c in counts.values() if not any(c is d for d, _ in dropped)}  # a real error today, not dropped
     closed = recheck(s, plan, kept, quiet, set(green) - set(unread))
-    if not checked and not unread:
+    s.rows, wk = week(s, last, checked, plan.now)
+    nxt.update({WEEK: wk} if wk else {})
+    if not checked and not unread and not s.rows:
         if aside:
             s.call("laib_note", kind="watch", text="Protokoll-Durchsicht: keine neuen Fehlermuster. " + aside)
         return laibskill.done(outcome="unchanged", why="keine neuen Fehlermuster" + (f"; {len(dropped)} Muster aussortiert" if dropped else "") + (f"; {closed} Wünsche geschlossen" if closed else ""), state=nxt)
 
-    out = ["Fehlermuster der letzten 24 Stunden (nach Inhalt, nicht nach Journal-Priorität), jedes geprüft wie von einem Menschen:"]
+    out = ["Fehlermuster der letzten 24 Stunden (nach Inhalt, nicht nach Journal-Priorität), jedes geprüft wie von einem Menschen:" if checked else "Heute keine neuen Fehlermuster."]
     for c, why, said in checked:
         ex = c["example"] if len(c["example"]) <= 200 else c["example"][:200] + "…"
         out.append(f"- {why}, {c['unit']}, {'mindestens ' if full.get(c['unit']) else ''}{c['count']}×: {c['pattern']}\n  Beispiel: {ex}\n  geprüft: {said}")
@@ -216,5 +207,8 @@ def run(s):
     if known_harmless:
         out.append("Als harmlos vermerkt (ignore.yml, nur gezählt): " + ", ".join(f"{u} {n} ({why})" for u, (n, why) in sorted(known_harmless.items())) + ".")
     out += [marks_said] if marks_said else []
-    s.services = {c["svc"] for c, _, _ in checked}
+    out += [f"Wochenkarte: die Funde seit {last[WEEK]['seit']}, je Fund eine Zeile (das ist der eine wish dieser Woche):"] if s.rows else [
+        "Wünsche sammelt laib über die Woche und legt sie dann als eine Karte vor: heute kein wish."]
+    out += [f"- {r['unit']}, {r['count']}×, zuletzt {when(r['seen']).astimezone(plan.now.tzinfo):%d.%m. %H:%M}: {r['pattern']}\n  Beispiel: {r['example']}\n  geprüft: {r['said']}" for r in s.rows]
+    s.services = {r["svc"] for r in s.rows}
     return laibskill.done(context="\n".join(out) + "\n", human=aside, state=nxt, checks=["laib_wish"])

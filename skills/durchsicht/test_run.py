@@ -267,7 +267,7 @@ class CheckedLikeAPerson(unittest.TestCase):
 
     def test_a_genuine_error_outside_restarts_is_still_a_wish_and_says_what_was_checked(self):
         day = homes("2026-11-01T05:00:00", "2026-11-01T05:10:00", "2026-11-01T05:20:00")
-        s = Fake(day, planned={"homes": HA_APPLIES}, now="2026-11-01T06:30:00+01:00")
+        s = Fake(day, planned={"homes": HA_APPLIES}, now="2026-11-01T06:30:00+01:00", state=WEEK_BEFORE)
         r = run.run(s)
         self.assertEqual(r["outcome"], "")
         self.assertIn("- neu, homes.service, 3×: homes: HA state_changed: dial tcp <ip>: connect: connection refused\n", r["context"])
@@ -285,7 +285,7 @@ class CheckedLikeAPerson(unittest.TestCase):
         r = run.run(Fake(day, planned={"homes": []}, now="2026-10-31T11:00:00+01:00"))
         self.assertIn("neu, homes.service, 3×", r["context"])
         self.assertIn("geprüft: nicht während eines geplanten Neustarts", r["context"])
-        s = Fake(day, planned="nicht ausgeführt: laib_planned ist der Fähigkeit durchsicht nicht gewährt", now="2026-10-31T11:00:00+01:00")
+        s = Fake(day, planned="nicht ausgeführt: laib_planned ist der Fähigkeit durchsicht nicht gewährt", now="2026-10-31T11:00:00+01:00", state=WEEK_BEFORE)
         r = run.run(s)
         self.assertIn("geprüft: geplante Neustarts nicht geprüft (nicht lesbar)", r["context"])
         # until Laib can answer (the ops grant waits in the Inbox, #932): a note, never an unchecked wish
@@ -317,6 +317,44 @@ class CheckedLikeAPerson(unittest.TestCase):
         self.assertIn("3× vorbei: zuletzt 05:10, seit Anwenden von homes um 05:30 nicht mehr, Dienst grün", notes(s)[0])
         r = run.run(Fake(day, planned=restart, now="2026-11-01T06:30:00+01:00", red=["homes"]))
         self.assertIn("vor Anwenden von homes um 05:30, Dienst nicht grün", r["context"])
+
+
+class OnceAWeek(unittest.TestCase):
+    """#1241: the Operator's log wishes are collected; once a week one card, a row per pattern."""
+
+    # Ablauf L-57
+    def test_patterns_gather_over_the_week_and_come_as_one_wish_with_a_row_each(self):
+        wed = homes("2026-10-21T05:00:00", "2026-10-21T05:10:00", "2026-10-21T05:20:00")
+        s = Fake(wed, now="2026-10-21T06:30:00+02:00")
+        r = run.run(s)
+        self.assertIn("neu, homes.service, 3×", r["context"])
+        self.assertIn("heute kein wish", r["context"])
+        self.assertIn("einmal pro Woche als eine Karte", run.check(s, "laib_wish", {"text": "homes", "saw": "geprüft: x"}))
+        self.assertEqual(r["state"][run.WEEK]["seit"], "2026-W43")
+        self.assertEqual(len(r["state"][run.WEEK]["rows"]), 1)
+
+        fri = {"immich": {"immich-server.service": "\n".join(at(f"2026-10-23T04:0{i}:00", "immich-server[7]", "ERROR thumbnail failed") for i in range(4))}}
+        r = run.run(Fake(fri, now="2026-10-23T06:30:00+02:00", state=r["state"]))
+        self.assertIn("heute kein wish", r["context"])
+        self.assertEqual(len(r["state"][run.WEEK]["rows"]), 2)
+
+        s = Fake({"caddy": {"caddy.service": ""}}, now="2026-10-26T06:30:00+01:00", state=r["state"])  # Monday: nothing new today
+        r = run.run(s)
+        self.assertEqual(r["outcome"], "")
+        self.assertTrue(r["context"].startswith("Heute keine neuen Fehlermuster.\nWochenkarte: die Funde"))
+        self.assertIn("Wochenkarte: die Funde seit 2026-W43, je Fund eine Zeile", r["context"])
+        self.assertIn("- immich-server.service, 4×, zuletzt 23.10. 05:03: ERROR thumbnail failed", r["context"])
+        self.assertIn("- homes.service, 3×, zuletzt 21.10. 06:20: homes: HA state_changed", r["context"])
+        self.assertLess(r["context"].index("immich-server.service, 4×"), r["context"].index("homes.service, 3×"))
+        self.assertEqual(run.check(s, "laib_wish", {"text": "homes und immich", "saw": "geprüft: nicht während eines geplanten Neustarts"}), "")
+        self.assertNotIn(run.WEEK, r["state"])  # shown once; the next week starts empty
+
+        r = run.run(Fake({"caddy": {"caddy.service": ""}}, now="2026-10-27T06:30:00+01:00", state=r["state"]))
+        self.assertEqual(r["outcome"], "unchanged")
+
+
+WEEK_BEFORE = {run.WEEK: {"seit": "2026-W40", "rows": {"homes.service\tolder": {"svc": "homes", "unit": "homes.service", "pattern": "older", "example": "older",
+                                                                                   "count": 3, "said": "x", "seen": "2026-10-01T05:00:00+02:00"}}}}
 
 
 def wish(id, services, skill="durchsicht", operator=True, title="x"):

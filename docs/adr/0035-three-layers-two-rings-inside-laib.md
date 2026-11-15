@@ -111,7 +111,8 @@ lists, one card per new source (#1244).
 - **One card per Laib release for template updates**, in the family's
   words, and no card and no restart for a change that does not change the
   rendered unit (a comment, a README).
-- **The Operator's log wishes are collected** and come as one card a week.
+- **The Operator's log wishes are collected** and come as one card a week
+  (#1241, ADR 0023 amendment 2026-11-15: one approval for the card).
 - **`laib-app register`** proposes the registry entry as an ordinary
   patch; its own box.yml writer goes.
 

@@ -10,6 +10,8 @@ real errors by pattern; vorfall's first aid shows the last one.
 import json
 import re
 
+from laibskill import first_line
+
 A = re.ASCII  # Go's regexp: \w, \d, \s and \b are ASCII
 LINE = re.compile(r"^(\S+) \S+ ([^\s\[:]+)(?:\[\d+\])?: (.*)$", A)
 # #915: rootless Podman's network layer and container monitor write into a
@@ -97,3 +99,26 @@ def last_error(units):
     real = [m[3] for m in msgs if pattern(m[3])[1]] or [m[3] for m in msgs]
     line = real[-1].strip() if real else ""
     return line[:200] + "…" if len(line) > 200 else line
+
+
+def harmless(s):
+    """ignore.yml's logs (laib ignore --log, #915): the shapes the owner or a
+    ticket answered as harmless, per service, and what to say about it; durchsicht
+    counts them only."""
+    r = s.call("laib_state", args="ignore.yml")
+    if r.error and "is not a file on main" in r.text:
+        return {}, ""
+    d = r.json()
+    if not isinstance(d, dict) or not isinstance(d.get("data", {}), (dict, type(None))):
+        return {}, "ignore.yml nicht lesbar (" + first_line(r.text) + "); als harmlos Vermerktes ist mitgezählt."
+    marks, bad = {}, 0
+    for e in ((d.get("data") or {}).get("logs") or []):
+        try:
+            rx = re.compile(e["match"]) if isinstance(e, dict) and e.get("match") and str(e.get("reason", "")).strip() else None
+        except (re.error, TypeError):
+            rx = None
+        if rx is None:
+            bad += 1
+            continue
+        marks.setdefault(str(e.get("service", "")), []).append((rx, str(e["reason"])))
+    return marks, (f"ignore.yml: {bad} Einträge unter logs ohne gültiges Muster oder Grund; sie gelten nicht." if bad else "")
