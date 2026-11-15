@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.30.1](https://github.com/mdopp/laib/compare/v2.30.0...v2.30.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* **envelope:** bound write and read, and register a registry by its repo name ([#1242](https://github.com/mdopp/laib/issues/1242)) ([6cd80e9](https://github.com/mdopp/laib/commit/6cd80e93044e60ac023fb1bd6c95352bc1b4cca1))
+
 ## [2.30.0](https://github.com/mdopp/laib/compare/v2.29.1...v2.30.0) (2026-11-15)
 
 
