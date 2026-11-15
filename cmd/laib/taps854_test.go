@@ -289,7 +289,9 @@ func TestTheShellApproveSaysItWaits(t *testing.T) {
 	unlock, _ := apply.TakeLock(env, st, "converge")
 	p := proposeService(t, env, "w1")
 	var out bytes.Buffer
-	time.AfterFunc(1500*time.Millisecond, unlock)
+	released := make(chan struct{})
+	time.AfterFunc(1500*time.Millisecond, func() { unlock(); close(released) })
+	t.Cleanup(func() { <-released }) // before testBox puts sysd.Run back: the release may still run it (race)
 	shell := &cliEnv{Paths: env.Paths, Actor: "human:test", Out: &out, ErrOut: &out, Wait: time.Minute}
 	if code := inbox.Approve(context.Background(), shell, []string{fmt.Sprint(p.ID)}); code != cli.ExitOK {
 		t.Fatalf("approve: exit %d\n%s", code, out.String())
