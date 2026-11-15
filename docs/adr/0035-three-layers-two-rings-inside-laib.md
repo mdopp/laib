@@ -98,7 +98,7 @@ it as a verb; it never gets the host. Homes' current ties are listed in #1245.
 The laib repo holds layer 0 only. Layer-1 templates move to their own
 template collection, layer-2 programs to their own repos (as Homes, the
 archive, documents and the poll already are); each is a registry the box
-lists, one card per new source (1244).
+lists, one card per new source (#1244).
 
 ### What is rethought, not moved
 
