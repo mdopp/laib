@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.34.0](https://github.com/mdopp/laib/compare/v2.33.0...v2.34.0) (2026-11-15)
+
+
+### Features
+
+* **pages:** Laib stands without Homes, everything operational on its own Status page ([#1258](https://github.com/mdopp/laib/issues/1258)) ([6df5fb6](https://github.com/mdopp/laib/commit/6df5fb6e228fa0fcba64bc558f87aa8ad0ce09d0))
+
 ## [2.33.0](https://github.com/mdopp/laib/compare/v2.32.0...v2.33.0) (2026-11-15)
 
 
