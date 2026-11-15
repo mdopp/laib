@@ -341,6 +341,13 @@ grep -q "^laib_haushalt_" "$WORK/podsec/laib.laib-haushalt.laib-haushalt.LAIB_TO
 [ -s "$WORK/podsec/laib.laib-haushalt.laib-haushalt.HAUSHALT_KEY" ] || fail "the door's key is no podman secret"
 if grep -q "laib_haushalt_" "$HHU"; then fail "the haushalt token is in the unit itself"; fi
 grep -q "restart laib-haushalt.service" "$SYSTEMCTL_LOG" || fail "laib-haushalt's container not started"
+# laib-updater (ADR 0035, #1233): no mount, no token of laib's, only the door's key as a podman secret
+UPU="$LAIB_QUADLET/laib-updater/laib-updater.container"
+test -f "$UPU" || fail "laib-updater's container is not rendered"
+python3 "$WORK/own.py" "$UPU" "$LAIB_HOME" '[]' || fail "laib-updater's container reaches more than it may (ADR 0035): it mounts nothing"
+[ -s "$WORK/podsec/laib.laib-updater.laib-updater.UPDATER_KEY" ] || fail "laib-updater's door key is no podman secret"
+if grep -q "LAIB_TOKEN\|laib_" "$UPU"; then fail "laib-updater holds a token of laib's"; fi
+grep -q "restart laib-updater.service" "$SYSTEMCTL_LOG" || fail "laib-updater's container not started"
 # the lease, as a GPU box with the llama template renders it: a scratch box, laib plan shows the unit
 GPU="$WORK/gpu"; mkdir -p "$GPU/home"
 ( export LAIB_HOME="$GPU/home" LAIB_QUADLET="$GPU/q" LAIB_SYSTEMD="$GPU/s" SYSTEMCTL_LOG="$GPU/systemctl.log"

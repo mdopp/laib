@@ -10,13 +10,14 @@ set -euo pipefail
 v=${1:?version} mode=${2:-}
 if [ "$mode" != serve ]; then
 mkdir -p dist
-# laib-operator, laib-notify, laib-haushalt and laib-lease are containers
+# laib-operator, laib-notify, laib-haushalt, laib-updater and laib-lease are containers
 # (ADR 0027): laib pins this commit's images when the build job pushed them
-# (OPERATOR_IMAGE, NOTIFY_IMAGE, HAUSHALT_IMAGE, LEASE_IMAGE)
+# (OPERATOR_IMAGE, NOTIFY_IMAGE, HAUSHALT_IMAGE, UPDATER_IMAGE, LEASE_IMAGE)
 pin=""; r=github.com/mdopp/laib/internal/render
 [ -z "${OPERATOR_IMAGE:-}" ] || pin="$pin -X $r.OperatorImage=$OPERATOR_IMAGE"
 [ -z "${NOTIFY_IMAGE:-}" ] || pin="$pin -X $r.NotifyImage=$NOTIFY_IMAGE"
 [ -z "${HAUSHALT_IMAGE:-}" ] || pin="$pin -X $r.HaushaltImage=$HAUSHALT_IMAGE"
+[ -z "${UPDATER_IMAGE:-}" ] || pin="$pin -X $r.UpdaterImage=$UPDATER_IMAGE"
 [ -z "${LEASE_IMAGE:-}" ] || pin="$pin -X $r.LeaseImage=$LEASE_IMAGE"
 for b in laib laib-disk; do src=./cmd/$b; [ $b = laib-disk ] && src=./disk/cmd/$b; x=""; [ $b = laib ] && x=$pin; CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=$v$x" -o dist/$b-linux-amd64 $src; done
 cp scripts/install-box.sh dist/install-box.sh

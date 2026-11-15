@@ -164,3 +164,26 @@ makes):
 Not covered: images a workflow `run:` step pulls by name (the vm-install
 test pulls upstream images to test them), and the tools a script installs
 (`go install …@version` pins by module version, not by hash).
+
+## Amendment 2026-11-15 (#1233, ADR 0035): who asks the registries
+
+The kernel no longer asks a registry or GitHub for this. `laib updates`
+hands the image values, the RepoDigests and labels podman has of an
+unpinned one, and `state/host/image` to **laib-updater**, a ring-1
+container with no mount, no token of laib's and only the door's key
+(`LAIB_UPDATER_KEY`, 127.0.0.1:5903), and prints its rows. The updater
+reads the tags, digests and labels, runs the pinned cosign from its own
+image as the pre-check behind `unsigned`, and reads the changelogs
+(moved from laib-haushalt, now without a GitHub token). A card's version
+labels (#959) are the updater's reading too: words on the card, nothing
+the kernel runs by.
+
+What the kernel runs it checks itself (`registry.Check`): a new image
+value with a digest has the digest's form (`sha256:` and 64 hex digits),
+and our own image by a new digest carries `SignedBy`'s signature, by the
+pinned cosign through podman — when the proposal is made, as before, and
+again right before the run that applies an approval (`inbox.checkBatch`).
+A digest or signature that does not hold then takes the run's approvals
+back before anything is snapshotted or written, and their cards say why.
+The card the owner taps, the nightly `versionen` and its summaries are
+unchanged.

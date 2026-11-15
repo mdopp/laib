@@ -13,8 +13,8 @@ curl -fsSL https://raw.githubusercontent.com/mdopp/laib/main/scripts/install-box
 A release carries `laib`, `laib-disk`, the scripts, `SHA256SUMS` and its
 signature `SHA256SUMS.bundle`; the script verifies the sums, and the
 nightly self-update first checks their signature from laib's release
-workflow (ADR 0034, #1130). `laib-operator`, `laib-notify`, `laib-haushalt`
-and `laib-lease` are images (`ghcr.io/mdopp/laib-<program>`) whose digests
+workflow (ADR 0034, #1130). `laib-operator`, `laib-notify`, `laib-haushalt`,
+`laib-updater` and `laib-lease` are images (`ghcr.io/mdopp/laib-<program>`) whose digests
 the release builds into `laib` (ADR 0027): its apply pulls them. The repo, its releases and
 the ghcr images are public: no GitHub token is needed (a private fork or
 mirror exports `LAIB_GH_TOKEN`; never a flag, ps shows every argv, #217).

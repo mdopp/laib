@@ -28,6 +28,11 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 22,547: lowered by what moved (ADR 0035, #1233): the registries, the changelogs and the
+# signature pre-check of laib updates went to laib-updater, the ring-1 program that reads the net;
+# the kernel keeps the values it hands over, the rows it prints and the check of what it runs
+# (registry.Check, before the proposal and again before the run). The kernel lost 103 lines;
+# the cap lowered by the same 103 from #1239's 22,650, the room as before.
 # 22,650: the owner's #1239 (2026-11-15, ADR 0035's rethink „eine Karte pro Laib-Version, keine
 # Karte ohne Änderung am Dienst“): the box's template updates of one release fold into one card on
 # every surface and are decided with one tap, and a template that changes only comments files
@@ -71,7 +76,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 22650 cmd internal
+budget kernel 22547 cmd internal
 budget operator 3300 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,
@@ -126,12 +131,17 @@ budget notify 660 notify        # laib-notify: the watchdog ping and the owner's
 # with the Inbox (#1038), behind the door, not in the kernel; 900 lines before, 1,164 with it
 # haushalt 1,320: the same approval: laib module aus, Homes' switch (#1036), a proposal the door files
 # so the dial never approves it; 1,197 lines with it, 95 % of 1,250
-budget haushalt 1320 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677); wish (#797); a module's wish and its stand (#1038); module aus (#1036)
+# haushalt 1,219: lowered by what moved (ADR 0035, #1233): an image's changelog went to laib-updater,
+# 1,318 → 1,217, the cap lowered by the same 101
+budget haushalt 1219 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677); wish (#797); a module's wish and its stand (#1038); module aus (#1036)
 # lease 1,300: set by the owner, mdopp, 2026-10-26, on #677 ("a+b"): the lease leaves the kernel
 # as its own program (the llama template's policy proxy and GPU lease, ADR 0011, 0027), reversing
 # 2026-10-17's "lease stays" (ADR 0005); 1,076 lines in the kernel, 1,154 with its own MCP client
 # and atomic write
 budget lease 1430 lease         # laib-lease: the policy proxy and the GPU lease (#677)
+# updater 760: set on the move out of the kernel (ADR 0035, #1233): laib updates' registries, digests
+# and labels from the kernel, the changelog from laib-haushalt, cosign's pre-check; 607 lines, plus a quarter
+budget updater 760 updater      # laib-updater: the registries, changelogs and signatures of laib updates, ring 1 (ADR 0035)
 # the shared leaves: what the kernel and the programs used to keep as copies, because a program
 # may not import the kernel. A leaf imports nothing of laib; anyone may import it. Each: its size
 # then, plus a quarter; owner, 2026-11-04, the cleanup train: shared by the programs instead of copies
@@ -153,7 +163,7 @@ down=$(grep -rlE '"github.com/mdopp/laib/operator' --include='*.go' cmd internal
 [ -z "$down" ] || { echo "the kernel imports the Operator: $down"; bad=1; }
 # a program that moved out of the kernel imports none of it, and the kernel
 # imports none of them
-for prog in stick frage automat directory mcpserver disk notify haushalt lease; do
+for prog in stick frage automat directory mcpserver disk notify haushalt lease updater; do
   up=$(grep -rlE '"github.com/mdopp/laib/(internal|cmd)/' --include='*.go' "$prog" 2>/dev/null || true)
   [ -z "$up" ] || { echo "$prog imports the kernel: $up"; bad=1; }
   down=$(grep -rlE "\"github.com/mdopp/laib/$prog[/\"]" --include='*.go' cmd internal || true)

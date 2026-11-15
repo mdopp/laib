@@ -91,6 +91,7 @@ flowchart TB
       p_lease["Lease<br/>wer die GPU hält, Policy-Proxy des Modells"]:::helfer
       p_notify["Notify<br/>Nachrichten an den Besitzer"]:::helfer
       p_operator["Operator<br/>lokales Modell als Hand ops: Vorfälle, Morgenbericht"]:::helfer
+      p_updater["Updater<br/>fragt Register und Änderungsnotizen, ohne Schlüssel und Token; der Kern prüft selbst"]:::helfer
     end
     t_adguard["AdGuard<br/>Namen im Heimnetz, Werbefilter"]:::s0
     t_auth["Anmeldung<br/>Konten und zweiter Faktor"]:::s0
@@ -130,6 +131,7 @@ flowchart TB
   p_lease ==>|Tür| laib
   p_notify ==>|Tür| laib
   p_operator ==>|Tür| laib
+  p_updater ==>|Tür| laib
   laib --> p_disk
   t_archiv -.-> t_radicale
   t_archiv -.-> t_immich

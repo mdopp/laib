@@ -2,7 +2,7 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
+	"regexp"
 	"strings"
 	"time"
 
@@ -10,10 +10,11 @@ import (
 	"github.com/mdopp/laib/internal/sysd"
 )
 
-// ADR 0034: a newer digest is a proposal a human taps. Its card says what
-// changed (the Operator's versionen has the box's model summarize Notes),
-// and our own image is proposed only with a signature from this
-// household's CI.
+// ADR 0034: a newer digest is a proposal a human taps, and our own image is
+// proposed only with a signature from this household's CI. ADR 0035: the
+// kernel asks no registry and reads no changelog for it — laib-updater does
+// — but what it is about to run it checks itself: the digest's form, and
+// our own image's signature, with the pinned cosign.
 
 // Cosign is the pinned tool that checks our own images' signatures.
 const Cosign = "ghcr.io/sigstore/cosign/cosign:v2.4.1@sha256:b03690aa52bfe94054187142fba24dc54137650682810633901767d8a3e15b31"
@@ -45,12 +46,6 @@ func Verify(image string) string {
 	return ""
 }
 
-// Changelog is what changed in a GitHub repository between two versions or
-// revisions of an image, as untrusted text; laib-haushalt reads it behind
-// the door, the kernel holds no GitHub client (#797). main sets it; ""
-// when nothing is found or the door does not answer.
-var Changelog func(ctx context.Context, env *cli.Env, repo, oldVersion, newVersion, oldRev, newRev string) string
-
 // Runs: the box runs this image by digest, among its tag's RepoDigests — a
 // pin of what runs brings nothing new and needs no signature check.
 func Runs(image string) bool {
@@ -59,27 +54,28 @@ func Runs(image string) bool {
 	return ok && strings.Contains(out, "@"+digest)
 }
 
-// describe is --notes for a new digest: our own image's signature, the
-// two versions and what changed between them.
-func (u *ImageUpdate) describe(ctx context.Context, env *cli.Env) {
-	if u.Service == "host" || u.Service == "laib" || u.Digest == "" {
-		return
+// digestForm is what a pin must be: a name, its tag if any, and one sha256
+// of 64 hex digits.
+var digestForm = regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]*(?::[0-9]+/[a-z0-9._/-]+)?(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`)
+
+// Check is "" when the kernel may run image in place of old (ADR 0035): a
+// value with a digest has the digest's form, and our own image by a new
+// digest carries our CI's signature — checked here, whatever laib-updater
+// said. A digest the box already runs, or the old value already had, is
+// nothing new.
+func Check(old, image string) string {
+	_, d, pinned := strings.Cut(image, "@")
+	if !pinned {
+		return ""
 	}
-	if Own(u.Image) {
-		u.Unsigned = Verify(u.Image + ":" + u.Current + "@" + u.Digest)
+	if !digestForm.MatchString(image) {
+		return image + " ist kein Image mit gültigem Digest (name:tag@sha256: und 64 Hex-Zeichen)"
 	}
-	old := imageLabels(u.value)
-	if !strings.Contains(u.value, "@") { // floating: the box runs the local image
-		out, _ := sysd.Run(ctx, "podman", "image", "inspect", "--format", "{{json .Labels}}", u.value)
-		json.Unmarshal([]byte(out), &old)
+	if !Own(image) || strings.HasSuffix(old, "@"+d) || Runs(image) {
+		return ""
 	}
-	labels := imageLabels(u.Image + ":" + u.Current + "@" + u.Digest)
-	u.OldVersion, u.NewVersion = version(old), version(labels)
-	repo, ok := strings.CutPrefix(strings.TrimSuffix(labels["org.opencontainers.image.source"], ".git"), "https://github.com/")
-	if !ok || Changelog == nil {
-		return
+	if why := Verify(image); why != "" {
+		return image + " ist nicht von Laibs CI signiert: " + why
 	}
-	u.Source = "https://github.com/" + repo
-	const rev = "org.opencontainers.image.revision"
-	u.Notes = Changelog(ctx, env, repo, u.OldVersion, u.NewVersion, old[rev], labels[rev])
+	return ""
 }

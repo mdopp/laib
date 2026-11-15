@@ -24,7 +24,7 @@ func binDir() string {
 // cmdSelf: rollback — the previous laib back (install-box.sh keeps it as
 // laib.prev; laib-disk too, since #443), laib restarted, and the previous
 // laib converges the box to its own rendering: laib-operator, laib-notify,
-// laib-haushalt and laib-lease are containers pinned by the laib that
+// laib-haushalt, laib-updater and laib-lease are containers pinned by the laib that
 // renders them (ADR 0027), so they go back with it like any service. A
 // binary of theirs an older release left stays for a rollback to it.
 // Humans only.
@@ -65,6 +65,6 @@ func cmdSelf(ctx context.Context, env *cliEnv, args []string) int {
 		fmt.Fprintln(env.W(), "zurückgerollt: das vorige laib läuft; der Abgleich ist rot: "+cli.Tail(out, 300)+" (laib plan zeigt warum)")
 		return cli.ExitRed
 	}
-	fmt.Fprintln(env.W(), "zurückgerollt: das vorige laib läuft, Operator, notify, haushalt und lease auf seinem Stand")
+	fmt.Fprintln(env.W(), "zurückgerollt: das vorige laib läuft, Operator, notify, haushalt, updater und lease auf seinem Stand")
 	return cli.ExitOK
 }

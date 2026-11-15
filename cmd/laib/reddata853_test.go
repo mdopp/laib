@@ -49,7 +49,7 @@ func redDataRun(t *testing.T) (env *cliEnv, p *proposal.Proposal, calls func() [
 	if code := apply.ApplyLocked(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test", Out: io.Discard}, st, "", "vault"); code != cli.ExitOK {
 		t.Fatalf("fixture apply: %d", code)
 	}
-	pin := "docker.io/vaultwarden/server:latest@sha256:b2"
+	pin := "docker.io/vaultwarden/server:latest@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	if out, code := mcp.Call(ctx, env, st, "ops", "laib_propose", map[string]any{"reason": "vault: neues Image", "service": "vault", "key": "IMAGE", "value": pin}); code != cli.ExitOK {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -190,7 +190,7 @@ func TestNachVorneReparierenPutsTheNewVersionOnAndKeepsTheRestore(t *testing.T) 
 	if code := inbox.Approve(context.Background(), &cliEnv{Paths: env.Paths, Actor: "human:test", Out: io.Discard, ErrOut: io.Discard}, []string{fmt.Sprint(p.Forward)}); code == cli.ExitOK {
 		t.Fatal("the new version is still red; the forward cannot end green")
 	}
-	if b, _ := os.ReadFile(filepath.Join(env.Paths.Quadlet, "vault", "vault.container")); !strings.Contains(string(b), "@sha256:b2") {
+	if b, _ := os.ReadFile(filepath.Join(env.Paths.Quadlet, "vault", "vault.container")); !strings.Contains(string(b), "@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") {
 		t.Fatalf("the new version is not on again: %s", b)
 	}
 	if slices.ContainsFunc(calls()[n:], func(c string) bool { return strings.HasPrefix(c, "restore") }) {

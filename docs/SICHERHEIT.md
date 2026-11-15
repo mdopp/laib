@@ -353,7 +353,7 @@ Je Vorlage: `archiv` 4, `bote` 5, `frage` 1, `homes` 13, `kalender` 1, `scan` 7.
 | ein Baustein hat eine Sicherheitslücke | er sieht nur seine eigenen Daten und Ordner; kein Host, keine fremden Schlüssel, kein Tresor |
 | Homes wird übernommen | der Angreifer hat Homes' Dienstkonten (meist lesend) und Homes' Hand (vorschlagen, nicht freigeben); keine Tresore, kein Host (nach |
 | ein Archiv-Programm hat einen Fehler | nur seine Bereiche, nur solange die Person den Tresor offen hat; Nachrichten bleiben für den Stammbaum unerreichbar |
-| eine Registry oder ein Changelog ist manipuliert | der Updater schlägt höchstens etwas vor; der Kern prüft Prüfsumme und Signatur selbst und lehnt ab (#1233) |
+| eine Registry oder ein Changelog ist manipuliert | der Updater liefert höchstens falsche Angaben; der Kern fragt nie selbst im Netz und prüft Prüfsumme und Signatur vor dem Vorschlag und noch einmal vor dem Einspielen selbst (#1233) |
 | ein Agent irrt sich | er kann nur vorschlagen oder im Budget anwenden; jede Änderung hat einen Snapshot und läuft zurück, wenn sie rot wird |
 | jemand stiehlt die Box | Tresore bleiben verschlüsselt; die übrigen Daten liegen unverschlüsselt auf der Platte (Lücke, |
 

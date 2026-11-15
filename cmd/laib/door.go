@@ -96,7 +96,7 @@ func door(ctx context.Context, env *cliEnv, prog, tier string, argv []string) in
 			call.Scan.Status = &s
 		}
 	}
-	reply, err := doorPost(ctx, env, call)
+	reply, err := doorPost(ctx, env, prog, call)
 	if err != nil {
 		fmt.Fprintf(env.Errw(), "laib: laib-%s antwortet nicht: %v — systemctl --user status laib-%s.service zeigt warum\n", prog, err, prog)
 		return cli.ExitRed
@@ -116,16 +116,22 @@ type doorReply struct {
 	Journal  []journal.Entry
 }
 
-// doorPost posts one call to laib-haushalt with the door's key.
-func doorPost(ctx context.Context, env *cliEnv, call doorCall) (doorReply, error) {
+// doorPost posts one call to one of laib's programs behind the door
+// (laib-haushalt, laib-updater) with its door's key; the updater's
+// laib updates --notes may take minutes (cosign, changelogs).
+func doorPost(ctx context.Context, env *cliEnv, prog string, call any) (doorReply, error) {
 	var reply doorReply
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
-	url := cmp.Or(os.Getenv("LAIB_HAUSHALT_URL"), "http://"+render.HaushaltListen)
+	listen, key, wait := render.HaushaltListen, render.HaushaltKey, 2*time.Minute
+	if prog == "updater" {
+		listen, key, wait = render.UpdaterListen, render.UpdaterKey, 10*time.Minute
+	}
+	url := cmp.Or(os.Getenv("LAIB_"+strings.ToUpper(prog)+"_URL"), "http://"+listen)
 	body, _ := json.Marshal(call)
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url+"/call", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+sec[render.HaushaltKey])
+	req.Header.Set("Authorization", "Bearer "+sec[key])
 	resp, err := http.DefaultClient.Do(req)
 	if err == nil {
 		defer resp.Body.Close()
@@ -141,16 +147,6 @@ func doorPost(ctx context.Context, env *cliEnv, call doorCall) (doorReply, error
 	return reply, nil
 }
 
-// changelog is registry.Changelog (ADR 0034): laib-haushalt reads what
-// changed on GitHub, "" when it does not answer.
-func changelog(ctx context.Context, env *cliEnv, repo, oldVersion, newVersion, oldRev, newRev string) string {
-	reply, err := doorPost(ctx, env, doorCall{Argv: []string{"changelog", repo, oldVersion, newVersion, oldRev, newRev}, Actor: env.Actor, Ceiling: "read"})
-	if err != nil || reply.Code != cli.ExitOK {
-		return ""
-	}
-	return reply.Out
-}
-
 // fileIssue is inbox.Issue (#797): the kernel's own ticket — an escalation,
 // a wish the admin approved — filed by laib-haushalt with its token, as the
 // caller. The caller journals it.
@@ -159,7 +155,7 @@ func fileIssue(ctx context.Context, env *cliEnv, st *state.State, title, body, l
 		return "", false, nil
 	}
 	in := &doorIntake{Repo: st.Box.Intake.Repo, Label: label, Domain: st.Box.Domain, Title: title, Body: body}
-	reply, err := doorPost(ctx, env, doorCall{Argv: []string{"wish"}, JSON: true, Actor: env.Actor, Ceiling: "propose", Intake: in})
+	reply, err := doorPost(ctx, env, "haushalt", doorCall{Argv: []string{"wish"}, JSON: true, Actor: env.Actor, Ceiling: "propose", Intake: in})
 	var out struct{ Issue string }
 	if err == nil && (reply.Code != cli.ExitOK || json.Unmarshal([]byte(reply.Out), &out) != nil) {
 		err = fmt.Errorf("laib-haushalt: %s", strings.TrimSpace(strings.TrimPrefix(reply.Err, "laib:")))

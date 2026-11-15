@@ -20,12 +20,14 @@ func TestADigestProposalCarriesTheVersions(t *testing.T) {
 	ctx := context.Background()
 	env, _ := testBox(t)
 	const img = "docker.io/traefik/whoami:latest@sha256:"
-	os.WriteFile(filepath.Join(env.Paths.State, "services", "whoami", "values.yml"), []byte("IMAGE: "+img+"a1\nTOKEN: !secret WHOAMI_TOKEN\n"), 0o644)
+	os.WriteFile(filepath.Join(env.Paths.State, "services", "whoami", "values.yml"), []byte("IMAGE: "+img+strings.Repeat("a", 64)+"\nTOKEN: !secret WHOAMI_TOKEN\n"), 0o644)
 	if err := proposal.CommitDirty(ctx, env.Paths.State, "human:test"); err != nil {
 		t.Fatal(err)
 	}
-	inbox.ImageVersion = func(image string) string { return map[string]string{img + "a1": "1.10.3", img + "b2": "1.10.4"}[image] }
-	if code := inbox.Propose(ctx, &cliEnv{Paths: env.Paths, Actor: "human:other"}, []string{"--set", "services/whoami/values.yml:IMAGE=" + img + "b2", "neues Image"}); code != cli.ExitOK {
+	inbox.ImageVersion = func(image string) string {
+		return map[string]string{img + strings.Repeat("a", 64): "1.10.3", img + strings.Repeat("b", 64): "1.10.4"}[image]
+	}
+	if code := inbox.Propose(ctx, &cliEnv{Paths: env.Paths, Actor: "human:other"}, []string{"--set", "services/whoami/values.yml:IMAGE=" + img + strings.Repeat("b", 64), "neues Image"}); code != cli.ExitOK {
 		t.Fatalf("propose: %d", code)
 	}
 	open, _ := proposal.List(cli.InboxDir(env), true)

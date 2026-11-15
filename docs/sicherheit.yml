@@ -204,7 +204,7 @@ wasPassiert:
   - fall: ein Archiv-Programm hat einen Fehler
     folge: nur seine Bereiche, nur solange die Person den Tresor offen hat; Nachrichten bleiben für den Stammbaum unerreichbar
   - fall: eine Registry oder ein Changelog ist manipuliert
-    folge: der Updater schlägt höchstens etwas vor; der Kern prüft Prüfsumme und Signatur selbst und lehnt ab (#1233)
+    folge: der Updater liefert höchstens falsche Angaben; der Kern fragt nie selbst im Netz und prüft Prüfsumme und Signatur vor dem Vorschlag und noch einmal vor dem Einspielen selbst (#1233)
   - fall: ein Agent irrt sich
     folge: er kann nur vorschlagen oder im Budget anwenden; jede Änderung hat einen Snapshot und läuft zurück, wenn sie rot wird
   - fall: jemand stiehlt die Box

@@ -111,6 +111,7 @@ func Render(st *state.State, secrets map[string]string) (Output, error) {
 		out["quadlet/laib-operator/laib-operator.container"], _ = operatorUnit(st, secrets)
 	}
 	out["quadlet/laib-haushalt/laib-haushalt.container"], _ = haushaltUnit(st, secrets)
+	out["quadlet/laib-updater/laib-updater.container"], _ = updaterUnit(st, secrets)
 	if notifier(st) {
 		out["quadlet/laib-notify/laib-notify.container"], _ = notifyUnit(st, secrets)
 		out["systemd/laib-notify.timer"] = "# Rendered by laib: the watchdog ping and the owner's mail every five minutes (#443).\n[Unit]\nDescription=Laib notify timer\n\n[Timer]\nOnBootSec=2m\nOnUnitActiveSec=5m\n\n[Install]\nWantedBy=timers.target\n"
@@ -245,6 +246,7 @@ func SecretNames(st *state.State) []state.Secret {
 		out = append(out, state.Secret{Name: NotifyToken, External: true, Mint: "notify"}) // minted on apply
 	}
 	out = append(out, state.Secret{Name: HaushaltToken, External: true, Mint: "haushalt"}, state.Secret{Name: HaushaltKey}) // laib-haushalt's call back (minted on apply), the door's key (generated), ADR 0027
+	out = append(out, state.Secret{Name: UpdaterKey})                                                                       // laib-updater's one credential, the door's key (generated), ADR 0035
 	if st.Box.Intake.Repo != "" {
 		out = append(out, state.Secret{Name: IntakeToken, External: true, Optional: true}) // laib wish's, laib-haushalt's (#797): laib secret set
 	}
@@ -419,6 +421,8 @@ func PodmanSecrets(st *state.State, secrets map[string]string) map[string]string
 		maps.Copy(all, sec)
 	}
 	_, sec := haushaltUnit(st, secrets)
+	maps.Copy(all, sec)
+	_, sec = updaterUnit(st, secrets)
 	maps.Copy(all, sec)
 	return all
 }
@@ -1010,7 +1014,7 @@ func notifier(st *state.State) bool {
 	return st.Box.Watchdog.URL != "" || mailTo(st) != "" || st.Box.Notify.Person != ""
 }
 
-// OperatorImage, NotifyImage, HaushaltImage and LeaseImage are the images
+// OperatorImage, NotifyImage, HaushaltImage, UpdaterImage and LeaseImage are the images
 // of Laib's own programs that run in containers (ADR 0027). The release
 // pins them by digest (ldflags -X, .github/workflows/release.yml), so they
 // move with the binary that renders their units: self-update and
@@ -1021,6 +1025,7 @@ var (
 	OperatorImage = "ghcr.io/mdopp/laib-operator:latest"
 	NotifyImage   = "ghcr.io/mdopp/laib-notify:latest"
 	HaushaltImage = "ghcr.io/mdopp/laib-haushalt:latest"
+	UpdaterImage  = "ghcr.io/mdopp/laib-updater:latest"
 	LeaseImage    = LeaseLatest
 )
 
@@ -1028,7 +1033,7 @@ const LeaseLatest = "ghcr.io/mdopp/laib-lease:latest"
 
 // Own are those programs by unit name (ADR 0027): their output is
 // quadlet/<name>/<name>.container, apply starts the long-running ones.
-var Own = []string{"laib-operator", "laib-notify", "laib-haushalt"}
+var Own = []string{"laib-operator", "laib-notify", "laib-haushalt", "laib-updater"}
 
 // LaibHome is where they keep their folders; units carry no LAIB_HOME of
 // a test, as every unit laib renders.
@@ -1044,7 +1049,7 @@ const LaibHome = "/mnt/data/laib"
 // resolves that through /etc/localtime, which Fedora CoreOS does not ship,
 // and refuses the start (#673). It returns the unit and the secrets.
 func ownUnit(st *state.State, name, head string, mounts []string, env, sec []string, service string) (string, map[string]string) {
-	image := map[string]string{"laib-operator": OperatorImage, "laib-notify": NotifyImage, "laib-haushalt": HaushaltImage}[name]
+	image := map[string]string{"laib-operator": OperatorImage, "laib-notify": NotifyImage, "laib-haushalt": HaushaltImage, "laib-updater": UpdaterImage}[name]
 	var b, mkdir strings.Builder
 	fmt.Fprintf(&b, "%s\n[Container]\nImage=%s\nNetwork=host\n", head, image)
 	if tz := st.Box.Timezone; tz != "" {
@@ -1083,6 +1088,22 @@ const (
 	HaushaltKey    = "LAIB_HAUSHALT_KEY"
 	HaushaltListen = "127.0.0.1:5902"
 )
+
+// UpdaterKey is how laib-updater knows a call came from laib, its only
+// credential (ADR 0035); UpdaterListen is where the kernel asks it.
+const (
+	UpdaterKey    = "LAIB_UPDATER_KEY"
+	UpdaterListen = "127.0.0.1:5903"
+)
+
+// updaterUnit is laib-updater's container, on every box: the registries,
+// GitHub's changelogs and cosign for laib updates (ADR 0035), on 127.0.0.1
+// in the host's network. No mount, no token of laib's: the door's key as a
+// podman secret is all it holds of the box.
+func updaterUnit(st *state.State, secrets map[string]string) (string, map[string]string) {
+	return ownUnit(st, "laib-updater", "# Rendered by laib: the registries, changelogs and signatures for laib updates, in its container (ADR 0035).\n[Unit]\nDescription=Laib updater\nAfter=laib.service\n",
+		nil, []string{"UPDATER_LISTEN", UpdaterListen}, []string{"UPDATER_KEY", secretValue(secrets, UpdaterKey)}, "Restart=always\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
+}
 
 // ScanFolder is the service that provides scan, its status file and its
 // orders folder beside it (#568), as host paths; "" without the service,

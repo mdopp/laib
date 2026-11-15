@@ -50,7 +50,7 @@ func TestOneRedAmongThreeKeepsTheGreenOnesAndOffersOnlyForTheRed(t *testing.T) {
 		t.Fatalf("fixture apply: %d", code)
 	}
 	w1 := proposeService(t, env, "w1")
-	pin := "docker.io/vaultwarden/server:latest@sha256:b2"
+	pin := "docker.io/vaultwarden/server:latest@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	if out, code := mcp.Call(ctx, env, st, "ops", "laib_propose", map[string]any{"reason": "vault: neues Image", "service": "vault", "key": "IMAGE", "value": pin}); code != cli.ExitOK {
 		t.Fatalf("exit %d: %s", code, out)
 	}

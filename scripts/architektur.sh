@@ -60,6 +60,7 @@ own=(
 declare -A role=(
   [operator]="The Operator, the admin agent: incidents, the morning report, the review (ADR 0013, 0027)"
   [lease]="laib-lease: the model role's policy proxy and the GPU lease (ADR 0011)"
+  [updater]="laib-updater: the registries, changelogs and signatures of laib updates; no key, no token (ADR 0035)"
   [haushalt]="laib-haushalt behind the kernel's verb door: scan, devices, tell, zuhause, person signal, wish (ADR 0026)"
   [directory]="The Bote's directory: its tools, levels and help, in the assistant's name (ADR 0030)"
   [disk]="laib-disk: the data RAID, SMART and temperatures for diag, the box's load for laib auslastung"

@@ -1,0 +1,38 @@
+# laib-updater's image (ADR 0027, 0035) on every main push that touches it: :latest
+# and :<sha>, what a build from source renders. A release builds its own
+# from the release tag and pins that digest into laib (release.yml).
+name: updater-image
+on:
+  push:
+    branches: [main]
+    paths: ["updater/**", "go.mod", "go.sum", ".github/workflows/updater-image.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+  id-token: write # cosign signs keyless with this workflow's identity (ADR 0034)
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: updater/Containerfile
+          push: true
+          tags: ghcr.io/mdopp/laib-updater:latest,ghcr.io/mdopp/laib-updater:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/mdopp/laib
+            org.opencontainers.image.revision=${{ github.sha }}
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        if: github.event_name != 'pull_request'
+      - name: sign the image; Laib proposes a digest of ours only with this signature (ADR 0034)
+        if: github.event_name != 'pull_request'
+        run: cosign sign --yes --new-bundle-format=false --use-signing-config=false ghcr.io/mdopp/laib-updater@${{ steps.build.outputs.digest }}

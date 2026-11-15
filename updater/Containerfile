@@ -1,0 +1,20 @@
+# laib-updater in its container (ADR 0027, 0035): the part of laib updates
+# that talks to the internet — the registries, GitHub's changelogs and our
+# own images' signatures. It gets nothing of the box: no mount, no token of
+# laib's, only the door's key. One static binary on distroless/static (CA
+# certificates for https, no shell) and the pinned cosign the kernel checks
+# with too (registry.Cosign), copied from its image. HOME is /tmp, the
+# read-only root's tmpfs, where cosign keeps its trust root.
+FROM ghcr.io/sigstore/cosign/cosign:v2.4.1@sha256:b03690aa52bfe94054187142fba24dc54137650682810633901767d8a3e15b31 AS cosign
+FROM golang:1.27-alpine@sha256:eb61c3873c97416fff0116553fff65d67a3549f72e11d9758849a689cdd8b523 AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /laib-updater ./updater/cmd/laib-updater
+FROM gcr.io/distroless/static-debian12@sha256:d75cdd72874d4790092fcb1b058493ecf6bb5bf2b2b897045b00ff01d91843f2
+COPY --from=build /laib-updater /laib-updater
+COPY --from=cosign /ko-app/cosign /cosign
+ENV HOME=/tmp
+LABEL org.opencontainers.image.source=https://github.com/mdopp/laib
+ENTRYPOINT ["/laib-updater"]

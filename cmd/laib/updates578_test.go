@@ -13,6 +13,7 @@ import (
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/mcp"
+	"github.com/mdopp/laib/internal/registry"
 	"github.com/mdopp/laib/internal/sysd"
 )
 
@@ -20,6 +21,9 @@ import (
 // the given states; everything else is active.
 func nightBox(t *testing.T, units map[string]string) (*cliEnv, *[]string) {
 	env, _, calls := envBox(t)
+	realAsk := registry.Ask
+	t.Cleanup(func() { registry.Ask = realAsk })
+	registry.Ask = func(context.Context, *cli.Env, registry.Call) (string, error) { return "[]", nil } // laib-updater: nothing new
 	run := sysd.Run
 	sysd.Run = func(ctx context.Context, name string, args ...string) (string, error) {
 		if name == "systemctl" && slices.Contains(args, "is-active") {

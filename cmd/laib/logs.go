@@ -20,14 +20,14 @@ import (
 // service of the same name wins.
 var ownUnits = map[string][]string{
 	"laib": {"laib.service"}, "operator": {"laib-operator.service"}, "notify": {"laib-notify.service", "laib-notify.timer"},
-	"updates": {"laib-images.service", "laib-images.timer"}, "haushalt": {"laib-haushalt.service"}, "backup": {"laib-backup.service", "laib-backup-check.service"},
+	"updates": {"laib-images.service", "laib-images.timer"}, "haushalt": {"laib-haushalt.service"}, "updater": {"laib-updater.service"}, "backup": {"laib-backup.service", "laib-backup-check.service"},
 }
 
 // cmdLogs reads journald for every unit of a service, secrets redacted
 // (ADR 0003: journald is the agent).
 func cmdLogs(ctx context.Context, env *cliEnv, args []string) int {
 	if len(args) == 0 {
-		return env.Fail(errors.New("usage: laib logs <service|laib|operator|notify|updates|haushalt|backup> [--since 1h] [--lines 200] [--priority warning] [--grep muster]"))
+		return env.Fail(errors.New("usage: laib logs <service|laib|operator|notify|updates|haushalt|updater|backup> [--since 1h] [--lines 200] [--priority warning] [--grep muster]"))
 	}
 	units, err := logUnits(env, args[0])
 	if err != nil {
