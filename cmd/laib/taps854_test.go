@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/apply"
+	"github.com/mdopp/laib/internal/aufgaben"
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/pages"
@@ -43,6 +44,7 @@ var routeKinds = map[string]string{
 	"GET /schluessel/stand":       "fragment",
 	"POST /inbox/{id}/{decision}": "tap",
 	"POST /check/{service}":       "tap",
+	"POST /aufgabe/{id}/{tat}":    "tap",
 	"/journal":                    "page: the Details place, technical by intent",
 }
 
@@ -168,6 +170,16 @@ var tapCases = []tapCase{
 		}},
 	{route: "POST /check/{service}", name: "a service without a check", want: "keine Prüfung",
 		setup: func(b *tapBox) (string, url.Values, func()) { return "/check/caddy", nil, nil }},
+	{route: "POST /aufgabe/{id}/{tat}", name: "a task checked off on Laib's page", want: "ist erledigt",
+		setup: func(b *tapBox) (string, url.Values, func()) {
+			return fmt.Sprintf("/aufgabe/%d/erledigt", addTask(b.t, b.env, aufgaben.Aufgabe{Titel: "Zweite Platte einbauen"})), nil, nil
+		}},
+	{route: "POST /aufgabe/{id}/{tat}", name: "a task deferred on Laib's page", want: "zurückgestellt",
+		setup: func(b *tapBox) (string, url.Values, func()) {
+			return fmt.Sprintf("/aufgabe/%d/zurueckstellen", addTask(b.t, b.env, aufgaben.Aufgabe{Titel: "Zweite Platte einbauen"})), url.Values{"bis": {"2030-01-01"}}, nil
+		}},
+	{route: "POST /aufgabe/{id}/{tat}", name: "a task that is not there", want: "ließ sich nicht abhaken",
+		setup: func(b *tapBox) (string, url.Values, func()) { return "/aufgabe/99/erledigt", nil, nil }},
 	{route: "/schluessel", name: "a key is stored", want: "fertig",
 		setup: func(b *tapBox) (string, url.Values, func()) {
 			withOwnerKey(b.t, b.env)

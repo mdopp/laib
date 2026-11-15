@@ -47,11 +47,14 @@ type Aufgabe struct {
 }
 
 // Weg is how a task is done (#878): a Homes page that leads through it, a
-// conversation with the Bote, or an owner's key on Laib's form (homes#362),
-// whose Link the list fills in; one of the three.
+// conversation with the Bote, an owner's key on Laib's form (homes#362),
+// whose Link the list fills in, or Laib's own Status page (#1236); one of
+// the four. Every admins' task is on Laib's page anyway: Laib stands
+// without Homes (ADR 0035), a Homes page or the Bote is the extra way.
 type Weg struct {
 	Seite      string `yaml:"seite,omitempty" json:"seite,omitempty"`
 	Gespraech  bool   `yaml:"gespraech,omitempty" json:"gespraech,omitempty"`
+	Laib       bool   `yaml:"laib,omitempty" json:"laib,omitempty"`
 	Schluessel string `yaml:"schluessel,omitempty" json:"schluessel,omitempty"`
 	Link       string `yaml:"-" json:"link,omitempty"`
 }
@@ -75,12 +78,12 @@ func Fuer(s string) error {
 	return nil
 }
 
-// CheckWeg holds a way laib-haushalt composed (#1234): one of the three,
+// CheckWeg holds a way laib-haushalt composed (#1234): one of the four,
 // a page only as a Homes path, never an address elsewhere.
 func CheckWeg(w Weg) error {
 	n := map[bool]int{true: 1}
-	if n[w.Seite != ""]+n[w.Gespraech]+n[w.Schluessel != ""] != 1 || w.Seite != "" && !seiteRe.MatchString(w.Seite) {
-		return fmt.Errorf("%+v ist kein Weg: eine Seite von Homes (/stimme), gespraech oder ein Schlüssel", w)
+	if n[w.Seite != ""]+n[w.Gespraech]+n[w.Laib]+n[w.Schluessel != ""] != 1 || w.Seite != "" && !seiteRe.MatchString(w.Seite) {
+		return fmt.Errorf("%+v ist kein Weg: eine Seite von Homes (/stimme), laib, gespraech oder ein Schlüssel", w)
 	}
 	return nil
 }

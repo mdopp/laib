@@ -30,7 +30,7 @@ import (
 // peopleFiles put text in front of people. osupdate.go and watchdog.go
 // are loopback endpoints for scripts, not people.
 var peopleFiles = []string{
-	"internal/pages/serve.go", "internal/pages/inbox.go", "internal/pages/schluessel.go", "internal/pages/status.go",
+	"internal/pages/serve.go", "internal/pages/inbox.go", "internal/pages/schluessel.go", "internal/pages/status.go", "internal/pages/betrieb.go",
 	"internal/proposal/card.go",
 }
 

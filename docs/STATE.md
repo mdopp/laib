@@ -863,7 +863,7 @@ aufgaben:
     seit: "2026-10-28"
     von: homes:mdopp
     fuer: person:anna
-    weg: {seite: /stimme}         # or {gespraech: true}: with the Bote (#878); or {schluessel: NAME}: a key's form (homes#362)
+    weg: {seite: /stimme}         # or {gespraech: true}: with the Bote (#878); or {schluessel: NAME}: a key's form (homes#362); or {laib: true}: Laib's page (#1236)
   - id: 1
     titel: TOTP für mdopp prüfen
     seit: "2026-10-25"
@@ -888,7 +888,16 @@ aufgaben:
   name of a key a template marks `owner:`; the list adds its form's
   `link` on the box page, and the task's `fertig_wenn` is `schluessel
   <NAME>` unless given: the next full diag ticks it off once the key is in
-  secrets.age (none while secrets.age cannot be read).
+  secrets.age (none while secrets.age cannot be read). Or Laib's own page
+  (`laib: true`, `--weg laib`, #1236): the task is done on Laib's Status
+  page and nowhere else.
+- **Laib stands without Homes (#1236, ADR 0035).** Whatever its `weg`,
+  every open task of the admins and everyone's is on Laib's Status page
+  under „Aufgaben“ (`/#aufgabe-<id>`, the link a proposal waiting for it
+  shows), with „Erledigt“ and „Zurückstellen“, journaled as the person
+  Authelia names; a Homes page (only when Homes is installed), the Bote
+  and a key's form are offered beside them. A person's own task is not
+  there.
 - An aufgaben.yml from before loads unchanged: a missing `fuer` is
   `admins`, the old key `befund` is `fertig_wenn`; the next change writes
   both under their new names.

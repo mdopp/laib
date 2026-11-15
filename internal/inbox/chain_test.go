@@ -130,7 +130,7 @@ func TestWhatAProposalWaitsFor(t *testing.T) {
 		{"schluessel:GONE_KEY", []Wait{{Text: "wartet auf den Schlüssel „GONE_KEY“", Link: "https://laib.example.home/schluessel?name=GONE_KEY"}}},
 		{"aufgabe:1", []Wait{{Text: "wartet auf Box-Aufgabe #1 „Offen“", Link: "https://laib.example.home/schluessel?name=WHO_MAIL"}}},
 		{"aufgabe:2", nil},
-		{"aufgabe:3", []Wait{{Text: "wartet auf Box-Aufgabe #3 „Ohne Weg“"}}},
+		{"aufgabe:3", []Wait{{Text: "wartet auf Box-Aufgabe #3 „Ohne Weg“", Link: "https://laib.example.home/#aufgabe-3"}}}, // on Laib's Status page (#1236)
 		{"aufgabe:4", []Wait{{Text: "wartet auf Box-Aufgabe #4, die es nicht gibt: diesen ablehnen oder neu vorschlagen", Nie: true}}},
 	} {
 		if got := Waits(env, st, &proposal.Proposal{WartetAuf: []string{c.wait}}); !slices.Equal(got, c.want) {
@@ -148,7 +148,7 @@ func TestWhatAProposalWaitsFor(t *testing.T) {
 	}
 	var out bytes.Buffer
 	printWaits(&cli.Env{Paths: env.Paths, Out: &out}, &proposal.Proposal{Status: "open", WartetAuf: []string{"vorschlag:1", "aufgabe:3"}})
-	if out.String() != "     wartet auf Vorschlag #1 "+link("1")+"\n     wartet auf Box-Aufgabe #3 „Ohne Weg“ \n" {
+	if out.String() != "     wartet auf Vorschlag #1 "+link("1")+"\n     wartet auf Box-Aufgabe #3 „Ohne Weg“ https://laib.example.home/#aufgabe-3\n" {
 		t.Errorf("the listing: %q", out.String())
 	}
 }
