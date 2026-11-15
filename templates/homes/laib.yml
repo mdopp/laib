@@ -18,6 +18,11 @@ instances:                       # each person's open archive gives a new phone 
     url: HOMES_ARCHIV_INTERN       # "<person>=http://host.containers.internal:<port> …"
     secret: ARCHIV_HOMES_SECRET    # that archive's own, as HOMES_ARCHIV_SECRET_<PERSON>; Homes sends it as X-Archiv-Homes to /intern/
     env: HOMES_ARCHIV_SECRET
+  - template: archiv               # the archive registers with Homes as a plugin (homes ADR 0003, homes#375): each person's
+    unit: homes.container          # instance serves the plugin contract at /homes/v1 to Homes with its own key; Homes names
+    url: HOMES_PLUGIN_ARCHIV       # no plugin and reads HOMES_PLUGIN_*. `laib remove archiv-<p>` drops the address, and with it
+    secret: ARCHIV_HOMES_SECRET    # what Homes kept of that archive (its tasks' text, docs/DATA.md)
+    env: HOMES_PLUGINKEY_ARCHIV    # HOMES_PLUGINKEY_ARCHIV_<PERSON>, sent as X-Homes-Plugin-Key
   - template: reitti               # the Standortverlauf (laib#1037): Reitti's address when it is installed, empty without it;
     unit: homes.container          # REITTI_URL set by hand wins (a box from before keeps its own)
     url: HOMES_REITTI_URL
