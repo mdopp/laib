@@ -1,0 +1,248 @@
+# The hand-written half of docs/C4.md (owner, 2026-11-15: „Die sollten Teil
+# der Dokumentation sein. Und die Aktualisierung Teil der Pipeline.“).
+# scripts/c4.sh puts it together with what it reads from the code:
+# templates/*/laib.yml, internal/, cmd/laib, scripts/loc.sh. Edit this file
+# for words and placements, never docs/C4.md; then run scripts/c4.sh.
+#
+# Facts against judgment: the diagrams' nodes and edges, the lines and the
+# tables are facts, the generator's. What stands here is judgment: where a
+# service belongs, what a part is for, the context and the data map.
+
+einleitung: >-
+  Was Laib kann und wie es mit den Diensten, der Familie und der Außenwelt
+  zusammenhängt, von außen nach innen: Umfeld, Dienste der Box, Laibs Kern,
+  Fähigkeiten. Die Schichten und Ringe sind ADR 0035: Schicht 0 ist Laib
+  (Ring 0a der Kern, Ring 0b Laibs Helfer), Schicht 1 die Bausteine,
+  Schicht 2 der Mehrwert; Abhängigkeiten zeigen nur nach unten.
+
+kontext:
+  text: >-
+    Laib ändert die Box nur über Freigaben. Agenten, auch Claude, schlagen
+    vor und gehen in private Daten nur mit einer Einblick-Karte (ADR 0032).
+  mermaid: |
+    flowchart LR
+      classDef person fill:#2f6f4f,stroke:#2f6f4f,color:#fff
+      classDef sys fill:#1f4d38,stroke:#1f4d38,color:#fff
+      classDef ext fill:#8a918c,stroke:#8a918c,color:#fff
+      owner(["Besitzer / Admin<br/>gibt frei, trägt Schlüssel ein"]):::person
+      family(["Familie<br/>Homes, App, Signal, Sprache"]):::person
+      guests(["Gäste<br/>Einladungslinks, geteilte Alben"]):::person
+      box["Laib-Box<br/>Heimserver: Dienste, Daten,<br/>Kern, Agenten"]:::sys
+      github["GitHub<br/>Repos, CI, Images, Signaturen"]:::ext
+      le["Let's Encrypt<br/>Zertifikate"]:::ext
+      dns["DNS-Anbieter<br/>Einträge der Domain"]:::ext
+      fritz["Router<br/>Internet, Heimnetz, mDNS"]:::ext
+      claude["Claude in der Werkstatt<br/>baut, schlägt vor"]:::ext
+      devices["Geräte im Haus<br/>Lautsprecher, Drucker, Sensoren"]:::ext
+      owner -->|"Eingang, Schlüssel, Einblicke"| box
+      family -->|"www, App, Signal, Hey Mycroft"| box
+      guests -->|"fotos, abstimmung, kontakt"| box
+      box -->|"Code, Images, Signaturen"| github
+      box -->|"ACME"| le
+      dns -->|"Name → Hausanschluss"| fritz
+      fritz --> box
+      claude -->|"laib propose / MCP"| box
+      box <-->|"IPP, MQTT, Z-Wave, Cast"| devices
+
+# Every template's layer (ADR 0035). A template missing here, or a name here
+# without its template, fails scripts/c4.sh: a new service is placed first.
+schichten:
+  adguard: 0
+  archiv: 2
+  audiobookshelf: 1
+  auth: 0
+  beets: 1
+  bote: 2
+  caddy: 0
+  druck: 1
+  esphome: 1
+  file-share: 1
+  frage: 2
+  home-assistant: 1
+  homes: 2
+  immich: 1
+  immich-public-proxy: 1
+  kalender: 2
+  llama: 1
+  media: 1
+  mosquitto: 1
+  music-assistant: 1
+  paperless: 1
+  radicale: 1
+  reitti: 1
+  scan: 2
+  stimme: 1
+  usage-metrics: 1
+  vaultwarden: 1
+  werkstatt: 0
+  whoami: 0
+
+# The kernel's packages, all ring 0a (ADR 0035). zieht: what ADR 0035 moves
+# to ring 0b, with its issue; it shows until the issue's PR moved it.
+kern:
+  cmd/laib:
+    titel: Verben
+    text: das eine Binary, CLI und Daemon, die Verb-Tabelle
+    zieht: {nach: Haushalt, was: "laib calendar, person, aufgabe", issue: "1234"}
+  internal/apply: {titel: Apply, text: "Sperre, Snapshot, Schreiben, Neustart, Prüfen, Zurück"}
+  internal/aufgaben: {titel: Aufgaben, text: "für Menschen, mit Weg"}
+  internal/backup: {titel: Backup, text: "restic jede Nacht, Wiederherstellung, Probe"}
+  internal/boxfs: {titel: Pfade, text: die Pfade der Box}
+  internal/cli: {titel: CLI, text: "Umgebung, Ausgabe, Ablehnung"}
+  internal/diag:
+    titel: Diag
+    text: "Befunde, Reparatur-Vorschläge"
+    zieht: {nach: Beobachter, was: die lesenden Befunde, issue: "1235"}
+  internal/envelope: {titel: Rahmen, text: "Eingriffsbudget je Dienst und Stunde"}
+  internal/inbox: {titel: Eingang, text: "Vorschläge, Freigaben, Läufe einzeln zurück"}
+  internal/journal: {titel: Journal, text: "eine JSONL-Datei je Tag, nur anhängen"}
+  internal/mcp: {titel: MCP, text: "die Tür: Verben als Werkzeuge, je Hand ein Token"}
+  internal/pages: {titel: Box-Seite, text: "Status, Eingang, Schlüssel, Journal"}
+  internal/plan: {titel: Plan, text: "Zustand gegen Box, Abweichung"}
+  internal/policy: {titel: Policy, text: "Hände, Stufen, wer freigibt"}
+  internal/proposal: {titel: Vorschlag, text: "Branch, Karte, Text für den Menschen"}
+  internal/registry:
+    titel: Registry
+    text: "Vorlagen, Lint, Pins, Signaturen"
+    zieht: {nach: Updater, was: "Update-Suche, Changelogs", issue: "1233"}
+  internal/render: {titel: Render, text: "Quadlet, Caddy, Authelia, AdGuard, nftables"}
+  internal/review: {titel: Prüfung, text: "was nur ein Mensch freigibt"}
+  internal/secrets: {titel: Secrets, text: "age, nur beim Apply offen"}
+  internal/skill: {titel: Skills, text: "die Skills des Operators"}
+  internal/state: {titel: Zustand, text: "box.yml, policy.yml, services/, laden und prüfen"}
+  internal/sysd: {titel: systemd, text: "systemctl, git, nft: die Naht für Tests"}
+  internal/token: {titel: Token, text: "ausgeben, nachschlagen, widerrufen"}
+
+# The programs scripts/loc.sh budgets beside the kernel. ring: host (beside
+# laib on the host), helfer (ring 0b: a container with its own token, no age
+# key, no state repo), vorlage (part of a template's service: vorlage names
+# it), laptop, blatt (a shared leaf), werkzeug (a tool of the repo, CI). A
+# program missing here fails.
+programme:
+  operator: {ring: helfer, titel: Operator, text: "lokales Modell als Hand ops: Vorfälle, Morgenbericht"}
+  notify: {ring: helfer, titel: Notify, text: "Nachrichten an den Besitzer"}
+  haushalt: {ring: helfer, titel: Haushalt, text: "die Haushalts-Verben hinter der Tür"}
+  lease: {ring: helfer, titel: Lease, text: "wer die GPU hält, Policy-Proxy des Modells"}
+  disk: {ring: host, titel: laib-disk, text: "Platten, RAID, Auslastung"}
+  frage: {ring: vorlage, vorlage: frage, titel: Frage}
+  automat: {ring: vorlage, vorlage: bote, titel: Automat}
+  directory: {ring: vorlage, vorlage: bote, titel: Verzeichnis}
+  mcpserver: {ring: blatt, titel: MCP-Server}
+  atomicfile: {ring: blatt, titel: atomicfile}
+  stick: {ring: laptop, titel: laib-stick}
+  c4: {ring: werkzeug, titel: c4, text: "erzeugt diese Seiten, in CI"}
+
+daten:
+  text: >-
+    Die Dienste mit den Daten der Familie und die Wege zwischen ihnen, wie
+    `docs/DATA.md` sie festhält (Besitz, Konten, Schlüssel). Ein
+    durchgezogener Pfeil schreibt, ein gestrichelter liest nur. Alles im
+    „Tresor“ gibt es nur, solange das Archiv der Person offen ist.
+  mermaid: |
+    flowchart LR
+      person(["Person<br/>(ein Mensch des Haushalts)"])
+      handy["Homes-App<br/>auf ihrem Handy"]
+      subgraph homesbox["Homes (gemeinsamer Stand des Haushalts)"]
+        homes["Homes<br/>Seiten · /napi · /intern/uebernahme"]
+      end
+      subgraph radicale["Radicale"]
+        hb[("homes/haushalt-kontakte<br/>Haushalts-Adressbuch")]
+        pb[("#lt;person#gt;/handy-kontakte<br/>Spiegel des Handys")]
+      end
+      subgraph paperless["Paperless"]
+        pdocs[("Dokumente<br/>je Besitzer, geteilt per Recht")]
+      end
+      immich[("Immich<br/>Fotos, Gesichter")]
+      subgraph archivbox["archiv-#lt;person#gt;"]
+        brief[("Briefkasten<br/>age-verschlüsselt")]
+        subgraph tresor["Tresor (gocryptfs), nur offen"]
+          mv[("msgvault<br/>Signal · WhatsApp · SMS · Mail")]
+          umfeld["Umfeld<br/>Steht nahe · Fragen · Ableitungen"]
+          antw[("Antworten<br/>umfeld/antworten.json")]
+        end
+      end
+      person -->|"tippt"| homes
+      person -->|"öffnet mit Passwort,<br/>beantwortet Fragen"| umfeld
+      handy -->|"alle Kontakte (Spiegel)"| homes
+      homes -->|"schreibt als Konto homes"| pb
+      homes -->|"schreibt"| hb
+      homes -.->|"liest als Nur-Lese-Konto homes:<br/>nur geteilte Dokumente"| pdocs
+      homes -->|"Änderungen fürs Handy:<br/>Beziehung, neuer Kontakt"| handy
+      handy -->|"Sicherungen, SMS"| homes
+      homes -->|"Eingang"| brief
+      brief -->|"beim Öffnen einsortiert"| mv
+      pb -.->|"Login archiv-#lt;person#gt;, nur lesen"| umfeld
+      hb -.->|"nur lesen"| umfeld
+      immich -.->|"eigener Schlüssel der Person,<br/>im Tresor"| umfeld
+      mv -.->|"Gruppen-Chats ≤ 30,<br/>Mail-Verläufe ≤ 10"| umfeld
+      umfeld -->|"speichert"| antw
+      umfeld -->|"ein Tipp: POST /intern/uebernahme<br/>signiert, je Person, 2 min, Nonce"| homes
+  regeln:
+    - Eine Haushaltskarte nennt nur Haushaltskontakte (per UID); eine Beziehung mit dem eigenen Handy-Kontakt der Person geht nur auf ihr Handy.
+    - Nichts, was das Archiv berechnet, verlässt den Tresor, außer was die Person mit einem Tipp schreibt; ein geschlossener Tresor rechnet nichts.
+    - Homes liest Paperless mit seinem eigenen Nur-Lese-Konto `homes`, nie mit dem Token einer Person; es sieht nur, was mit ihm geteilt ist.
+    - "`/intern/uebernahme` ist Homes' eigener Port auf der Box, nie über Caddy erreichbar; eine Anfrage mit Proxy-Kopfzeilen wird abgelehnt."
+
+ablauf:
+  titel: "„Paperless für die Familie, nur intern“"
+  mermaid: |
+    sequenceDiagram
+      autonumber
+      actor A as Admin
+      participant S as Bote (Hand bote)
+      participant L as Laib
+      participant B as Box-Seite (Authelia)
+      participant Q as systemd/Quadlet
+      A->>S: "Ich hätte gern Paperless für die Familie, nur intern."
+      S->>A: eine Rückfrage (Gruppe family? intern?)
+      S->>L: laib_propose --add paperless exposure=internal group=family
+      L->>L: Worktree: Vorlage kopieren, laden, rendern
+      L-->>S: Vorschlag #17 (Diff)
+      L-->>A: über den Boten: „Freigabe #17 … · Link auf laib.#lt;domain#gt;/inbox“
+      A->>B: Freigeben (Remote-User, X-Laib-Proxy)
+      B->>L: approve #17 als human:admin
+      L->>L: merge · Snapshot · render · write
+      L->>Q: daemon-reload · restart paperless
+      Q-->>L: active · health 200 · Route antwortet
+      L->>L: post-deploy Hook (Admin-User anlegen)
+      L->>L: Journal: apply grün
+      A->>S: "Läuft es?"
+      S->>L: laib_status paperless
+      S->>A: "Läuft unter paperless.#lt;domain#gt;, SSO ist drauf."
+
+faehigkeiten:
+  - titel: Ändern, nur mit Freigabe
+    punkte:
+      - Vorschlag als Karte, Freigabe durch einen Menschen
+      - Snapshot vor jedem Apply, rotes Ergebnis → zurück
+      - Karten können auf andere Karten oder Aufgaben warten
+      - eine rote Karte nimmt nur sich selbst zurück
+  - titel: Aktuell bleiben
+    punkte:
+      - Images per Prüfsumme festgehalten, neue als Karte
+      - eigene Images nur mit CI-Signatur
+      - Laib-Updates signiert geprüft
+      - Vorlagen aus den Registries
+  - titel: Selbst gesund bleiben
+    punkte:
+      - Converge bringt Abweichungen zurück
+      - Diag mit Befunden und Reparatur-Vorschlägen
+      - "Operator: Routineblick, Vorfälle, „Durchgang rot“"
+      - Nachricht nach 10 Minuten rot, Helfer nur gelb
+  - titel: Schützen
+    punkte:
+      - Hände mit Stufen und Eingriffsbudget je Stunde
+      - private Dienste nur mit Einblick-Karte, Archiv versiegelt
+      - Secrets in age, nie im Repo
+      - öffentliche Adressen nur mit Freigabe
+      - "das ganze Konzept: [`docs/SICHERHEIT.md`](SICHERHEIT.md)"
+  - titel: Sichern
+    punkte:
+      - restic jede Nacht, mit Wiederherstellungsprobe
+      - noch keine Kopie außer Haus (#1128)
+  - titel: Agenten tragen
+    punkte:
+      - Werkstatt mit Claude Code und pi
+      - MCP aus den CLI-Verben erzeugt
+      - "`laib context` als Einstieg"
+      - "Abläufe: Versprechen mit Tests (`docs/ABLAEUFE.md`)"

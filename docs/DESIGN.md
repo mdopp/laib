@@ -5,6 +5,12 @@ Claude session as the operators, with a human who reads, approves and rarely
 touches anything by hand. Stability, simplicity and transparency are the
 goals; everything below is derived from them.
 
+The whole in two pictures: [`C4.md`](C4.md), the map from the context to
+the kernel's packages in ADR 0035's three layers, and
+[`SICHERHEIT.md`](SICHERHEIT.md), the security concept. Both are generated
+by `scripts/c4.sh` from the code and from `docs/c4.yml` and
+`docs/sicherheit.yml`, and every PR's CI holds them to the code.
+
 ## Why not evolve ServiceBay
 
 ServiceBay (2026-10) is 91k backend lines, 57k frontend lines, 185 API routes,

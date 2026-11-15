@@ -76,6 +76,24 @@ them.
   reach others updates `docs/DATA.md` in the same PR — the section of
   the service and the table of crossings (owner, 2026-11-10: „Das sollte
   direkt in der Architektur stehen“).
+- **The overview pages are generated: facts by script, judgment by the
+  agent** (owner, 2026-11-15: „Die Aktualisierung … muss erfolgen!“).
+  `docs/C4.md`, `docs/SICHERHEIT.md` and README.md's c4 section come from
+  `scripts/c4.sh`: the facts (services, layers, edges, kernel packages,
+  routes, ports, hands, secrets, the #1166 exceptions, layer 2's ties to
+  the OS) from the code, the judgment (principles, „Was passiert, wenn …“,
+  open points, the explaining sentences, each template's layer) from
+  `docs/c4.yml` and `docs/sicherheit.yml`. A change to a template, a route,
+  the policy or a kernel package runs `scripts/c4.sh` and commits the
+  pages. The agent who makes a change does the judgment: a new public
+  route or auth mode, LAN port, hand or tier, secret between services,
+  host-network or label-off line, service or layer, or layer-2 tie to the
+  OS changes `docs/sicherheit.yml` (`docs/c4.yml` for a service or layer)
+  in the same PR, or acknowledges the fact under `aenderungen:` with why
+  nothing changes. The gate enforces that, it judges nothing: GitHub CI
+  runs no model. The principles are the owner's, a PR changing them
+  carries the label `besitzer-entscheidung`. The Operator reviews the
+  judgment weekly (#1251).
 - **No secrets in the tree.** Templates declare secrets in `laib.yml`; values
   live only in `secrets.age` on the box.
 - **Finish the work.** Done means merged, released, applied on the box and
@@ -105,6 +123,9 @@ runs in CI in seconds, or it is a guideline and says so. No rule here
 | Dead code, staticcheck findings, duplicates and complexity only go down (see below) | `scripts/ratchet.py`, CI job `ratchet` |
 | The trust kernel's tests bite (ADR 0019 §2, #1167): in `internal/policy`, `envelope`, `token`, `proposal`, `inbox` no new mutant survives | `scripts/ratchet.py mutation`, workflow `mutation` (a PR touching those packages, and nightly) |
 | The gates have one source (#1170): `ratchet.py`, `test_ratchet.py`, `ablaeufe.py`, `test_ablaeufe.py`, `pins.sh`, `copies.sh` are `werkstatt/scaffold/repo/scripts/`'s, copied unchanged into every repo of the household (and `loc.sh` with one cap where a repo has `scripts/loc.txt`); a fix goes here first, then to the copies | `scripts/copies.sh`, in each repo's CI |
+| `docs/C4.md`, `docs/SICHERHEIT.md` and README's c4 section are what the code and their sources say; a template has its layer, a kernel package and a program their place, an open point its issue | `scripts/c4.sh --check` |
+| A security-relevant change of the facts carries its judgment in `docs/sicherheit.yml` or an acknowledgement; principles only with the label `besitzer-entscheidung` | `scripts/c4.sh --gate` in `ci.yml` (PRs) |
+| An open point of the security concept names an open issue | `scripts/c4.sh --issues`, daily in `architektur.yml`; it opens an issue, it gates nothing |
 | Every scenario of `docs/ABLAEUFE.md` is named by a test (`// Ablauf L-12`), no test names an unknown id, the baseline only shrinks | `scripts/ablaeufe.py` |
 | Every touch answers at once (#588): every POST route ends done, red with a next step, or waiting with a limit | `cmd/laib/taps854_test.go` |
 | No raw or technical text in front of people (#855) | `cmd/laib/plain855_test.go`, `notify/plain855_test.go`, `frage/plain855_test.go` |
@@ -135,7 +156,7 @@ of the package runs the line) is keyed by file, mutator and the line's
 text. It takes minutes, so the workflow `mutation` runs it on a PR that
 touches those packages, and nightly.
 
-Guidelines, no check: what a `docs/DATA.md` section says beyond its class, issues first, Conventional Commits, releases via
+Guidelines, no check: what a `docs/DATA.md` section says beyond its class, whether the judgment in `docs/sicherheit.yml` is right (the Operator's weekly review, #1251), issues first, Conventional Commits, releases via
 release-please, weighing a change against what worked before, regression ⇒
 gate, no secrets in the tree, finishing the work. Proof on the box (rule 2)
 is the box's, not CI's.

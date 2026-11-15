@@ -1,0 +1,23 @@
+einleitung: Wie die kleine Box schützt.
+grundsaetze:
+  - {titel: Nur nach unten., text: Abhängigkeiten zeigen nach unten., en: Dependencies point down.}
+zonen:
+  text: Eine Zone.
+  mermaid: |
+    flowchart TB
+      inet((Internet)) --> caddy
+identitaeten:
+  - {wer: Familie, wie: LLDAP, darf: Homes, stand: {status: läuft}}
+netz:
+  - {weg: Von außen, schutz: Caddy, stand: {status: läuft}}
+daten:
+  - {daten: Fotos, liegen: in a, wer: die Person, stand: {status: Lücke, notiz: unverschlüsselt, issues: ["9"]}}
+schichtregeln:
+  - {titel: Schicht 2, punkte: [nur über die Tür]}
+wasPassiert:
+  - {fall: b wird übernommen, folge: nur bs Hand}
+offen:
+  - titel: Platte verschlüsseln
+    stand: {status: geplant, issues: ["9", "archiv#3"]}
+    punkte: [noch offen]
+aenderungen: []

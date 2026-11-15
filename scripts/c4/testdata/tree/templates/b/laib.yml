@@ -1,0 +1,17 @@
+name: b
+title: Beta
+beschreibung: Seiten der Familie
+after: [a]
+uses: [a]
+needs: [mcp]
+routes:
+  - host: www
+    port: 2000
+    exposure: public
+    auth: one_factor
+    outside: two_factor
+    bypass: [/napi/]
+secrets:
+  - name: B_LAIB_TOKEN
+    external: true
+    mint: b

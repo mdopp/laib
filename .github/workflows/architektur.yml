@@ -1,25 +1,50 @@
-# README.md's architecture section (owner, 2026-10-27): every day
-# scripts/architektur.sh regenerates it from scripts/loc.sh, skills/ and templates/;
-# when it changed, scripts/architektur-pr.sh opens or updates one PR from
+# README.md's architecture section (owner, 2026-10-27) and the overview pages
+# docs/C4.md and docs/SICHERHEIT.md (owner, 2026-11-15): every day
+# scripts/architektur.sh and scripts/c4.sh regenerate them from scripts/loc.sh,
+# skills/, templates/, internal/ and docs/c4.yml, docs/sicherheit.yml; when
+# they changed, scripts/architektur-pr.sh opens or updates one PR from
 # bot/architektur with a docs(readme) commit. Nothing is pushed to main.
+# The second job checks that every open point of the security concept names
+# an open issue and opens or updates an issue when not (scripts/c4-punkte.sh);
+# neither job gates a PR, a release or vm-install: every PR's own CI runs
+# scripts/c4.sh --check and the judgment gate.
 name: architektur
 on:
   schedule:
     - cron: "23 4 * * *"
   workflow_dispatch:
-permissions:
-  contents: write      # push bot/architektur
-  pull-requests: write # open, update or close its PR
 concurrency:
   group: architektur
 jobs:
   readme:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write      # push bot/architektur
+      pull-requests: write # open, update or close its PR
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-      - name: regenerate the architecture section and open or update its PR
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: regenerate the architecture section and the overview pages, open or update their PR
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts/architektur-pr.sh
+  sicherheit-punkte:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write # open, update or close "Sicherheitskonzept: Stand nachtragen"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: every open point of docs/sicherheit.yml names an open issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/c4-punkte.sh

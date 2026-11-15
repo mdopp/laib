@@ -1,0 +1,32 @@
+einleitung: Eine kleine Box.
+kontext:
+  text: Nur ein Bild.
+  mermaid: |
+    flowchart LR
+      family(["Familie"]) --> box["Box"]
+schichten:
+  a: 1
+  b: 2
+kern:
+  cmd/laib: {titel: Verben, text: das Binary}
+  internal/state: {titel: Zustand, text: laden}
+  internal/x:
+    titel: Iks
+    text: ein Teil
+    zieht: {nach: Helfer, was: das Lesen, issue: "7"}
+programme:
+  helper: {ring: helfer, titel: Helfer, text: liest und schlägt vor}
+daten:
+  text: Daten.
+  mermaid: |
+    flowchart LR
+      p --> a
+  regeln: [Eine Regel.]
+ablauf:
+  titel: Ein Ablauf
+  mermaid: |
+    sequenceDiagram
+      A->>B: hallo
+faehigkeiten:
+  - titel: Schützen
+    punkte: [Hände mit Stufen]

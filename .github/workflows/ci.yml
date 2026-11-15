@@ -23,6 +23,7 @@ jobs:
     permissions:
       contents: read
       packages: read # ghcr.io/mdopp/laib-caddy for the Caddyfile check
+      pull-requests: read # the PR's labels for the judgment gate (scripts/c4.sh --gate)
       issues: write # the Kern-Diät issue (scripts/kern-diaet.sh, #309)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -106,6 +107,17 @@ jobs:
         run: scripts/ablaeufe.py
       - name: README's architecture section is current (a warning only; the daily architektur workflow opens the PR)
         run: scripts/architektur.sh --check || echo "::warning title=README architecture section::stale; the daily architektur workflow opens its PR, or run scripts/architektur.sh"
+      - name: the overview pages are what the code says (docs/C4.md, docs/SICHERHEIT.md, README's c4 section)
+        run: scripts/c4.sh --check
+      - name: the judgment gate, a security change carries its judgment in docs/sicherheit.yml (labels read by gh)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git worktree add -q "$RUNNER_TEMP/main" "$(git merge-base HEAD "$BASE")"
+          C4_LABELS=$(gh pr view "$PR" --json labels --jq '[.labels[].name] | join(",")') scripts/c4.sh --gate "$RUNNER_TEMP/main"
       - run: scripts/workflow-syntax.sh
       - run: scripts/pins.sh
       - run: scripts/e2e.sh
