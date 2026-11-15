@@ -91,3 +91,16 @@ func TestSpentCountsActionsNotRefusals(t *testing.T) {
 		t.Fatalf("claude used %d, want 2", used)
 	}
 }
+
+// #1238: read and write cut, and say so, exactly above their limit.
+func TestClipCutsAboveTheLimitOnly(t *testing.T) {
+	for _, c := range []struct {
+		n, max, want int
+		cut          bool
+	}{{4, 4, 4, false}, {5, 4, 4, true}, {0, 4, 0, false}} {
+		b, size, cut := clip(make([]byte, c.n), c.max)
+		if len(b) != c.want || size != c.n || cut != c.cut {
+			t.Fatalf("clip(%d, %d) = %d, %d, %v", c.n, c.max, len(b), size, cut)
+		}
+	}
+}

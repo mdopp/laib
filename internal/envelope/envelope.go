@@ -222,10 +222,7 @@ func Read(ctx context.Context, env *cli.Env, args []string) int {
 		return env.Fail(err)
 	}
 	p := args[1]
-	size, truncated := len(b), len(b) > MaxRead
-	if truncated {
-		b = b[:MaxRead]
-	}
+	b, size, truncated := clip(b, MaxRead)
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	text := journal.Scrub(string(b), sec) // the box's secrets, key material, tokens, password hashes (#1054)
 	if env.JSON {
@@ -236,6 +233,14 @@ func Read(ctx context.Context, env *cli.Env, args []string) int {
 		fmt.Fprintf(env.Errw(), "\nabgeschnitten: %s hat %d Bytes, gezeigt sind die ersten %d\n", p, size, MaxRead)
 	}
 	return cli.ExitOK
+}
+
+// clip cuts b to max bytes: the cut, b's size, whether it was cut.
+func clip(b []byte, max int) ([]byte, int, bool) {
+	if len(b) > max {
+		return b[:max], len(b), true
+	}
+	return b, len(b), false
 }
 
 // MaxRead and MaxWrite bound laib read (above it: truncated and the size) and laib write (#1238).
@@ -261,11 +266,11 @@ func Write(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	defer root.Close()
 	p := args[1]
-	content, err := io.ReadAll(io.LimitReader(env.Stdin(), MaxWrite+1))
+	content, err := io.ReadAll(env.Stdin()) // over MCP bounded by its body limit
 	if err != nil {
 		return env.Fail(err)
 	}
-	if len(content) > MaxWrite {
+	if _, _, over := clip(content, MaxWrite); over {
 		return cli.Refused(env, fmt.Sprintf("%s ist zu groß: laib write nimmt höchstens %d MiB. Teile die Datei, oder leg sie über die Dateiablage ab", p, MaxWrite>>20))
 	}
 	if bytes.Contains(content, []byte(journal.Redacted)) { // a redacted read written back overwrites the secret (#1054)
