@@ -113,10 +113,13 @@ cupsd's own socket. No password exists for a remote client to try. The
 queues are the search's to make; by hand, `laib exec druck -- lpstat -t`.
 A job's owner may cancel their own job (`@OWNER`), nobody another's.
 
-## Nothing kept after printing
+## Nothing kept after printing but a short note
 
-`PreserveJobHistory No` and `PreserveJobFiles No`: a job leaves no record
-once it is printed. The spool is a tmpfs: a job waiting for a printer that is
+`PreserveJobFiles No`: a printed job's content is gone at once.
+`PreserveJobHistory 1800`: its entry (name, sender, state) stays 30 minutes,
+then goes. Android's print service asks for the finished job's state; when
+the job was forgotten at once (`No`, the first setting) it showed every
+printed page as „Druckerfehler … Offline“ (2026-11-15). The spool is a tmpfs: a job waiting for a printer that is
 off lives in memory, at most two hours, and is gone on a restart. No page log
 (`PageLogFormat` empty); the access log has configuration changes only.
 docs/DATA.md has the flow.

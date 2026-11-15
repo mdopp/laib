@@ -85,7 +85,7 @@ BrowseLocalProtocols dnssd
 DefaultShared No
 WebInterface No
 DefaultAuthType Basic
-PreserveJobHistory No
+PreserveJobHistory 1800
 PreserveJobFiles No
 MaxJobs 200
 ErrorPolicy retry-job
