@@ -326,7 +326,8 @@ func OnCard(env *cli.Env, p *proposal.Proposal) {
 // only comments changed, so no card and no restart; once in 30 days.
 func Inert(env *cli.Env, svc string) {
 	e := journal.Entry{Actor: env.Actor, Verb: "template", Service: svc, Result: "info", Detail: "die Vorlage von " + svc + " ändert nur Kommentare: keine Karte, kein Neustart"}
-	if seen, _ := journal.Newest(env.Paths.Journal, time.Now().AddDate(0, 0, -30), 1, func(o journal.Entry) bool { return o.Detail == e.Detail }); len(seen) == 0 {
+	same := func(o journal.Entry) bool { return o.Detail == e.Detail }
+	if seen, _ := journal.Newest(env.Paths.Journal, time.Now().AddDate(0, 0, -30), 1, same); len(seen) == 0 {
 		journal.Append(env.Paths.Journal, e)
 	}
 }
@@ -423,8 +424,8 @@ func decide(ctx context.Context, env *cli.Env, st *state.State, p *proposal.Prop
 	if p.Recomputed && !env.JSON {
 		fmt.Fprintf(env.W(), "#%d neu berechnet auf dem aktuellen Stand\n", p.ID)
 	}
-	st, err := cli.LoadState(env)
-	if err != nil {
+	var err error
+	if st, err = cli.LoadState(env); err != nil {
 		return env.Fail(err)
 	}
 	FileWishes(ctx, env, st, p)

@@ -84,7 +84,7 @@ func TestTheTemplateUpdatesOfOneReleaseAreOneCard(t *testing.T) {
 	decided := member(570, "audiobookshelf", "Hörbücher laden schneller", "template-update")
 	decided.Status = "approved"
 	ps := []*Proposal{other, member(587, "paperless", "Paperless erkennt Rechnungen besser", "template-update"),
-		member(575, "home-assistant", "Home Assistant findet den Drucker", "human"), member(580, "media", "Filme starten schneller", "template-update"), decided}
+		member(575, "home-assistant", "Home Assistant findet den Drucker", "template-update"), member(580, "media", "Filme starten schneller", "human"), decided}
 
 	folded := Fold(ps)
 	if len(folded) != 3 {
@@ -120,6 +120,13 @@ func TestTheTemplateUpdatesOfOneReleaseAreOneCard(t *testing.T) {
 	many := []*Proposal{}
 	for i, s := range []string{"auth", "bote", "media", "immich", "paperless"} {
 		many = append(many, member(600+i, s, "neu", "template-update"))
+	}
+	if c := Fold(many)[0]; c.Class != "template-update" {
+		t.Errorf("no member only a human may approve, yet the card is %s", c.Class)
+	}
+	one := Card(Fold(many[:1])[0], "")
+	if len(one.Changes) != 1 || !strings.HasSuffix(one.Changes[0].Text, ": neu") {
+		t.Errorf("a card of one template still shows its news line: %+v", one.Changes)
 	}
 	if s := Card(Fold(many)[0], "").Summary; !strings.HasPrefix(s, "Neue Vorlagen aus Laib 2.31.0 für ") || !strings.HasSuffix(s, " und 3 weitere Dienste") {
 		t.Errorf("five services in one headline: %q", s)

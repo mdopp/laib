@@ -217,10 +217,9 @@ func Fold(ps []*Proposal) []*Proposal {
 	}
 	var out []*Proposal
 	for _, p := range ps {
-		switch c := cards[p.Karte]; {
-		case c == nil || p.Status != "open":
+		if c := cards[p.Karte]; c == nil || p.Status != "open" {
 			out = append(out, p)
-		case p.ID == c.ID:
+		} else if p.ID == c.ID {
 			out = append(out, c)
 		}
 	}
