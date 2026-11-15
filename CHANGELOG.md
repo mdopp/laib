@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.31.0](https://github.com/mdopp/laib/compare/v2.30.1...v2.31.0) (2026-11-15)
+
+
+### Features
+
+* **inbox:** one card per Laib release for template updates, none for comments ([#1243](https://github.com/mdopp/laib/issues/1243)) ([1132961](https://github.com/mdopp/laib/commit/113296183d8a505cbdd8acf493397d1bfe2318cb))
+
 ## [2.30.1](https://github.com/mdopp/laib/compare/v2.30.0...v2.30.1) (2026-11-15)
 
 
