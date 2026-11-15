@@ -342,17 +342,33 @@ subscriptions). Its data folder holds only the status and the last run.
   the page, with their Archiv-Passwort (apps/archiv/seite.go
   `/tresor/anlegen`); a passkey may unlock it (apps/archiv/passkey.go).
 - **Separation:** no other person, no admin, no agent through Laib
-  (`sealed`). Inside the vault (gocryptfs, apps/archiv/tresor.go): the
+  (`sealed`). Inside the vault (gocryptfs, apps/archiv/tresor/): the
   msgvault database, the Briefkasten's private key, the Signal and
   WhatsApp keys, the contacts and calendar copies, the person's Immich
   key, and the settings for deleting old mail at the provider
-  (`mail-aufraeumen.json`). **While the vault is open, root reads it**
+  (`mail-aufraeumen.json`).
+  **Within the open vault, by area (archiv#68, archiv ADR 0001):** every
+  file belongs to one area — Nachrichten, Kontakte, Beziehungen, Fotos,
+  Notizen (apps/archiv/tresor/bereiche.go). The unlock starts a session
+  (12 h at most) in which the person grants each of the archive's
+  programs (Importe, Nachrichten, Umfeld und Stammbaum, Datenpfleger;
+  apps/archiv/programme.go) its areas, read and write separately; a
+  program reaches the vault only with a key for that grant, at most
+  15 minutes long, voided at once by the lock or the session's end. Every
+  access, allowed or refused, is one line in the vault's protocol
+  (`zugriffe.jsonl`, inside the vault: program, area, right, file name,
+  never content; apps/archiv/tresor/zugriffe.go), shown to the person on
+  `/tresor/freigaben`. The programs still run in one process, so this
+  separates the features from each other, not from root.
+  **While the vault is open, root reads it**
   (ADR 0029; the page says so, apps/archiv/seite.go). **While closed,
   outside the vault in plaintext:** the IMAP hosts, users and app
   passwords of each mailbox the person entered (root can read the
   person's mailboxes with them), the person's own number, the Briefkasten's
   public key, its HMAC dedupe sets, the status files, the last counts for
-  Homes (`aufgaben.json`, below) (ADR 0029 amendment 2026-11-01;
+  Homes (`aufgaben.json`, below), the person's last choice of which
+  program may which area (`freigaben.json`: program and area names, no
+  data of hers) (ADR 0029 amendment 2026-11-01;
   apps/archiv/briefkasten.go). Briefkasten packets
   are age-encrypted to the person's key.
 - **Umfeld (archiv#27):** the contact net, the answers to „Wie steht X
@@ -465,9 +481,12 @@ subscriptions). Its data folder holds only the status and the last run.
   there to the messenger's own file; the media are then plaintext on
   their way through Homes to the phone — the counts above; the archive also signs
   with it the answers it posts to Homes' `/intern/uebernahme`, which Homes
-  checks with the same secret); the msgvault key on
-  `/p/<person>/` only where the person set `AGENT_PATH` (off by default,
-  templates/archiv/values.example.yml).
+  checks with the same secret); on `/p/<person>/`, only where the person
+  set `AGENT_PATH` (off by default, templates/archiv/values.example.yml),
+  a bearer that is a program's key from the open vault, with Nachrichten
+  granted for what the request does; msgvault's own key never leaves the
+  vault, and the lock voids the bearer (archiv#68, apps/archiv/seite.go
+  `agent`). No program outside the archive holds such a key yet.
 
 ### homes
 
