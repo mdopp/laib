@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.33.0](https://github.com/mdopp/laib/compare/v2.32.0...v2.33.0) (2026-11-15)
+
+
+### Features
+
+* **updater:** registries, changelogs and signatures move to laib-updater, ring 0b ([#1246](https://github.com/mdopp/laib/issues/1246)) ([317f19e](https://github.com/mdopp/laib/commit/317f19e5cfbbb86299c1bbd8e0a9677f1e65bf42))
+
 ## [2.32.0](https://github.com/mdopp/laib/compare/v2.31.1...v2.32.0) (2026-11-15)
 
 
