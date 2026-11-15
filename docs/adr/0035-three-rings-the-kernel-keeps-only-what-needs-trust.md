@@ -28,9 +28,6 @@ about that. But the kernel still does work that needs no trust:
   `laib aufgabe` still live in `cmd/laib`.
 - **It observes.** Much of `internal/diag` (devices, images, OS update,
   operator state, self-update) only reads and judges; it needs no secret.
-- **It shows a second status UI.** `internal/pages` serves a Status page
-  next to Homes' Box pages, which show the same readiness, load and
-  findings (owner, 2026-11-04: Laib minimal, the everyday UI in Homes).
 
 ## Decision
 
@@ -57,8 +54,20 @@ Laib has three rings.
      need a secret stay in ring 0 and say why.
 3. **Ring 2, the services.** Templates, as before.
 
-**Homes is the one status UI.** The Status page leaves `laib serve`;
-Laib's own pages keep Inbox and Schlüssel.
+**Laib stands without Homes.** Laib is the foundation that keeps the box
+alive; Homes is the household's program on top of it, with value through
+technology and as little tie to hardware and OS as it can have (owner,
+2026-11-15: „Laib ist etwas, das ohne Homes funktionieren sollte … Homes
+ist erst fachliches“). So:
+
+- Everything an admin needs to keep the box running is on Laib's own
+  pages and verbs: status, findings, inbox, keys, the admins' tasks with a
+  way to do them there. Nothing operational exists only in Homes.
+- Homes may show the box's state to the family in its own words; it reads
+  it from Laib and never becomes the only place for it.
+- Laib depends on no Homes page: a task's way (`weg`) and a notification's
+  link have a Laib target for anything operational; a Homes page is an
+  extra for what is the household's.
 
 ### What is rethought, not moved
 
@@ -82,6 +91,8 @@ Laib's own pages keep Inbox and Schlüssel.
 - The kernel stops parsing registry and changelog answers. A compromised
   registry or changelog can at worst make the updater propose something
   the kernel then refuses on digest or signature.
+- The direction of dependency is one way: Homes needs Laib, Laib does
+  not need Homes. A box without Homes is a complete, maintainable box.
 - Each move is its own issue and PR, behaviour unchanged, vm-install green
   on main before the next.
 - A household verb or an observation added later goes to ring 1 by
