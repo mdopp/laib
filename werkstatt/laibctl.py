@@ -22,6 +22,8 @@ minutes before it runs out.
 import json, os, sys, urllib.request
 from datetime import datetime, timedelta, timezone
 
+# the kernel's envelope.MaxWrite: refused here, before the upload (#1238)
+MAX_WRITE = 8 << 20
 URL = (os.environ.get("LAIB_MCP_URL") or "http://host.containers.internal:5900/mcp").rstrip("/")
 RUN = os.environ.get("LAIB_RUN_DIR") or "/run/laib"   # this container's own tmpfs (#44)
 TOKEN_FILE = os.environ.get("LAIB_TOKEN_FILE") or RUN + "/token"
@@ -95,6 +97,8 @@ def main(argv: list[str]) -> int:
         tools = {t["name"]: t for t in rpc("tools/list", {}).get("tools", [])}
         if "stdin" in tools.get("laib_" + verb, {}).get("inputSchema", {}).get("properties", {}):
             if data := sys.stdin.read():
+                if len(data.encode()) > MAX_WRITE:
+                    raise SystemExit(f"laib: zu groß: {len(data.encode())} Bytes, laib {verb} nimmt höchstens {MAX_WRITE >> 20} MiB (#1238)")
                 args["stdin"] = data
     res = rpc("tools/call", {"name": "laib_" + verb, "arguments": args})
     for c in res.get("content", []):

@@ -222,17 +222,29 @@ func Read(ctx context.Context, env *cli.Env, args []string) int {
 		return env.Fail(err)
 	}
 	p := args[1]
-	if len(b) > 1<<20 {
-		b = b[:1<<20]
-	}
+	b, size, truncated := clip(b, MaxRead)
 	sec, _ := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	text := journal.Scrub(string(b), sec) // the box's secrets, key material, tokens, password hashes (#1054)
 	if env.JSON {
-		return cli.Emit(env, map[string]string{"path": p, "content": text})
+		return cli.Emit(env, map[string]any{"path": p, "content": text, "size": size, "truncated": truncated})
 	}
 	fmt.Fprint(env.W(), text)
+	if truncated {
+		fmt.Fprintf(env.Errw(), "\nabgeschnitten: %s hat %d Bytes, gezeigt sind die ersten %d\n", p, size, MaxRead)
+	}
 	return cli.ExitOK
 }
+
+// clip cuts b to max bytes: the cut, b's size, whether it was cut.
+func clip(b []byte, max int) ([]byte, int, bool) {
+	if len(b) > max {
+		return b[:max], len(b), true
+	}
+	return b, len(b), false
+}
+
+// MaxRead and MaxWrite bound laib read (above it: truncated and the size) and laib write (#1238).
+const MaxRead, MaxWrite = 1 << 20, 8 << 20
 
 func Write(ctx context.Context, env *cli.Env, args []string) int {
 	if len(args) < 2 {
@@ -254,9 +266,12 @@ func Write(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	defer root.Close()
 	p := args[1]
-	content, err := io.ReadAll(env.Stdin())
+	content, err := io.ReadAll(env.Stdin()) // over MCP bounded by its body limit
 	if err != nil {
 		return env.Fail(err)
+	}
+	if _, _, over := clip(content, MaxWrite); over {
+		return cli.Refused(env, fmt.Sprintf("%s ist zu groß: laib write nimmt höchstens %d MiB. Teile die Datei, oder leg sie über die Dateiablage ab", p, MaxWrite>>20))
 	}
 	if bytes.Contains(content, []byte(journal.Redacted)) { // a redacted read written back overwrites the secret (#1054)
 		return cli.Refused(env, p+" trägt "+journal.Redacted+" aus laib read: so überschriebe es ein Geheimnis mit der Schwärzung. Ändere die Datei im Container (laib exec, z. B. sed -i), oder schreib sie mit dem echten Wert")

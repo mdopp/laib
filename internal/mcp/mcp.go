@@ -64,8 +64,24 @@ func rpcReply(w http.ResponseWriter, id json.RawMessage, result any, rerr *rpcEr
 	json.NewEncoder(w).Encode(msg)
 }
 
-// Handler authenticates the bearer, then dispatches.
+// MaxBody fits envelope.MaxWrite (8 MiB, a test holds it) JSON-escaped, six bytes a byte (#1238).
+const MaxBody = 6*8<<20 + 1<<20
+
+// Handler authenticates the bearer, then dispatches; a body over MaxBody is answered, not reset.
 func Handler(env *cli.Env) http.HandlerFunc {
+	h := handler(env)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if body, _ := io.ReadAll(io.LimitReader(r.Body, MaxBody+1)); len(body) <= MaxBody {
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			h(w, r)
+			return
+		}
+		io.Copy(io.Discard, io.LimitReader(r.Body, 4*MaxBody))
+		rpcReply(w, nil, nil, &rpcError{-32600, fmt.Sprintf("Anfrage zu groß: höchstens %d MiB", MaxBody>>20)})
+	}
+}
+
+func handler(env *cli.Env) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
@@ -88,7 +104,7 @@ func Handler(env *cli.Env) http.HandlerFunc {
 			http.Error(w, "state: "+err.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		body, _ := io.ReadAll(r.Body) // bounded by Handler's readBody
 		var req rpcRequest
 		if err := json.Unmarshal(body, &req); err != nil {
 			rpcReply(w, nil, nil, &rpcError{-32700, "parse error"})

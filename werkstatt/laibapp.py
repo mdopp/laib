@@ -15,13 +15,12 @@ runs commands instead of re-deriving them from prose.
 
 The guide is /opt/werkstatt/guide/apps.md.
 """
-import argparse, json, os, re, shutil, socket, ssl, subprocess, sys, time, urllib.parse, urllib.request, zlib
+import argparse, difflib, json, os, re, shutil, socket, ssl, subprocess, sys, time, urllib.parse, urllib.request, zlib
 import http.client
 from pathlib import Path
 
 SCAFFOLD = Path(os.environ.get("LAIB_APP_SCAFFOLD") or "/opt/werkstatt/scaffold")
 DEFAULT_REPO = os.environ.get("LAIB_APP_REPO") or "/workspace/laib-apps"
-REGISTRY = "apps"
 DOH = os.environ.get("LAIB_APP_DOH") or "https://cloudflare-dns.com/dns-query"
 LAIB = os.environ.get("LAIB_APP_LAIB") or "laib"   # the box's routes: `laib net` (#774)
 BOX = os.environ.get("LAIB_APP_BOX") or "host.containers.internal"   # Caddy, on the box's host network
@@ -78,7 +77,7 @@ def cmd_new(a) -> int:
     port = a.port or 18000 + zlib.crc32(name.encode()) % 1000
     subs = {
         "__NAME__": name, "__Name__": name[:1].upper() + name[1:], "__PORT__": str(port),
-        "__OWNER__": owner, "__REPO__": repo.name, "__REGISTRY__": REGISTRY,
+        "__OWNER__": owner, "__REPO__": repo.name, "__REGISTRY__": registry_name(repo.name),
         "__MODULE__": f"github.com/{owner}/{repo.name}/apps/{name}",
         "__SECRET__": name.upper() + "_PROXY_SECRET", "__AUTH__": "one_factor",
         "__GROUP__": a.group, "__EXPOSURE__": a.exposure,
@@ -102,24 +101,63 @@ def cmd_new(a) -> int:
     return 0
 
 
-def registry_patch(url: str, ref: str) -> str:
-    # zero context: inserted at the top of box.yml, which has no registries
-    # yet (a second `registries:` key would not load, and the proposal says so)
-    lines = ["registries:", f"  - name: {REGISTRY}", f"    url: {url}", f"    ref: {ref}"]
-    return "--- a/box.yml\n+++ b/box.yml\n@@ -0,0 +1,%d @@\n" % len(lines) + "".join("+" + l + "\n" for l in lines)
+def registry_name(repo: str) -> str:
+    # the repo's own name is the registry's: unique per repo, never a fixed `apps` (#1240)
+    return re.sub(r"[^a-z0-9-]", "-", repo.lower().removesuffix(".git")).strip("-")
+
+
+def with_registry(box: str, name: str, url: str, ref: str) -> str:
+    """box.yml's text with the entry added: under the one `registries:` key,
+    or a new key at the end. Never a second key (#1240)."""
+    lines = box.splitlines()
+    at = [i for i, l in enumerate(lines) if re.match(r"registries:\s*(#.*)?$", l)]
+    if not at:
+        body = box.rstrip("\n") + "\n" if box.strip() else ""
+        return body + f"registries:\n  - name: {name}\n    url: {url}\n    ref: {ref}\n"
+    i, last, items = at[0] + 1, at[0], []
+    while i < len(lines) and (not lines[i].strip() or lines[i][0] in " \t#-"):
+        if lines[i].strip() and not lines[i].lstrip().startswith("#"):
+            last = i
+            if lines[i].lstrip().startswith("- "):
+                items.append(lines[i])
+        i += 1
+    indent = items[0][: len(items[0]) - len(items[0].lstrip())] if items else "  "
+    entry = [f"{indent}- name: {name}", f"{indent}  url: {url}", f"{indent}  ref: {ref}"]
+    return "\n".join(lines[: last + 1] + entry + lines[last + 1 :]) + "\n"
+
+
+def check_box(text: str, name: str) -> str:
+    """What is wrong with the proposed box.yml, or "" (#1240): a top-level
+    key twice, or the registry name twice."""
+    keys = [m.group(1) for m in re.finditer(r"(?m)^([A-Za-z_][\w-]*):", text)]
+    if twice := sorted({k for k in keys if keys.count(k) > 1}):
+        return "box.yml hätte den Schlüssel " + ", ".join(twice) + " doppelt"
+    if len(re.findall(rf"(?m)^\s*-?\s*name:\s*{re.escape(name)}\s*$", text.split("registries:", 1)[1])) > 1:
+        return f"die Registry {name} stünde zweimal in box.yml"
+    return ""
 
 
 def cmd_register(a) -> int:
+    p = subprocess.run([LAIB, "state", "box.yml"], capture_output=True, text=True)
+    if p.returncode != 0:
+        return die("laib state box.yml: " + (p.stderr or p.stdout).strip())
+    got = json.loads(p.stdout)
+    box, data = got["content"], got.get("data") or {}
+    name = registry_name(a.url.rstrip("/").rsplit("/", 1)[-1])
+    for r in data.get("registries") or []:
+        if r.get("url", "").rstrip("/").removesuffix(".git") == a.url.rstrip("/").removesuffix(".git"):
+            print(f"{a.url} ist schon als Registry {r.get('name')} eingetragen; nichts zu tun")
+            return 0
+        if r.get("name") == name:
+            return die(f"der Name {name} ist schon vergeben (an {r.get('url')}); benenne das Repo um")
+    new = with_registry(box, name, a.url, a.ref)
+    if why := check_box(new, name):
+        return die(why + "; nichts vorgeschlagen")
+    patch = "".join(difflib.unified_diff(box.splitlines(True), new.splitlines(True), "a/box.yml", "b/box.yml"))
     reason = a.reason or f"Vorlagen der Werkstatt-Programme aus {a.url}"
-    p = subprocess.run(["laib", "propose", "--patch", reason], input=registry_patch(a.url, a.ref), capture_output=True, text=True)
+    p = subprocess.run([LAIB, "propose", "--patch", reason], input=patch, capture_output=True, text=True)
     sys.stdout.write(p.stdout)
     sys.stderr.write(p.stderr)
-    if p.returncode != 0 and "already" in (p.stdout + p.stderr):
-        print(f"""box.yml has registries already: this one needs a line there, which only the owner can add.
-Ask them to add under `registries:` in box.yml:
-  - name: {REGISTRY}
-    url: {a.url}
-    ref: {a.ref}""", file=sys.stderr)
     return p.returncode
 
 

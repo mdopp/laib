@@ -47,12 +47,12 @@ class Stdin(unittest.TestCase):
         self.tok.write("synthetic-617"); self.tok.close()
         self.addCleanup(os.unlink, self.tok.name)
 
-    def laib(self, *args, stdin=""):
+    def laib(self, *args, stdin="", code=0):
         env = {k: v for k, v in os.environ.items() if not k.startswith("LAIB_")}
         env.update(LAIB_MCP_URL=self.fake.url, LAIB_TOKEN_FILE=self.tok.name, LAIB_RUN_DIR=tempfile.mkdtemp())
         p = subprocess.run(["python3", str(HERE / "laibctl.py"), *args], input=stdin, env=env, capture_output=True, text=True, timeout=30)
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        return self.fake.calls[-1]
+        self.assertEqual(p.returncode, code, p.stdout + p.stderr)
+        return p if code else self.fake.calls[-1]
 
     def test_calendar_subscribe_gets_the_address(self):
         name, args = self.laib("calendar", "subscribe", "homes", "muell", "abo", "Müllabfuhr", stdin="https://example.invalid/m.ics")
@@ -70,6 +70,14 @@ class Stdin(unittest.TestCase):
 
     def test_empty_stdin_is_not_sent(self):
         self.assertNotIn("stdin", self.laib("calendar", "list")[1])
+
+    def test_write_up_to_the_limit_goes_above_it_is_refused_before_upload(self):
+        # #1238: 8 MiB is sent whole; one byte more is refused in German, nothing uploaded
+        self.assertEqual(len(self.laib("write", "media", "/x", stdin="a" * (8 << 20))[1]["stdin"]), 8 << 20)
+        before = len(self.fake.calls)
+        p = self.laib("write", "media", "/x", stdin="a" * ((8 << 20) + 1), code=1)
+        self.assertIn("zu groß", p.stderr)
+        self.assertEqual(len(self.fake.calls), before)
 
 
 if __name__ == "__main__":
