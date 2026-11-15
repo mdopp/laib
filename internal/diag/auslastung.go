@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/state"
 )
 
 // `laib auslastung` (read, owner 2026-11-06): the box's values now, for
@@ -30,6 +31,15 @@ func LoadCmd(ctx context.Context, env *cli.Env, _ []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
+	out, err := Load(ctx, st)
+	if err != nil {
+		return env.Fail(err)
+	}
+	return cli.Emit(env, out)
+}
+
+// Load is laib-disk's answer, kept loadWait: the verb's and Laib's Status page's (#1236).
+func Load(ctx context.Context, st *state.State) (json.RawMessage, error) {
 	loadMu.Lock()
 	defer loadMu.Unlock()
 	if loadLast == nil || time.Since(loadAt) > loadWait {
@@ -39,9 +49,9 @@ func LoadCmd(ctx context.Context, env *cli.Env, _ []string) int {
 		}
 		out, err := exec.CommandContext(ctx, DiskBin(), args...).Output()
 		if err != nil || !json.Valid(out) {
-			return env.Fail(fmt.Errorf("laib-disk antwortet nicht (%v): die Auslastung ist unbekannt; install-box.sh bringt laib-disk mit (%s)", err, DiskBin()))
+			return nil, fmt.Errorf("laib-disk antwortet nicht (%v): die Auslastung ist unbekannt; install-box.sh bringt laib-disk mit (%s)", err, DiskBin())
 		}
 		loadLast, loadAt = out, time.Now()
 	}
-	return cli.Emit(env, loadLast)
+	return loadLast, nil
 }

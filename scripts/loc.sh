@@ -28,6 +28,11 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 22,690: the owner's #1236 (2026-11-15, ADR 0035 „Laib ist etwas, das ohne Homes funktionieren
+# sollte“): a box without Homes is maintained from Laib's own Status page — the admins' tasks with
+# Erledigt and Zurückstellen and a way of their own (weg laib), the last whole diag's findings, the
+# load and the morning report; a waiting card's task links there. The kernel at 22,471 before, about
+# 206 lines asked, the request counts as the owner's yes.
 # 22,471: lowered by #1234 (ADR 0035, 2026-11-15): laib calendar, person invite and pending and aufgabe
 # run in laib-haushalt; the kernel keeps their one write each (KALENDER_ABOS in secrets.age, the LLDAP
 # account by the identity tool, aufgaben.yml with who sees and changes which task) as a door verb's
@@ -81,7 +86,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 22471 cmd internal
+budget kernel 22690 cmd internal
 budget operator 3300 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,

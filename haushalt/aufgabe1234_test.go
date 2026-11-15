@@ -44,6 +44,9 @@ func TestWegAndFuerAreCheckedBeforeTheKernel(t *testing.T) {
 	if w, err := parseWeg("gespraech"); err != nil || w.Seite != "" || !w.Gespraech {
 		t.Fatalf("the conversation: %+v %v", w, err)
 	}
+	if w, err := parseWeg("laib"); err != nil || !w.Laib || w.Gespraech { // Laib's own Status page (#1236)
+		t.Errorf("laib: %+v %v", w, err)
+	}
 	if w, err := parseWeg("schluessel:OPENAI_KEY"); err != nil || w.Schluessel != "OPENAI_KEY" {
 		t.Fatalf("a key: %+v %v", w, err)
 	}

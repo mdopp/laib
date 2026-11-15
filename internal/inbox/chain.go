@@ -113,11 +113,12 @@ func keyLabel(st *state.State, name string) string {
 	return ""
 }
 
+// taskLink: an owner's key's form, else the task on Laib's Status page (#1236).
 func taskLink(st *state.State, a aufgaben.Aufgabe) string {
 	if a.Weg != nil && a.Weg.Schluessel != "" {
 		return render.KeyLink(st, a.Weg.Schluessel)
 	}
-	return ""
+	return render.PageLink(st, fmt.Sprintf("/#aufgabe-%d", a.ID))
 }
 
 var versionRe = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)

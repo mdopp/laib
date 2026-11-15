@@ -13,9 +13,10 @@ import (
 	"github.com/mdopp/laib/internal/policy"
 )
 
-// #798: the admin page keeps what approving, keys and repair need. /net,
-// /bote/link and the morning report left it (`laib net` and Homes keep
-// them), family-card and adopt left the verb table.
+// #798: the admin page keeps what approving, keys and repair need. /net
+// and /bote/link left it (`laib net` and the Bote's README keep them),
+// family-card and adopt left the verb table; the morning report, which
+// left for Homes, is back beside it (#1236: Laib stands without Homes).
 // Ablauf L-41
 func TestTheAdminPageKeepsOnlyApproveKeysAndRepair(t *testing.T) {
 	c := newCbox(t)
@@ -41,9 +42,14 @@ func TestTheAdminPageKeepsOnlyApproveKeysAndRepair(t *testing.T) {
 		}
 	}
 	_, status := get("/")
-	for _, w := range []string{"Morgenbericht", "Alles ruhig.", `href="/net"`, "/bote/link"} {
+	for _, w := range []string{`href="/net"`, "/bote/link"} {
 		if strings.Contains(status, w) {
 			t.Errorf("the Status page still holds %q", w)
+		}
+	}
+	for _, w := range []string{"Morgenbericht", "Vom 27.10.2026", "Alles ruhig."} { // back on Laib's page too: Laib stands without Homes (#1236)
+		if !strings.Contains(status, w) {
+			t.Errorf("the Status page lacks the morning report's %q", w)
 		}
 	}
 	for _, v := range mcp.Verbs {

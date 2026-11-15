@@ -463,6 +463,37 @@ jobs:
                 [ "$code" = 200 ] && grep -q "data-stand=" /tmp/lan2.html || { echo "with laib stopped, Caddy does not serve the page laib wrote last"; exit 1; }
                 for i in $(seq 1 60); do curl -fsS -o /dev/null http://127.0.0.1:5900/ready && break; sleep 2; done
                 $L journal --since 1h'
+      - name: Laib without Homes — the admins' tasks, findings, load and the morning report on Laib's own page (#1236)
+        if: matrix.part == 'services'
+        run: |
+          SSH="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i key -p 2222 core@127.0.0.1"
+          $SSH bash -s <<'EOS'
+          set -euo pipefail
+          export LAIB_HOME=/mnt/data/laib LAIB_ACTOR=human:core
+          lw() { local i rc; for i in $(seq 1 60); do rc=0; /var/opt/laib/laib "$@" || rc=$?; [ "$rc" = 4 ] || return "$rc"; echo "laib $1: the lock is busy (the converge timer, #211), trying again" >&2; sleep 3; done; return 4; }
+          root=/mnt/data/stacks/caddy/data/caddy/pki/authorities/local/root.crt; none=$(mktemp -d)
+          # the box page through Caddy, before Authelia is there (ADR 0012): as the admin's browser gets it
+          box() { curl -s --cacert "$root" --capath "$none" --resolve laib.vm.test:443:127.0.0.1 -o /tmp/laib.html -w "%{http_code}" "$@" || true; }
+          # ADR 0035: this box has no Homes, and nothing operational may need one
+          if grep -q '"name": "homes"' <<<"$(lw status --json)"; then echo "this box has Homes; the scenario is a box without it"; exit 1; fi
+          lw aufgabe add "VM: zweite Platte einbauen" --weg laib --warum "Dann ist die Datenplatte gespiegelt." --json | tee /tmp/add.json
+          id=$(grep -o '"id": *[0-9]*' /tmp/add.json | head -1 | grep -o '[0-9]*$')
+          [ -n "$id" ] || { echo "laib aufgabe add gave no id"; exit 1; }
+          lw note --kind report "Nachts alles ruhig in der VM." >/dev/null
+          lw diag >/dev/null || true   # a whole run: its findings are kept for the page
+          code=$(box https://laib.vm.test/); echo "https://laib.vm.test/ -> HTTP $code"; [ "$code" = 200 ]
+          for w in "id=aufgabe-$id " "VM: zweite Platte einbauen" "action=/aufgabe/$id/erledigt" "action=/aufgabe/$id/zurueckstellen" \
+                   "<h2>Befunde</h2>" "Letzte ganze Durchsicht" "<h2>Auslastung</h2>" "Prozessor " "Datenplatte: " "<h2>Morgenbericht</h2>" "Nachts alles ruhig in der VM."; do
+            grep -qF -- "$w" /tmp/laib.html || { echo "Laib's Status page lacks: $w"; sed 's/<[^>]*>/ /g' /tmp/laib.html | tr -s ' ' | tail -c 3000; exit 1; }
+          done
+          echo "Laib's Status page shows the task with its forms, the findings, the load and the morning report, without Homes"
+          code=$(box -X POST "https://laib.vm.test/aufgabe/$id/erledigt"); echo "Erledigt on Laib's page -> HTTP $code"
+          [ "$code" = 200 ] && grep -q "ist erledigt" /tmp/laib.html || { echo "Erledigt did not answer done"; sed 's/<[^>]*>/ /g' /tmp/laib.html | tail -c 1500; exit 1; }
+          grep -E "^#$id +VM: zweite Platte einbauen +✓" <<<"$(lw aufgabe list --alle)" || { echo "the task is not checked off"; lw aufgabe list --alle; exit 1; }
+          grep -q "erledigt #$id auf der Box-Seite" <<<"$(lw journal --since 10m)" || { echo "the journal does not say who checked it off on the page"; exit 1; }
+          [ "$(box https://laib.vm.test/)" = 200 ] && ! grep -qF "id=aufgabe-$id " /tmp/laib.html || { echo "the done task is still on the Status page"; exit 1; }
+          echo "a box without Homes is maintained from Laib's own page (#1236)"
+          EOS
       - name: reboot — the firewall is back in the kernel, the registry login survives, services come up (#37)
         if: matrix.part == 'services'
         run: |

@@ -23,7 +23,7 @@ func TestThePagesWearTheHouseholdLook(t *testing.T) {
 		{Name: "home-assistant", State: "gelb", Units: map[string]string{"home-assistant.service": "active"}, Detail: "fehlt: Jellyfin, Waschmaschine"},
 		{Name: "auth", Title: "Anmeldung", Beschreibung: "Konten und zweiter Faktor", State: "grün", Units: map[string]string{"auth-pod.service": "active"}, Detail: "Passwort-Mails über smtp.example · geprüft vor 3 min"},
 	}
-	body := statusBody(rd, rows, map[string]bool{"home-assistant": false}, "")
+	body := statusBody(rd, rows, map[string]bool{"home-assistant": false}, "", "")
 	got := pageHTML("Status", body)
 	golden := "testdata/status.html"
 	if os.Getenv("UPDATE_GOLDEN") != "" {

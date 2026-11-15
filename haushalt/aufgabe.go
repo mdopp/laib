@@ -27,11 +27,12 @@ type Aufgabe struct {
 	Erledigt   *Erledigt `json:"erledigt,omitempty"`
 }
 
-// Weg is how a task is done (#878): a Homes page, a conversation with the
-// Bote, or an owner's key on Laib's form (homes#362), whose link the kernel fills in.
+// Weg is how a task is done (#878): a Homes page, the Bote, an owner's key
+// on Laib's form (homes#362, the kernel links it), or Laib's page (#1236).
 type Weg struct {
 	Seite      string `json:"seite,omitempty"`
 	Gespraech  bool   `json:"gespraech,omitempty"`
+	Laib       bool   `json:"laib,omitempty"`
 	Schluessel string `json:"schluessel,omitempty"`
 	Link       string `json:"link,omitempty"`
 }
@@ -53,17 +54,17 @@ var (
 	befundRe = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}( [A-Za-z0-9][A-Za-z0-9._-]{0,63})?$`) // a key's topic is its NAME
 )
 
-// parseWeg reads a weg: a Homes page's path, gespraech, or schluessel:<NAME>.
+// parseWeg reads a weg: a Homes page's path, gespraech, laib or schluessel:<NAME>.
 func parseWeg(s string) (*Weg, error) {
 	switch m := keyRe.FindStringSubmatch(s); {
-	case s == "gespraech":
-		return &Weg{Gespraech: true}, nil
+	case s == "gespraech" || s == "laib":
+		return &Weg{Gespraech: s == "gespraech", Laib: s == "laib"}, nil
 	case seiteRe.MatchString(s):
 		return &Weg{Seite: s}, nil
 	case m != nil:
 		return &Weg{Schluessel: m[1]}, nil
 	}
-	return nil, fmt.Errorf("%q ist kein Weg: eine Seite von Homes (/stimme), gespraech (gemeinsam mit dem Boten) oder schluessel:<NAME> (ein Schlüssel auf der Box-Seite)", s)
+	return nil, fmt.Errorf("%q ist kein Weg: eine Seite von Homes (/stimme), laib (auf Laibs Status-Seite unter Aufgaben), gespraech (gemeinsam mit dem Boten) oder schluessel:<NAME> (ein Schlüssel auf der Box-Seite)", s)
 }
 
 func checkFuer(s string) error {
@@ -87,11 +88,11 @@ func checkBefund(s string) error {
 	return nil
 }
 
-const aufgabeUsage = `usage: laib aufgabe list [--alle] [--faellig] | zeigen <id> | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT] [--fertig-wenn "<probe> [<dienst|thema>]"] [--fuer admins|alle|person:<login>] [--weg /seite|gespraech] | erledigt <id> | zurueckstellen <id> <JJJJ-MM-TT> | befund <id> "<probe> [<dienst|thema>]"`
+const aufgabeUsage = `usage: laib aufgabe list [--alle] [--faellig] | zeigen <id> | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT] [--fertig-wenn "<probe> [<dienst|thema>]"] [--fuer admins|alle|person:<login>] [--weg /seite|laib|gespraech] | erledigt <id> | zurueckstellen <id> <JJJJ-MM-TT> | befund <id> "<probe> [<dienst|thema>]"`
 
 // cmdAufgabe: `laib aufgabe list [--alle] [--faellig] | zeigen <id> | add "<titel>"
 // [--warum W] [--erinnern JJJJ-MM-TT] [--fertig-wenn "<probe> [<dienst|thema>]"]
-// [--fuer admins|alle|person:<login>] [--weg /seite|gespraech] | erledigt <id>
+// [--fuer admins|alle|person:<login>] [--weg /seite|laib|gespraech] | erledigt <id>
 // | zurueckstellen <id> <JJJJ-MM-TT> | befund <id> "<probe> [<dienst|thema>]"`
 // (#667, #759, #878): the box's to-do list. Here the input is checked and the
 // answer worded (#1234); the list is aufgaben.yml in the state repo, and who

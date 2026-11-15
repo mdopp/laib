@@ -140,8 +140,9 @@ func Routes(env *cli.Env, guard func(http.HandlerFunc) http.HandlerFunc) *http.S
 			page(w, "Status", failure(proposal.NotReadable, err.Error()))
 			return
 		}
+		admin := betrieb(r.Context(), env, st)
 		rd, rows := CollectStatus(r.Context(), env, st)
-		body := statusBody(rd, rows, checks(r.Context(), st, true), r.URL.Query().Get("filter"))
+		body := statusBody(rd, rows, checks(r.Context(), st, true), r.URL.Query().Get("filter"), admin())
 		for _, w := range st.Warnings { // the box's own warnings, once here, not on every proposal (#616)
 			body += "<p class=gelb>Hinweis: " + html.EscapeString(w) + "</p>"
 		}
@@ -168,6 +169,7 @@ func Routes(env *cli.Env, guard func(http.HandlerFunc) http.HandlerFunc) *http.S
 	mux.HandleFunc("/schluessel", guard(Keys(env))) // a key from outside, by the owner (#696)
 	mux.HandleFunc("GET /schluessel/stand", guard(KeysStand))
 	mux.HandleFunc("POST /inbox/{id}/{decision}", guard(Decision(env)))
+	mux.HandleFunc("POST /aufgabe/{id}/{tat}", guard(Aufgabe(env))) // a task done or deferred on Laib's page (#1236)
 	// "jetzt prüfen" (#309): the service's check, started without waiting
 	mux.HandleFunc("POST /check/{service}", guard(func(w http.ResponseWriter, r *http.Request) {
 		st, err := cli.LoadState(env)
@@ -458,8 +460,8 @@ func liveIf(body string) string {
 
 // statusBody is the status page: the box's line, one card per service with
 // its state and note, the backup and the last change, all from the one
-// verdict (#856); the morning report is Homes's (#798).
-func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, show string) string {
+// verdict (#856), and admin: what keeps the box running without Homes (#1236).
+func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, show, admin string) string {
 	var b strings.Builder
 	// the owner's filter by state (#785): problems first; a paused service counts green
 	group := func(s string) string {
@@ -513,7 +515,7 @@ func statusBody(rd Readiness, rows []ServiceStatus, checking map[string]bool, sh
 	} else { // and the next step (#854)
 		fmt.Fprintf(&b, "<p class=rot>%s Sieh im Journal nach, was die Sicherung meldet.</p>", html.EscapeString(rd.LastBackup.Text))
 	}
-	b.WriteString(operatorSection(rd.OperatorWork) + "<h2>Dienste</h2>")
+	b.WriteString(admin + operatorSection(rd.OperatorWork) + "<h2>Dienste</h2>")
 	b.WriteString(filter + "<div class=liste>")
 	for _, row := range rows {
 		if show != "" && group(row.State) != show {

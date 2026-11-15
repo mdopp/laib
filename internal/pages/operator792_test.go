@@ -33,7 +33,7 @@ func TestTheBoxPageSaysWhatTheOperatorDoes(t *testing.T) {
 	}
 	// what the model's sessions cost today (#859), as the Operator's /ready says it
 	json.Unmarshal([]byte(`{"model":{"day":"`+now.Format(time.DateOnly)+`","sessions":2,"in":1200,"out":34,"ms":3400}}`), &w.OpWork)
-	page := statusBody(Readiness{State: "bereit", OperatorWork: w}, nil, nil, "")
+	page := statusBody(Readiness{State: "bereit", OperatorWork: w}, nil, nil, "", "")
 	for _, want := range []string{"<h2>Operator</h2>", "Arbeitet an: bote: unit bote-check.service ist failed", "zuletzt: startet bote neu", "Wartet: die Grafikkarte ist vergeben · 1 Vorfall in der Warteschlange",
 		"Heute: 1 Neustart · 0 Vorschläge · 1 Eskalation · 1 Notiz", `href="/inbox"`, `href="/journal"`, "Neustart bote: bote-check.service failed",
 		"Modell: 2 Sitzungen, 1200 Token gelesen, 34 geschrieben, 3 s"} {
@@ -41,7 +41,7 @@ func TestTheBoxPageSaysWhatTheOperatorDoes(t *testing.T) {
 			t.Errorf("the page lacks %q", want)
 		}
 	}
-	if idle := statusBody(Readiness{State: "bereit"}, nil, nil, ""); !strings.Contains(idle, "Gerade kein Vorfall.") || strings.Contains(idle, "Wartet") {
+	if idle := statusBody(Readiness{State: "bereit"}, nil, nil, "", ""); !strings.Contains(idle, "Gerade kein Vorfall.") || strings.Contains(idle, "Wartet") {
 		t.Errorf("an idle Operator: %s", idle)
 	}
 }

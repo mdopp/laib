@@ -282,7 +282,13 @@ Dann steht dort ein deutscher Satz, der rohe Text nur unter „Details“.
 ### L-41 Die Box-Seite ist nur für Admins
 Wenn jemand die Box-Seite nicht über Caddy und Authelia aufruft,
 Dann antwortet sie „nur über die Box-Seite“ und zeigt nichts.
-Und sie behält nur, was Freigeben, Schlüssel und Reparatur brauchen.
+Und sie behält, was Freigeben, Schlüssel und Reparatur brauchen, und den Morgenbericht.
+
+### L-59 Laib steht ohne Homes
+Wenn auf der Box kein Homes läuft,
+Dann zeigt Laibs Status-Seite alles für den Betrieb: Bereitschaft, Befunde, Auslastung, den Morgenbericht und die Aufgaben der Admins.
+Und jede Aufgabe lässt sich dort abhaken oder zurückstellen; eine Seite von Homes oder der Bote ist nur ein zusätzlicher Weg.
+Und Links aus Nachrichten und wartenden Karten führen auf Laibs Seite.
 
 ### L-42 Die Apps der Familie gibt es nur zu Hause
 Wenn jemand von außen eine App der Familie aufruft,

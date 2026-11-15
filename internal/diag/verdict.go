@@ -162,21 +162,27 @@ func Stand(_ context.Context, env *cli.Env, _ []string) int {
 	return cli.Emit(env, k)
 }
 
+// LastRun is the last whole diag run's time and findings; none before the
+// first or when diag.json is not readable (Laib's Status page, #1236).
+func LastRun(home string) (time.Time, []Finding) {
+	var k kept
+	if b, err := os.ReadFile(keptPath(home)); err == nil && json.Unmarshal(b, &k) != nil {
+		k = kept{}
+	}
+	return k.At, k.Findings
+}
+
 // Kept are the red findings of the last whole diag run that the pages do
 // not probe themselves (RAID, SMART, the certificate, the box's config),
 // each with the time of that run: a slow probe is not run on every look.
 func Kept(home string) []Finding {
-	var k kept
-	b, err := os.ReadFile(keptPath(home))
-	if err != nil || json.Unmarshal(b, &k) != nil {
-		return nil
-	}
+	at, fs := LastRun(home)
 	var out []Finding
-	for _, f := range k.Findings {
+	for _, f := range fs {
 		if f.Severity != "rot" || slices.Contains(Live, f.Probe) {
 			continue
 		}
-		f.Detail += " (laib diag " + k.At.Local().Format("02.01. 15:04") + ")"
+		f.Detail += " (laib diag " + at.Local().Format("02.01. 15:04") + ")"
 		out = append(out, f)
 	}
 	return out
