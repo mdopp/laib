@@ -50,6 +50,9 @@ func newSelfBox(t *testing.T) *selfBox {
 	// signature is laib's release workflow's on main
 	shim(t, s.bin, "podman", `echo "podman $*" >> "$SHIM_LOG"
 for a in "$@"; do case "$a" in *:/w:ro,Z) w="${a%%:/w:ro,Z}";; esac; done
+# cosign runs as a nonroot user: in rootless podman that is "other" on the host
+case "$(stat -c %A "$w")" in ???????r?x) ;; *) echo "open /w/SHA256SUMS.bundle: permission denied" >&2; exit 1;; esac
+for f in SHA256SUMS SHA256SUMS.bundle; do case "$(stat -c %A "$w/$f")" in ???????r??) ;; *) echo "open /w/$f: permission denied" >&2; exit 1;; esac; done
 [ "$(cat "$w/SHA256SUMS.bundle")" = good ] || { echo "Error: none of the expected identities matched what was in the certificate" >&2; exit 1; }`)
 	// the network: /ready, the releases API and the release downloads
 	shim(t, s.bin, "curl", `o=""; prev=""

@@ -71,6 +71,9 @@ done
 # a release from before #1130 carries no signature: it is refused, never installed unverified
 curl -fsSL --max-time 120 -o "$tmp/SHA256SUMS.bundle" "$DL/$target/SHA256SUMS.bundle" ||
   { failed="$target"; record failed "$target trägt keine Signatur (SHA256SUMS.bundle): nicht installiert, von Hand aktualisieren"; exit 0; }
+# cosign's image runs as a nonroot user, which rootless podman maps to "other"
+# on the host: mktemp's 0700 would read as "permission denied" and refuse every release
+chmod a+rx "$tmp" && chmod a+r "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.bundle"
 if ! sig="$(timeout 300 podman run --rm -v "$tmp:/w:ro,Z" "$COSIGN" verify-blob --bundle /w/SHA256SUMS.bundle \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com --certificate-identity "$SIGNER" /w/SHA256SUMS 2>&1)"; then
   failed="$target"; record failed "$target: die Signatur von SHA256SUMS stammt nicht aus Laibs Release auf main, nicht installiert ($(tail -1 <<<"$sig" | cut -c1-200))"; exit 0
