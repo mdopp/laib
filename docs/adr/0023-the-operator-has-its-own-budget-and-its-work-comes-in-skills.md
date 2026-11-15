@@ -897,3 +897,30 @@ by hand, while the kernel answered the same question for the look in Go
 Weighed against before (#246): one place to fix „planned“ instead of two,
 and the look learns the case #975 found (a client's red while Home
 Assistant is restarted on purpose). Nothing the family sees gets worse.
+
+## Amendment 2026-11-15 — the log review's wishes come once a week as one card (#1241, ADR 0035)
+
+The review filed a wish a day per pattern; the owner read and rejected
+cards for harmless lines one by one (zwave „Cannot check for firmware
+updates“, music-assistant „Failed to connect to service …“). The owner:
+collect them, one card a week, a row per finding.
+
+- **The script collects, the model judges once a week.** durchsicht's
+  script keeps every checked pattern of the week in its state (`_woche`,
+  one row per unit and pattern: count summed, last seen, the „geprüft“
+  line). The first run of a later ISO week shows them all as
+  „Wochenkarte“ and clears the list; on every other day its check
+  refuses `wish`. `limits: {wish: 1}`: the model files at most one wish,
+  „Protokoll-Funde der Woche“, a line per finding that needs a human.
+- **One approval for the card, not one per row.** A wish is one proposal
+  adding one `wishes/<time>.md`; the Inbox decides a proposal or a card
+  (#1239) as a whole, and a per-row decision would be a new kind of
+  partial approval in ring 0a, which ADR 0035 shrinks. The owner rejects
+  the card, or approves it and closes a row's part later with
+  `laib wish status`; the daily re-check closes the whole wish when none
+  of its services errs any more.
+
+Weighed against before (#246): the owner reads one card a week instead of
+up to three a day; a real error waits up to a week for its wish, but the
+daily `watch` note and the morning report still carry it the next morning.
+
