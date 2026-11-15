@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.30.0](https://github.com/mdopp/laib/compare/v2.29.1...v2.30.0) (2026-11-15)
+
+
+### Features
+
+* **state:** Homes finds Reitti by itself, instances: with value: ([#1227](https://github.com/mdopp/laib/issues/1227)) ([ede5c2b](https://github.com/mdopp/laib/commit/ede5c2b8029d9a7b707cf2daac3125ddc1904c2a)), closes [#1037](https://github.com/mdopp/laib/issues/1037)
+
 ## [2.29.1](https://github.com/mdopp/laib/compare/v2.29.0...v2.29.1) (2026-11-14)
 
 
