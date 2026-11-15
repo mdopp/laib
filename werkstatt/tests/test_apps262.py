@@ -127,25 +127,66 @@ class Scaffold(unittest.TestCase):
 
 
 class Register(unittest.TestCase):
-    def test_the_registry_is_a_box_yml_patch_the_kernel_applies(self):
+    """#1240: register reads box.yml, adds one entry named after the repo
+    under the one `registries:` key, checks the result and proposes it as
+    an ordinary patch the kernel applies."""
+
+    def register(self, d, box_yml, url="https://github.com/mdopp/abstimmung"):
+        import yaml
+        reply = json.dumps({"path": "box.yml", "content": box_yml, "data": yaml.safe_load(box_yml)})
+        (Path(d) / "state.json").write_text(reply)
+        fake = Path(d) / "laib"
+        fake.write_text(f'#!/bin/sh\nif [ "$1" = state ]; then cat {d}/state.json; exit 0; fi\n'
+                        f'printf "%s\\n" "$@" > {d}/argv\ncat > {d}/stdin\necho "Vorschlag #3"\n')
+        fake.chmod(0o755)
+        return laib_app("register", url, env={"PATH": f"{d}:{os.environ['PATH']}"})
+
+    def applied(self, d, box_yml):
+        box = Path(d) / "box"
+        box.mkdir()
+        (box / "box.yml").write_text(box_yml)
+        subprocess.run(["git", "init", "-q"], cwd=box, check=True)
+        subprocess.run(["git", "add", "box.yml"], cwd=box, check=True)
+        a = subprocess.run(["git", "apply", "--index", "--unidiff-zero", str(Path(d) / "stdin")], cwd=box, capture_output=True, text=True)
+        self.assertEqual(a.returncode, 0, a.stderr)   # internal/proposal applies a patch exactly so
+        text = (box / "box.yml").read_text()
+        self.assertEqual(len(re.findall(r"(?m)^registries:", text)), 1, text)
+        import yaml
+        return yaml.safe_load(text)
+
+    def test_a_box_without_registries_gets_the_key(self):
         with tempfile.TemporaryDirectory() as d:
-            fake = Path(d) / "laib"
-            fake.write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > {d}/argv\ncat > {d}/stdin\necho "Vorschlag #3"\n')
-            fake.chmod(0o755)
-            p = laib_app("register", "https://github.com/mdopp/laib-apps", env={"PATH": f"{d}:{os.environ['PATH']}"})
+            box = "domain: example.home\nroles: {proxy: caddy}\n"
+            p = self.register(d, box)
             self.assertEqual(p.returncode, 0, p.stderr)
             self.assertEqual((Path(d) / "argv").read_text().splitlines()[:2], ["propose", "--patch"])
-            box = Path(d) / "state"
-            box.mkdir()
-            (box / "box.yml").write_text("domain: example.home\nroles: {proxy: caddy}\n")
-            subprocess.run(["git", "init", "-q"], cwd=box, check=True)
-            subprocess.run(["git", "add", "box.yml"], cwd=box, check=True)
-            a = subprocess.run(["git", "apply", "--index", "--unidiff-zero", str(Path(d) / "stdin")], cwd=box, capture_output=True, text=True)
-            self.assertEqual(a.returncode, 0, a.stderr)   # internal/proposal applies a patch exactly so
-            import yaml
-            doc = yaml.safe_load((box / "box.yml").read_text())
-            self.assertEqual(doc["registries"], [{"name": "apps", "url": "https://github.com/mdopp/laib-apps", "ref": "main"}])
+            doc = self.applied(d, box)
+            self.assertEqual(doc["registries"], [{"name": "abstimmung", "url": "https://github.com/mdopp/abstimmung", "ref": "main"}])
             self.assertEqual(doc["domain"], "example.home")
+
+    def test_a_box_with_registries_gets_one_more_entry_not_a_second_key(self):
+        with tempfile.TemporaryDirectory() as d:
+            box = ("domain: example.home\nregistries:\n  - name: laib\n    url: https://github.com/mdopp/laib\n    ref: main\n"
+                   "  - name: apps\n    url: https://github.com/mdopp/laib-apps\nnotify:\n  mail: a@example.home\n")
+            p = self.register(d, box)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            doc = self.applied(d, box)
+            self.assertEqual([r["name"] for r in doc["registries"]], ["laib", "apps", "abstimmung"])
+            self.assertEqual(doc["notify"], {"mail": "a@example.home"})
+
+    def test_a_taken_name_or_a_known_url_proposes_nothing(self):
+        with tempfile.TemporaryDirectory() as d:
+            box = "registries:\n  - name: abstimmung\n    url: https://github.com/other/abstimmung\n"
+            p = self.register(d, box)
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn("vergeben", p.stderr)
+            self.assertFalse((Path(d) / "argv").exists())
+        with tempfile.TemporaryDirectory() as d:
+            box = "registries:\n  - name: x\n    url: https://github.com/mdopp/abstimmung\n"
+            p = self.register(d, box)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertIn("schon", p.stdout)
+            self.assertFalse((Path(d) / "argv").exists())
 
 
 class _DoH(BaseHTTPRequestHandler):

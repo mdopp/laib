@@ -133,10 +133,11 @@ auf GitHub unter Packages das Paket <name> auf öffentlich.“ Check with
 laib-app register https://github.com/mdopp/laib-apps
 ```
 
-This proposes the `registries` entry in box.yml. It is the owner's
-decision (a box.yml change); the Inbox card shows it. If box.yml has
-other registries already, the command says so and prints the lines for
-the owner to add.
+This proposes the `registries` entry in box.yml as an ordinary patch,
+named after the repo (`laib-apps` here), under the one `registries:` key
+box.yml has or a new one. It checks the result first: a name already
+taken refuses, a repo already registered does nothing. It is the owner's
+decision (a box.yml change); the Inbox card shows it.
 
 ## 6. Propose the service
 
