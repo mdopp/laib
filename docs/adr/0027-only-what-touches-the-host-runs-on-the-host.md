@@ -30,7 +30,8 @@ propose" held only by agreement.
 
 1. **Host only for what must touch the host.** These stay on the host:
    - `laib`: systemd, podman, Quadlet, snapshots;
-   - `laib-disk`: block devices, mdadm, SMART;
+   - `laib-disk`: block devices, mdadm, SMART, and the box's load (`/proc`,
+     `/sys`, `nvidia-smi`; #1047);
    - `self-update.sh`: it replaces the binaries;
    - the backup, which stops services and reads their data.
 2. **Everything else is a container with only its own token and folders.**

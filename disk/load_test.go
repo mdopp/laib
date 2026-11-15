@@ -1,4 +1,4 @@
-package diag
+package disk
 
 import (
 	"context"
@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/mdopp/laib/internal/state"
 )
 
 func put(t *testing.T, root, name, body string) {
@@ -23,7 +21,7 @@ func put(t *testing.T, root, name, body string) {
 	}
 }
 
-// laib auslastung (owner 2026-11-06): the values from fake /proc and /sys, a
+// laib auslastung (owner 2026-11-06), measured by laib-disk load since #1047: the values from fake /proc and /sys, a
 // fake nvidia-smi and a fake lease; a missing sensor is said, not zero.
 func TestAuslastungReadsTheBox(t *testing.T) {
 	proc, sys, bin := t.TempDir(), t.TempDir(), t.TempDir()
@@ -52,8 +50,8 @@ func TestAuslastungReadsTheBox(t *testing.T) {
 	procRoot, sysRoot, smi = proc, sys, filepath.Join(bin, "nvidia-smi")
 	defer func() { procRoot, sysRoot, smi = "/proc", "/sys", "nvidia-smi" }()
 
-	st := &state.State{Box: state.Box{DataDir: t.TempDir(), GPU: state.GPU{Present: true}, Model: state.Model{Lease: lease.URL}}}
-	l := measure(context.Background(), st)
+	data := t.TempDir()
+	l := Measure(context.Background(), data, true, lease.URL)
 	if l.CPU.Load != [3]float64{0.52, 0.41, 0.30} || l.CPU.Cores < 1 || l.Uptime != 86400 {
 		t.Errorf("cpu %+v uptime %d", l.CPU, l.Uptime)
 	}
@@ -77,7 +75,7 @@ func TestAuslastungReadsTheBox(t *testing.T) {
 	// no GPU answering, no CPU sensor: both said, nothing invented
 	smi = filepath.Join(bin, "gibt-es-nicht")
 	os.RemoveAll(filepath.Join(sys, "class/hwmon/hwmon0"))
-	l = measure(context.Background(), st)
+	l = Measure(context.Background(), data, true, lease.URL)
 	if l.GPU != nil || len(l.Missing) != 2 || !strings.HasPrefix(l.Missing[0], "Grafikkarte: nvidia-smi antwortet nicht") || !strings.HasPrefix(l.Missing[1], "CPU-Temperatur") {
 		t.Errorf("gpu %+v missing %v", l.GPU, l.Missing)
 	}

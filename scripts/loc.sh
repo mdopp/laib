@@ -28,6 +28,10 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 22,500: lowered on the Kern-Diät #1047 (2026-11-14): laib auslastung's measuring (/proc, /sys,
+# statfs, nvidia-smi, the lease's holder) moved to laib-disk, the program that already reads the
+# host's hardware (ADR 0027); the kernel keeps the verb, its 4 s and the call. The kernel 22,649 →
+# 22,419, the cap its size plus about 80 lines, the open PRs' room.
 # 22,660: two requests of the owner, 2026-11-14, on top of each other: #1209's 22,560 (below) and
 # Durchgang rot with „a failed helper is no ‚läuft nicht‘“: the cause of a red run on its cards
 # (laib note --karten, the Inbox shows it) and a helper's failure gelb with its last log line on
@@ -62,7 +66,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 22660 cmd internal
+budget kernel 22500 cmd internal
 budget operator 3300 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,
@@ -99,7 +103,9 @@ budget frage 540 frage          # "was ist …", 261
 budget automat 660 automat      # the Bote's HA automations, 421
 budget directory 530 directory  # the Bote's directory (ADR 0030; the persona engine's cap was 990), 421
 budget mcpserver 220 mcpserver  # the Bote's tools' MCP server, 111
-budget disk 770 disk            # laib-disk: the data RAID, SMART, thermal (#443), 564
+# disk 1,110: the Kern-Diät #1047 (2026-11-14): laib auslastung's values (laib-disk load) moved here
+# out of the kernel, 271 lines; 886 with them, plus a quarter
+budget disk 1110 disk           # laib-disk: the data RAID, SMART, thermal (#443), 564; the box's load (#1047)
 # notify 600: the owner, mdopp, 2026-10-25 (#659): the chat retried before mail, mail sent right,
 # failures noted once an hour; 501 lines, no honest cut
 budget notify 660 notify        # laib-notify: the watchdog ping and the owner's mail (#443), ~270
@@ -168,7 +174,7 @@ if [ -n "$diet" ]; then
   echo "| Package | Lines | What it is |"
   echo "|---|---:|---|"
   for c in $chores; do echo "| \`internal/$c\` | $(lines internal/$c) | box chore |"; done
-  echo "| \`cmd/laib\` | $(lines cmd/laib) | the small verbs; \`internal/hands\` (secret, token, operator) is the next cut |"
+  echo "| \`cmd/laib\` | $(lines cmd/laib) | the small verbs; \`internal/hands\` (secret, token, operator) would structure them, not shrink the count (ADR 0005, #1047) |"
   echo
   echo "Crossing the cap means raising it in the same PR, with its reason in \`scripts/loc.sh\` and the owner's approval (#309)."
   echo

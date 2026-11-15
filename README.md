@@ -180,7 +180,7 @@ directory/           the Bote's directory: tools, levels, help (ADR 0030); its o
 mcpserver/           the smallest MCP server, shared by the Bote's tools (frage, automat, directory)
 atomicfile/          the durable write (#148), a leaf the kernel and the programs share; imports nothing of laib
 stick/               the laptop tool laib-stick (Butane, ISO, Ignition, write): its own program and line budget (#309)
-disk/                laib-disk beside laib: the data RAID (`laib disk`), SMART and thermal for diag; its own program and budget (#443)
+disk/                laib-disk beside laib: the data RAID (`laib disk`), SMART and thermal for diag, the box's load for `laib auslastung` (#1047); its own program and budget (#443)
 haushalt/            laib-haushalt behind the kernel's verb door, a container laib renders (ADR 0027): scan, net geraete, tell, zuhause, person signal and wish, the household verbs (ADR 0026); its own program and budget
 lease/               laib-lease, the model role's policy proxy and GPU lease (ADR 0011), the llama template's container (ADR 0027): its own program and budget (#677)
 notify/              laib-notify, a container on a rendered timer (ADR 0027): the outside watchdog ping and the owner's mail, over MCP as the notify hand; its own program and budget (#443)

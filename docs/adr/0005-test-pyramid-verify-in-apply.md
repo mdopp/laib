@@ -281,3 +281,35 @@ row `internal/relay` + `cmd/relay` of the 2026-10-17 table is gone with the
 relay; invariant §2e is now kept by the kernel alone (only the hand `human`
 approves, ADR 0019 amendment of the same date). `internal/mcp`'s client,
 whose last production user the relay was, moved into the tests.
+
+## Amendment 2026-11-14 (#1047): the third Kern-Diät cut, and what stays
+
+At 22,649 of 22,660 the 95 % warning opened #1047. Measured by #246, one
+cut was honest: **`laib auslastung`'s measuring moved to laib-disk**
+(`laib-disk load --data-dir <dir> [--gpu] [--lease <url>]`). It reads the
+host's `/proc`, `/sys`, statfs and `nvidia-smi`, and the lease's open GET,
+and needs nothing of the kernel but three values of box.yml; laib-disk is
+the program that already reads the host's hardware (RAID, SMART, thermal),
+on the host by ADR 0027. The kernel keeps the verb (tier read, the homes
+hand's), its 4 s, and the call, and shows laib-disk's JSON as it said it;
+when laib-disk does not answer, the verb says so instead of showing
+nothing. Both binaries ship, update and roll back together
+(`install-box.sh`, `self-update.sh`). Kernel 22,649 → 22,419, cap 22,500;
+disk 615 → 886, cap 1,110.
+
+Looked at and left, because a move would be a rewrite or weaken a gate:
+
+- **`internal/diag`'s rest** reads the plan (rendered files against the
+  box), units, the journal and the secrets, and its findings become repair
+  proposals and Box-Aufgaben. Outside the kernel it would need all of that
+  over MCP, whose `diag` it is.
+- **`internal/registry`**: the template lint is the kernel's own validation
+  (`state.Load` and the renderers on a throw-away state); outside it would
+  be a copy that drifts. The image updates propose the pins the kernel
+  applies, behind ADR 0034's signature check.
+- **`internal/pages`**: the Inbox and the Schlüssel page are the human's
+  approval and key surface (ADR 0019 §2e); outside the kernel a program
+  would hold the human's power. The status page shares its facts with
+  `/ready`.
+- **`internal/hands`** (secret, token, operator out of `cmd/laib`) stays in
+  `cmd/` + `internal/`: it would structure the kernel, not shrink its count.

@@ -38,7 +38,7 @@ laib restart <service>               restart + verify (envelope)
 laib start <service>                 start its units, lift a stop's pause, verify (envelope, #441)
 laib stop <service> [--until 2h] ["<grund>"]   stop its units and pause the service, at most a day; converge leaves it alone (envelope, #441); off for good is laib remove
 laib backups                         read: the last nightly backup (green/red, when, why), the last green one, the off-box copy, the restore test, with diag's backup findings and their fix (#441)
-laib auslastung                      read: the box's values now, JSON: disks by role (system /var, data, boot), CPU load, cores and % over a second, RAM, swap, the GPU from the host's nvidia-smi with who holds it by the lease, hwmon temperatures (CPU package, NVMe, drivetemp disks), uptime, missing; kept 4 s; the RAID stays diag's (Homes' Box → Auslastung, 2026-11-06)
+laib auslastung                      read: the box's values now, JSON: disks by role (system /var, data, boot), CPU load, cores and % over a second, RAM, swap, the GPU from the host's nvidia-smi with who holds it by the lease, hwmon temperatures (CPU package, NVMe, drivetemp disks), uptime, missing; measured by laib-disk (`laib-disk load`, #1047), kept 4 s, an error when laib-disk does not answer; the RAID stays diag's (Homes' Box → Auslastung, 2026-11-06)
 laib befunde                         read: the last whole laib diag run's findings as diag.json keeps them, JSON {at, findings}; at is null before the first run; measures nothing, settles nothing, closes no Box-Aufgabe, so a page may ask on every look (Homes' Box page, 2026-11-06)
 laib escalate <service> "<was ich weiß>"       context bundle + red journal line for the next hand; an issue when box.yml intake is set; from the bote hand never an issue but a Box-Aufgabe for the owner (#863)
 laib wish [--von <login>] "<was das Haus braucht>"  the intake (#56): a GitHub issue with the wunsch label, never pi:ready; kept in the journal without an intake; laib-haushalt files it behind the door with its own GITHUB_INTAKE_TOKEN, as it files escalations (#797); from the bote hand a Box-Aufgabe for the admins, „Wunsch aus dem Boten: …“ with von bote:<login>, never a ticket (#883); from the ops hand a proposal (wishes/<time>.md, class human) whose approval files the issue (#270)
@@ -534,7 +534,8 @@ the background and `laib diag` shows it. The stick creates the array with one
 member on purpose (#29). The work is the program `laib-disk` beside `laib`
 (`disk/`, out of the kernel since #443; `laib disk` hands it the actor and
 `--json`), which also gives `laib diag` the RAID, SMART and temperature
-findings (`laib-disk probe [--hardware]`, JSON).
+findings (`laib-disk probe [--hardware]`, JSON), and `laib auslastung` the
+box's load (`laib-disk load --data-dir <dir> [--gpu] [--lease <url>]`, JSON, #1047).
 
 ### `laib inbox`
 
