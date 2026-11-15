@@ -123,6 +123,7 @@ programme:
   notify: {ring: helfer, titel: Notify, text: "Nachrichten an den Besitzer"}
   haushalt: {ring: helfer, titel: Haushalt, text: "die Haushalts-Verben hinter der Tür"}
   lease: {ring: helfer, titel: Lease, text: "wer die GPU hält, Policy-Proxy des Modells"}
+  updater: {ring: helfer, titel: Updater, text: "fragt Register und Änderungsnotizen, ohne Schlüssel und Token; der Kern prüft selbst"}
   disk: {ring: host, titel: laib-disk, text: "Platten, RAID, Auslastung"}
   frage: {ring: vorlage, vorlage: frage, titel: Frage}
   automat: {ring: vorlage, vorlage: bote, titel: Automat}

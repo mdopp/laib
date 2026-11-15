@@ -336,7 +336,7 @@ if [ -n "$TOKEN" ]; then
 fi
 
 sudo mkdir -p /var/opt/laib
-# laib-operator, laib-notify, laib-haushalt and laib-lease are containers
+# laib-operator, laib-notify, laib-haushalt, laib-updater and laib-lease are containers
 # since ADR 0027: their images are pinned by laib and pulled by its apply.
 # A binary of theirs from an older release stays where it is: a self
 # rollback to that release runs it.

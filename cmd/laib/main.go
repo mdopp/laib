@@ -64,7 +64,7 @@ func init() {
 		{Name: "updates", Tier: "read", MCP: true, Help: "[--run|--now|--notes]: what is behind — a tag's or pin's newer digest, patch and minor releases (#287), a template's extensions and firmware; --notes adds a new digest's versions, its changelog from GitHub and our own image's signature check (ADR 0034); --run is laib-images.timer's nightly run, which pulls nothing since ADR 0034 (#528); --now (tier apply) starts that night's run now, Laib's own update first, without waiting (#578)", Run: cmdUpdates},
 		{Name: "skill", Tier: "read", MCP: true, Help: "list | enable <name> | pause <name> (humans only): the Operator's skills, active or paused (ADR 0023)", Run: mcp.Skill},
 		{Name: "operator", Tier: "apply", Help: "enable [--model alias] [--report-at 07:00] | disable | status (humans only)", Run: cmdOperator},
-		{Name: "logs", Tier: "read", MCP: true, Help: "journald for every unit of a service, or of Laib itself (laib, operator, notify, updates, haushalt, backup), secrets redacted (--since 1h, --lines 200, --grep <re2> filters before the cut)", Run: cmdLogs},
+		{Name: "logs", Tier: "read", MCP: true, Help: "journald for every unit of a service, or of Laib itself (laib, operator, notify, updates, haushalt, updater, backup), secrets redacted (--since 1h, --lines 200, --grep <re2> filters before the cut)", Run: cmdLogs},
 		{Name: "rollback", Tier: "apply", MCP: true, Help: "[<commit>]: revert the last (or a given) state commit and apply", Flags: []string{}, Run: inbox.Rollback},
 		{Name: "backup", Tier: "propose", MCP: true, Help: "[check]: restic snapshot of state, journal and declared data paths; check tests a restore", Flags: []string{}, Run: backup.Cmd},
 		{Name: "restore", Tier: "apply", MCP: true, Help: "<snapshot|latest> <service> | --box <snapshot|latest>: restore declared paths, then apply", Flags: []string{"--box"}, Run: backup.Restore},
@@ -106,12 +106,12 @@ func init() {
 		mcp.Verbs[i] = cli.Guard(mcp.Verbs[i])
 	}
 	inbox.Present = diag.Present
-	inbox.ImageVersion = registry.ImageVersion // a digest proposal's card says the version (#959)
-	inbox.VerifyImage = registry.Verify        // our own image is proposed only signed (ADR 0034)
-	inbox.Runs = registry.Runs                 // a pin of what runs is no update (ADR 0034)
-	registry.Changelog = changelog             // an image's changelog, read by laib-haushalt (ADR 0034)
-	inbox.Issue = fileIssue                    // escalations and approved wishes, through laib-haushalt (#797)
-	proposal.VerbTier = map[string]string{}    // the card says whether a granted verb changes or proposes (#616)
+	inbox.ImageVersion = imageVersion       // a digest proposal's card says the version, as laib-updater reads it (#959, ADR 0035)
+	inbox.CheckImage = registry.Check       // the digest's form and our own image's signature, the kernel's own check (ADR 0034, 0035)
+	inbox.Runs = registry.Runs              // a pin of what runs is no update (ADR 0034)
+	registry.Ask = updaterAsk               // the registries, changelogs and signatures, laib-updater's (ADR 0035)
+	inbox.Issue = fileIssue                 // escalations and approved wishes, through laib-haushalt (#797)
+	proposal.VerbTier = map[string]string{} // the card says whether a granted verb changes or proposes (#616)
 	for _, v := range mcp.Verbs {
 		proposal.VerbTier[v.Name] = v.Tier
 		policy.KnownVerbs[v.Name] = true // policy.yml may name every verb of the table (#800)

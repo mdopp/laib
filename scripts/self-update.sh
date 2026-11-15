@@ -81,7 +81,7 @@ want="$(grep ' laib-install-box.sh$' "$tmp/SHA256SUMS" | cut -d' ' -f1)"
 
 # the binaries that run now, for the way back (*.prev of a binary the last
 # update did not change is older than what runs). laib-operator,
-# laib-notify, laib-haushalt and laib-lease are containers whose images the
+# laib-notify, laib-haushalt, laib-updater and laib-lease are containers whose images the
 # laib that renders them pins (ADR 0027): they come back with the old
 # laib's converge below.
 mkdir "$tmp/keep"

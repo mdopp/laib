@@ -1,6 +1,6 @@
 # scripts/ratchet.py gocognit: functions over 30, the number is the score
 # written by `scripts/ratchet.py --update`; lowered in the PR that fixes one, raised only with --accept
-# total 53
+# total 52
 83 automat/automat.go: automat.Server
 92 cmd/laib/aufgabe.go: main.cmdAufgabe
 37 cmd/laib/calendar.go: main.cmdCalendar
@@ -34,7 +34,6 @@
 46 internal/registry/lint.go: registry.lintHostWrites
 36 internal/registry/lint.go: registry.lintMounts
 37 internal/registry/template.go: registry.TemplateCmd
-42 internal/registry/updates.go: registry.ImageUpdates
 32 internal/render/net.go: render.Net
 33 internal/render/render.go: render.Render
 67 internal/render/render.go: render.caddyfile

@@ -1,6 +1,6 @@
 # scripts/ratchet.py mutation: surviving mutants, the number is how many on that line's text
 # written by `scripts/ratchet.py --update`; lowered in the PR that fixes one, raised only with --accept
-# total 556
+# total 543
 3 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: Warum: "Der Bote kam bei " + svc.Name + " nicht weiter; was er wusste und der Stand liegen in " + p}, env.Actor, time.Now())
 2 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: bad = append(bad, c.What+" "+c.Detail)
 1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: case args[i] == "--container" && i+1 < len(args):
@@ -121,7 +121,6 @@
 1 internal/inbox/inbox.go: lived CONDITIONALS_NEGATION: if reason == "" {
 1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: add.Name = args[i+1]
 4 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: add.Person, add.Name = args[i+1], add.Name+"-"+args[i+1]
-1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: c.Pin = Runs != nil && strings.HasPrefix(c.New, c.Old+"@") && Runs(c.New)
 1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: case args[i] == "--limit" && i+1 < len(args):
 1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: case args[i] == "--name" && i+1 < len(args):
 1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: case args[i] == "--person" && i+1 < len(args):
@@ -129,7 +128,6 @@
 1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: edit.Add.Name = args[i+1]
 4 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: edit.Add.Person, edit.Add.Name = args[i+1], edit.Add.Name+"-"+args[i+1]
 2 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: g, err := grantEdit(st, args[i+1], args[i+2])
-1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: if VerifyImage == nil || !strings.HasPrefix(c.New, "ghcr.io/mdopp/") || strings.HasSuffix(c.Old, "@"+d) || c.Pin {
 2 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: if edit.Add == nil || i+1 >= len(args) {
 3 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: if i+1 >= len(args) {
 1 internal/inbox/inbox.go: not-covered ARITHMETIC_BASE: if i+2 >= len(args) {
@@ -159,7 +157,6 @@
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if policy.Index(st.Policy.Hands[h].Ceiling) > mine || h == "human" {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: if r := []rune(strings.Join(strings.Fields(text), " ")); len(r) > 400 {
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_BOUNDARY: return limit > 0 && decided > limit
-1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: c.Pin = Runs != nil && strings.HasPrefix(c.New, c.Old+"@") && Runs(c.New)
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: case args[i] == "--all":
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: case args[i] == "--limit" && i+1 < len(args):
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: case args[i] == "--name" && i+1 < len(args):
@@ -169,15 +166,12 @@
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: for i := 0; i < len(args); i++ {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: for i := 1; i < len(args); i++ {
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: full := func(p *proposal.Proposal) bool { return id != 0 || p.Status == "open" }
-1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if ImageVersion != nil {
-1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if VerifyImage == nil || !strings.HasPrefix(c.New, "ghcr.io/mdopp/") || strings.HasSuffix(c.Old, "@"+d) || c.Pin {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if _, err := fs.Stat(sub, "laib.yml"); err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if _, err := render.Render(cst, nil); err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if a.Notes == nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if b, err := policy.Grant(text, "ops", false, need...); err == nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if b, err := policy.Grant(text, hand, paths, miss[hand]...); err == nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if c.Decider != "" {
-1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if c.Op != "~" || !strings.HasSuffix(c.Key, "IMAGE") || !strings.Contains(c.New, "@") {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if code := Decide(ctx, env, args, true); code != cli.ExitOK {
 4 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if edit.Add == nil || i+1 >= len(args) {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if edit.At == nil {
@@ -213,7 +207,6 @@
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if st, err := cli.LoadState(env); err == nil {
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if st, err = cli.LoadState(env); err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if svc, ok := st.Services[add.Name]; ok && svc.Contract.Template.Name == args[0] {
-1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if why := VerifyImage(c.New); why != "" {
 3 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: return (p.Status == "open" && strings.HasPrefix(p.Reason, defaultsReason)) || (p.Status == "rejected" && p.Reason == reason)
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: return id != 0 && p.ID != id
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: return limit > 0 && decided > limit

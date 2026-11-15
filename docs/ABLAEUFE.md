@@ -193,6 +193,12 @@ Dann installiert die Box es nur, wenn seine Prüfsummen die Unterschrift von Lai
 Und fehlt die Unterschrift oder stammt sie von jemand anderem, bleibt die Box auf ihrer Version, und `laib diag` sagt auf Deutsch, warum.
 Und ein Programm mit Versionsnummer kommt in genau der Fassung, die geprüft wurde; „Images festhalten“ hält auch diese fest.
 
+### L-57 Der Kern liest keine Antworten aus dem Internet; ein Update wird vor dem Einspielen selbst geprüft
+Wenn nachts nach neuen Versionen gesucht wird,
+Dann fragt ein eigener Helfer ohne Schlüssel die Register und Änderungsnotizen, nicht der Kern, und die Karte „Neue Versionen“ sieht aus wie immer.
+Und bevor ein freigegebenes Update eingespielt wird, prüft der Kern selbst die Prüfsumme und bei Laibs eigenen Programmen die Unterschrift.
+Und stimmt eins davon nicht, läuft nichts davon, die Box bleibt auf ihrer Version und die Karte sagt, warum.
+
 ## Sicherung
 
 ### L-27 Eine fehlgeschlagene oder alte Sicherung meldet sich

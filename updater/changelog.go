@@ -1,11 +1,9 @@
-package haushalt
+package updater
 
 import (
 	"cmp"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -15,23 +13,27 @@ import (
 	"time"
 )
 
+// GitHub is where the changelogs are read: GitHub's API, without a token —
+// the program that reads the net holds no credential (ADR 0035); 60 asks an
+// hour, and after a rate limit none before its reset.
+type GitHub struct{ API string }
+
 // Changelog (ADR 0034): what changed between the image the box runs and a
 // newer digest — the releases from the new version down to the old, else the
 // commits between the revisions — as untrusted text, capped; nothing found is
-// empty. The kernel holds no GitHub client (#797): this program reads, with
-// its token if any (else 60 an hour), and after a rate limit not before its reset.
-func Changelog(ctx context.Context, env *Env, args []string) int {
-	if len(args) != 5 || !ghRepo.MatchString(args[0]) {
-		return env.fail(errors.New("usage: changelog <owner/repo> <old version> <new version> <old revision> <new revision>"))
+// empty.
+func (g GitHub) Changelog(ctx context.Context, repo, oldV, newV, oldRev, newRev string) string {
+	if !ghRepo.MatchString(repo) {
+		return ""
 	}
-	repo, oldV, newV, oldRev, newRev := args[0], strings.TrimPrefix(args[1], "v"), strings.TrimPrefix(args[2], "v"), args[3], args[4]
+	oldV, newV = strings.TrimPrefix(oldV, "v"), strings.TrimPrefix(newV, "v")
 	var text []string
 	if oldV != "" && newV != "" && oldV != newV {
 		var rs []struct {
 			Tag  string `json:"tag_name"`
 			Body string `json:"body"`
 		}
-		env.GitHub.get(ctx, "/repos/"+repo+"/releases?per_page=30", &rs)
+		g.get(ctx, "/repos/"+repo+"/releases?per_page=30", &rs)
 		in := false
 		for _, r := range rs { // newest first
 			t := strings.TrimPrefix(r.Tag, "v")
@@ -49,13 +51,12 @@ func Changelog(ctx context.Context, env *Env, args []string) int {
 				Commit struct{ Message string } `json:"commit"`
 			} `json:"commits"`
 		}
-		env.GitHub.get(ctx, "/repos/"+repo+"/compare/"+oldRev+"..."+newRev, &c)
+		g.get(ctx, "/repos/"+repo+"/compare/"+oldRev+"..."+newRev, &c)
 		for _, x := range c.Commits {
 			text = append(text, "- "+strings.SplitN(x.Commit.Message, "\n", 2)[0])
 		}
 	}
-	fmt.Fprint(env.Out, clip(strings.Join(text, "\n"), 6000))
-	return exitOK
+	return clip(strings.Join(text, "\n"), 6000)
 }
 
 var (
@@ -74,9 +75,6 @@ func (g GitHub) get(ctx context.Context, path string, v any) {
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(cmp.Or(g.API, "https://api.github.com"), "/")+path, nil)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	if g.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+g.Token)
-	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return

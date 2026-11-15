@@ -41,7 +41,7 @@ jobs:
       actions: write      # dispatch vm-install for the release commit when no run exists
       id-token: write     # provenance
       attestations: write
-      packages: write     # the images of laib's own programs: operator, notify, haushalt, lease (ADR 0027)
+      packages: write     # the images of laib's own programs: operator, notify, haushalt, updater, lease (ADR 0027, 0035)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -86,7 +86,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      # laib-operator, laib-notify, laib-haushalt and laib-lease are containers
+      # laib-operator, laib-notify, laib-haushalt, laib-updater and laib-lease are containers
       # (ADR 0027): their images are built from this tag and pinned by digest
       # into this laib, so they move with it — the self-update brings them, a
       # self rollback takes the previous laib's back. The release carries no
@@ -117,6 +117,13 @@ jobs:
           file: haushalt/Containerfile
           push: true
           tags: ghcr.io/mdopp/laib-haushalt:${{ needs.release-please.outputs.tag }}
+      - id: updater
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: updater/Containerfile
+          push: true
+          tags: ghcr.io/mdopp/laib-updater:${{ needs.release-please.outputs.tag }}
       - id: lease
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -141,20 +148,26 @@ jobs:
           push-to-registry: true
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
+          subject-name: ghcr.io/mdopp/laib-updater
+          subject-digest: ${{ steps.updater.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
           subject-name: ghcr.io/mdopp/laib-lease
           subject-digest: ${{ steps.lease.outputs.digest }}
           push-to-registry: true
-      - name: laib, with the four images pinned by digest
+      - name: laib, with the five images pinned by digest
         env:
           OPERATOR: ghcr.io/mdopp/laib-operator@${{ steps.operator.outputs.digest }}
           NOTIFY: ghcr.io/mdopp/laib-notify@${{ steps.notify.outputs.digest }}
           HAUSHALT: ghcr.io/mdopp/laib-haushalt@${{ steps.haushalt.outputs.digest }}
+          UPDATER: ghcr.io/mdopp/laib-updater@${{ steps.updater.outputs.digest }}
           LEASE: ghcr.io/mdopp/laib-lease@${{ steps.lease.outputs.digest }}
         run: |
           set -euo pipefail
-          for i in "$OPERATOR" "$NOTIFY" "$HAUSHALT" "$LEASE"; do case "$i" in *@sha256:?*) ;; *) echo "no digest for the image: $i"; exit 1;; esac; done
+          for i in "$OPERATOR" "$NOTIFY" "$HAUSHALT" "$UPDATER" "$LEASE"; do case "$i" in *@sha256:?*) ;; *) echo "no digest for the image: $i"; exit 1;; esac; done
           r=github.com/mdopp/laib/internal/render
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.Version=${{ needs.release-please.outputs.tag }} -X $r.OperatorImage=$OPERATOR -X $r.NotifyImage=$NOTIFY -X $r.HaushaltImage=$HAUSHALT -X $r.LeaseImage=$LEASE" -o laib-linux-amd64 ./cmd/laib
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.Version=${{ needs.release-please.outputs.tag }} -X $r.OperatorImage=$OPERATOR -X $r.NotifyImage=$NOTIFY -X $r.HaushaltImage=$HAUSHALT -X $r.UpdaterImage=$UPDATER -X $r.LeaseImage=$LEASE" -o laib-linux-amd64 ./cmd/laib
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o laib-disk-linux-amd64 ./disk/cmd/laib-disk
       - run: |
           for t in linux-amd64 darwin-arm64 darwin-amd64 windows-amd64; do

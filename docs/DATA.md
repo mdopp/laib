@@ -66,6 +66,15 @@ owner pastes on the box page („Schlüssel hinterlegen“, `owner:` in
 laib.yml) belong to whichever account the owner made them in; the
 `hilfe:` text says which.
 
+Laib's own helpers in ring 1 (ADR 0027, 0035) hold no key to a
+service's data. laib-updater, which asks the registries and GitHub for
+`laib updates`, holds one key only: the door's (`LAIB_UPDATER_KEY`), by
+which it knows a call is laib's. It reads the registries and GitHub's
+changelogs without a credential (until #1233 laib-haushalt read them with
+the intake's GitHub token), sees the image values and nothing of a person,
+and can make Laib run nothing: the kernel checks a digest and our own
+image's signature itself before it runs one.
+
 ## Overview
 
 | Service | Accounts | One person sees another's? | Admin / root | `private:` |

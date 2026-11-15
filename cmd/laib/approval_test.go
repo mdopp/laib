@@ -231,7 +231,7 @@ func TestANewImageOfAServiceWithDataWaitsAndIsSnapshottedFirst(t *testing.T) {
 	if code := apply.ApplyLocked(ctx, &cliEnv{Paths: env.Paths, Actor: "human:test", Out: io.Discard}, st, "", "vault"); code != cli.ExitOK {
 		t.Fatalf("fixture apply: %d", code)
 	}
-	pin := "docker.io/vaultwarden/server:latest@sha256:b2"
+	pin := "docker.io/vaultwarden/server:latest@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	propose := func() string {
 		if out, code := mcp.Call(ctx, env, st, "ops", "laib_propose", map[string]any{"reason": "vault: neues Image", "service": "vault", "key": "IMAGE", "value": pin}); code != cli.ExitOK {
 			t.Fatalf("exit %d: %s", code, out)

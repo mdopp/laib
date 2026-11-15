@@ -4,13 +4,12 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"net/http"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -27,13 +26,13 @@ import (
 )
 
 // laib updates (#287): for every pinned image in the services' values, the
-// newest patch release (same major.minor) and the newest minor release
-// (same major) the registry has, the tag's shape kept. For a floating tag
-// (latest, stable, a bare major) and a digest pin, the registry's digest of
-// the tag when the box runs another one (#528), and for a value without a
-// digest, a version tag too (#1130), the digest it runs (Pin). Nothing
-// pulls it (ADR 0034): the Operator's nightly versionen proposes it, with
-// --notes' changelog and signature. Reading only, except --run.
+// newest patch and minor release, a tag's or pin's newer digest (#528) and
+// the digest an unpinned value runs (Pin, #1130). Nothing pulls it (ADR
+// 0034): the Operator's nightly versionen proposes it, with --notes'
+// changelog and signature. The kernel reads no answer from the internet
+// for it (ADR 0035): it hands the values and what podman knows of them
+// locally to laib-updater and prints the updater's rows; what it runs it
+// checks itself before an apply (CheckImages). Reading only, except --run.
 
 type ImageUpdate struct {
 	Service string `json:"service"`
@@ -52,278 +51,87 @@ type ImageUpdate struct {
 	Running string `json:"running,omitempty"` // the laib row (#578): since when laib-images.service runs
 	// --notes (ADR 0034), for a new digest: the versions its labels name, its
 	// GitHub repository, what changed there (untrusted text, capped); for our
-	// own image (ghcr.io/mdopp/) why its signature fails
+	// own image (ghcr.io/mdopp/) why its signature fails — the updater's
+	// word, for the card; the kernel checks again before it runs one
 	OldVersion string `json:"oldVersion,omitempty"`
 	NewVersion string `json:"newVersion,omitempty"`
 	Source     string `json:"source,omitempty"`
 	Notes      string `json:"notes,omitempty"`
 	Unsigned   string `json:"unsigned,omitempty"`
-	value      string // the value as it stands, for --notes
 
 	PatchDigest string `json:"patchDigest,omitempty"` // Patch's digest: its proposal keeps the value pinned (#1130)
 }
 
-// RegistryURL is where a registry host's v2 API lives; tests swap it.
-var RegistryURL = func(host string) string {
-	if host == "docker.io" {
-		host = "registry-1.docker.io"
-	}
-	return "https://" + host
+// Pinned is one image value as the kernel hands it to laib-updater
+// (updater.Pinned; the two meet over HTTP, never by import): for a value
+// without a digest podman's RepoDigests of the local image (Have) and, with
+// --notes, its labels.
+type Pinned struct {
+	Service string            `json:"service"`
+	Key     string            `json:"key"`
+	Value   string            `json:"value"`
+	Have    string            `json:"have,omitempty"`
+	Labels  map[string]string `json:"labels,omitempty"`
 }
 
-var semverTag = regexp.MustCompile(`^(v?)(\d+)\.(\d+)(?:\.(\d+))?$`)
-
-// splitImage: "redis:6.2" → docker.io, library/redis, 6.2.
-func splitImage(ref string) (host, repo, tag string) {
-	ref, _, _ = strings.Cut(ref, "@")
-	i := strings.LastIndex(ref, ":")
-	if i < 0 || strings.Contains(ref[i:], "/") {
-		return "", "", ""
-	}
-	name, tag := ref[:i], ref[i+1:]
-	host, repo, ok := strings.Cut(name, "/")
-	if !ok || !strings.ContainsAny(host, ".:") {
-		host, repo = "docker.io", name
-	}
-	if host == "docker.io" && !strings.Contains(repo, "/") {
-		repo = "library/" + repo
-	}
-	return host, repo, tag
+// Call is one question to laib-updater (updater.Call): "updates" [--notes]
+// with the values and state/host/image, or "version" <image>.
+type Call struct {
+	Argv   []string `json:"argv"`
+	Images []Pinned `json:"images,omitempty"`
+	Host   string   `json:"host,omitempty"`
 }
 
-func ImageUpdates(ctx context.Context, st *state.State) []ImageUpdate {
-	var out []ImageUpdate
+// Ask is how the kernel asks laib-updater, its answer or why there is
+// none; main sets it to the door (ADR 0035).
+var Ask func(ctx context.Context, env *cli.Env, c Call) (string, error)
+
+var semverTag = regexp.MustCompile(`^v?\d+\.\d+(?:\.\d+)?$`)
+
+// ImageUpdates are the rows laib-updater finds for the box's image values
+// and its host image; with notes, a new digest described (ADR 0034).
+func ImageUpdates(ctx context.Context, env *cli.Env, st *state.State, notes bool) ([]ImageUpdate, error) {
+	c := Call{Argv: []string{"updates"}}
+	if notes {
+		c.Argv = append(c.Argv, "--notes")
+	}
 	for _, name := range st.ServiceNames() {
-		svc := st.Services[name]
-		for key, v := range svc.Values {
-			host, repo, tag := splitImage(v.Literal)
-			if !strings.HasSuffix(key, "IMAGE") || host == "" {
+		for _, key := range slices.Sorted(maps.Keys(st.Services[name].Values)) {
+			v := st.Services[name].Values[key].Literal
+			if !strings.HasSuffix(key, "IMAGE") || v == "" {
 				continue
 			}
-			cur := semverTag.FindStringSubmatch(tag)
-			ref, pin, _ := strings.Cut(v.Literal, "@")
-			u := ImageUpdate{Service: name, Key: key, Image: ref[:strings.LastIndex(ref, ":")], Current: tag, value: v.Literal}
-			// every value, a version tag without a digest too: pinned to what runs (#1130)
-			u.Digest, u.Pin, u.Error = newDigest(ctx, host, repo, tag, ref, pin)
-			if cur == nil {
-				out = append(out, u)
-				continue
-			}
-			tags, err := registryTags(ctx, host, repo)
-			if err != nil {
-				u.Error = err.Error()
-			}
-			num := func(m []string, i int) int { n, _ := strconv.Atoi(m[i]); return n }
-			less := func(a, b []string) bool {
-				return num(a, 3) < num(b, 3) || num(a, 3) == num(b, 3) && num(a, 4) < num(b, 4)
-			}
-			bestP, bestM := cur, cur
-			for _, t := range tags {
-				m := semverTag.FindStringSubmatch(t)
-				if m == nil || m[1] != cur[1] || (m[4] == "") != (cur[4] == "") || num(m, 2) != num(cur, 2) {
-					continue // another shape (v-prefix, components) or another major
-				}
-				if num(m, 3) == num(cur, 3) && less(bestP, m) {
-					bestP = m
-				}
-				if num(m, 3) > num(cur, 3) && less(bestM, m) {
-					bestM = m
+			p := Pinned{Service: name, Key: key, Value: v}
+			if !strings.Contains(v, "@") { // what the box runs of a value without a digest, from podman, never the net
+				p.Have, _ = sysd.Run(ctx, "podman", "image", "inspect", "--format", "{{json .RepoDigests}}", v)
+				if notes {
+					out, _ := sysd.Run(ctx, "podman", "image", "inspect", "--format", "{{json .Labels}}", v)
+					json.Unmarshal([]byte(out), &p.Labels)
 				}
 			}
-			if bestP[0] != tag {
-				u.Patch = bestP[0]
-				u.PatchDigest, _ = tagDigest(ctx, host, repo, u.Patch) // proposed with it: a patch stays pinned (#1130)
-			}
-			if bestM[0] != tag {
-				u.Minor = bestM[0]
-			}
-			out = append(out, u)
+			c.Images = append(c.Images, p)
 		}
 	}
 	if b, err := os.ReadFile(filepath.Join(st.Dir, "host", "image")); err == nil {
-		if u, ok := hostUpdate(ctx, string(b)); ok {
-			u.Paused = diag.OSPause()
-			out = append(out, u)
-		}
+		c.Host = string(b)
 	}
-	return out
-}
-
-// newDigest is the registry's digest of the tag: moved when the box runs
-// another — the pin's, else the local image's (podman keeps the index
-// digest among its RepoDigests) — and same, for an unpinned tag, when it
-// runs this one; and the error in words.
-func newDigest(ctx context.Context, host, repo, tag, ref, pin string) (moved, same, errText string) {
-	have := pin
-	if pin == "" {
-		have, _ = sysd.Run(ctx, "podman", "image", "inspect", "--format", "{{json .RepoDigests}}", ref)
+	if Ask == nil {
+		return nil, errors.New("laib-updater ist nicht verdrahtet")
 	}
-	d, err := tagDigest(ctx, host, repo, tag)
-	if err != nil {
-		return "", "", err.Error()
-	}
-	if d != "" && !strings.Contains(have, d) {
-		return d, "", ""
-	} else if pin != "" {
-		return "", "", ""
-	}
-	return "", d, ""
-}
-
-// tagDigest is the registry's digest of the tag, "" when it names none.
-func tagDigest(ctx context.Context, host, repo, tag string) (string, error) {
-	resp, err := registryGet(ctx, host, repo, "/manifests/"+tag)
-	if err != nil {
-		return "", err
-	}
-	resp.Body.Close()
-	return resp.Header.Get("Docker-Content-Digest"), nil
-}
-
-// VersionTimeout bounds one ImageVersion (#959); tests shorten it.
-var VersionTimeout = 5 * time.Second
-
-// ImageVersion (#959) is the version an image's labels name, the OCI one
-// before the vendors'. "" when it has none or the registry does not answer
-// in time: a card says it without.
-func ImageVersion(image string) string {
-	return version(imageLabels(image))
-}
-
-func version(labels map[string]string) string {
-	for _, l := range []string{"org.opencontainers.image.version", "io.hass.version", "org.label-schema.version"} {
-		if v := labels[l]; v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-// imageLabels are an image's labels, read from its registry: the manifest
-// (an index's for this platform), then the config blob's; nil when the
-// registry does not answer in time.
-func imageLabels(image string) map[string]string {
-	ctx, cancel := context.WithTimeout(context.Background(), VersionTimeout)
-	defer cancel()
-	host, repo, ref := splitImage(image)
-	if _, pin, ok := strings.Cut(image, "@"); ok {
-		ref = pin
-	}
-	get := func(path string, v any) bool {
-		resp, err := registryGet(ctx, host, repo, path)
-		if err != nil {
-			return false
-		}
-		defer resp.Body.Close()
-		return json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(v) == nil
-	}
-	type entry struct {
-		Digest   string
-		Platform struct{ OS, Architecture string }
-	}
-	var m struct {
-		Manifests []entry
-		Config    struct{ Digest string }
-	}
-	if host == "" || !get("/manifests/"+ref, &m) {
-		return nil
-	}
-	if len(m.Manifests) > 0 {
-		i := max(0, slices.IndexFunc(m.Manifests, func(x entry) bool {
-			return x.Platform.OS == "linux" && x.Platform.Architecture == runtime.GOARCH
-		}))
-		if d := m.Manifests[i].Digest; !get("/manifests/"+d, &m) {
-			return nil
-		}
-	}
-	var cfg struct {
-		Config struct{ Labels map[string]string }
-	}
-	if m.Config.Digest == "" || !get("/blobs/"+m.Config.Digest, &cfg) {
-		return nil
-	}
-	return cfg.Config.Labels
-}
-
-// registryTags lists a repository's tags through the registry v2 API, with
-// the anonymous bearer token public registries hand out.
-func registryTags(ctx context.Context, host, repo string) ([]string, error) {
-	resp, err := registryGet(ctx, host, repo, "/tags/list?n=1000")
+	out, err := Ask(ctx, env, c)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	var out struct{ Tags []string }
-	return out.Tags, json.NewDecoder(resp.Body).Decode(&out)
-}
-
-// registryGet is one v2 API GET with the anonymous token dance; a status
-// other than 200 is an error.
-func registryGet(ctx context.Context, host, repo, path string) (*http.Response, error) {
-	client := &http.Client{Timeout: 20 * time.Second}
-	url := RegistryURL(host) + "/v2/" + repo + path
-	get := func(token string) (*http.Response, error) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Accept", "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json")
-		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-		return client.Do(req)
+	var ups []ImageUpdate
+	if err := json.Unmarshal([]byte(out), &ups); err != nil {
+		return nil, fmt.Errorf("laib-updater antwortet unlesbar: %w", err)
 	}
-	resp, err := get("")
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode == http.StatusUnauthorized {
-		resp.Body.Close()
-		ch := map[string]string{}
-		for _, m := range regexp.MustCompile(`(\w+)="([^"]*)"`).FindAllStringSubmatch(resp.Header.Get("WWW-Authenticate"), -1) {
-			ch[m[1]] = m[2]
-		}
-		treq, err := http.NewRequestWithContext(ctx, http.MethodGet, ch["realm"]+"?service="+ch["service"]+"&scope="+ch["scope"], nil)
-		if err != nil {
-			return nil, err
-		}
-		tresp, err := client.Do(treq)
-		if err != nil {
-			return nil, err
-		}
-		var tok struct{ Token, AccessToken string }
-		json.NewDecoder(tresp.Body).Decode(&tok)
-		tresp.Body.Close()
-		if resp, err = get(tok.Token + tok.AccessToken); err != nil {
-			return nil, err
+	for i := range ups {
+		if ups[i].Service == "host" {
+			ups[i].Paused = diag.OSPause()
 		}
 	}
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, fmt.Errorf("%s/%s: %s", host, repo, resp.Status)
-	}
-	return resp, nil
-}
-
-// hostUpdate (#368): state/host/image is "# tag: <tag>" and the rebase
-// reference by digest; Patch is the tag's digest when it moved.
-func hostUpdate(ctx context.Context, file string) (u ImageUpdate, ok bool) {
-	ref := ""
-	for _, l := range strings.Split(file, "\n") {
-		if t, found := strings.CutPrefix(l, "# tag: "); found {
-			u.Key = strings.TrimSpace(t)
-		} else if l = strings.TrimSpace(l); ref == "" && l != "" && !strings.HasPrefix(l, "#") {
-			ref = l
-		}
-	}
-	name, digest, found := strings.Cut(ref, "@")
-	if !found || u.Key == "" {
-		return u, false
-	}
-	u.Service, u.Image, u.Current = "host", name, digest
-	host, repo, _ := strings.Cut(name[strings.LastIndex(name, ":")+1:], "/")
-	u.Patch, _, u.Error = newDigest(ctx, host, repo, u.Key, "", digest)
-	return u, true
+	return ups, nil
 }
 
 // hostLine is the host row in words (#486): the pin by digest, whether its
@@ -398,11 +206,14 @@ func Updates(ctx context.Context, env *cli.Env, args []string) int {
 		}
 		code = apply.ImageRun(ctx, env, st, backup.RcloneImage) // laib-images.timer's nightly run (#528)
 	}
-	ups := ImageUpdates(ctx, st)
-	if slices.Contains(args, "--notes") { // the nightly versionen's (ADR 0034)
-		for i := range ups {
-			ups[i].describe(ctx, env)
+	ups, err := ImageUpdates(ctx, env, st, slices.Contains(args, "--notes")) // --notes: the nightly versionen's (ADR 0034)
+	if err != nil {                                                          // the night's run is done; only its list is missing
+		err = fmt.Errorf("%w — systemctl --user status laib-updater.service zeigt warum", err)
+		if slices.Contains(args, "--run") {
+			fmt.Fprintln(env.Errw(), "laib:", err)
+			return code
 		}
+		return env.Fail(err)
 	}
 	u, ok := laibRow(env.Paths.Home, cli.Version)
 	if u.Running = RunningSince(ctx); ok || u.Running != "" {

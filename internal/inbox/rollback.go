@@ -68,6 +68,7 @@ func Carry(ctx context.Context, env *cli.Env) int {
 		}
 	}()
 	run, snaps, ran := "", []snap(nil), false
+	code, l.because = checked(env, st, batch, code, l.because) // what it is about to run, checked by the kernel itself before anything (ADR 0035)
 	for _, p := range batch {
 		run += fmt.Sprintf(", #%d", p.ID)
 		for _, name := range p.Snapshot { // a service with data (#528): its snapshot before the run touches it, fail closed

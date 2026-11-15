@@ -4,6 +4,7 @@
 /laib-disk
 /laib-notify
 /laib-haushalt
+/laib-updater
 /frage/frage
 /dist/
 *.test

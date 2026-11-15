@@ -239,35 +239,72 @@ func JudgeFor(st *state.State, actor string) proposal.Judge {
 	}
 }
 
-// ImageVersion is an image's version label from its registry, "" when it
-// has none or the registry does not answer; main sets it (#959).
+// ImageVersion is an image's version label, as laib-updater reads it from
+// the registry, "" when it has none or the updater does not answer; main
+// sets it (#959, ADR 0035). It is the card's word, nothing the kernel runs by.
 var ImageVersion func(image string) string
 
-// VerifyImage is "" when our own image by digest carries our CI's
-// signature, else why not; Runs whether the box runs an image by digest;
-// main sets both (ADR 0034).
-var VerifyImage func(image string) string
+// CheckImage is "" when the kernel may run an image in place of the old
+// value: a digest of the right form, our own image signed by our CI — the
+// kernel's own check, never the updater's word; Runs whether the box runs
+// an image by digest; main sets both (ADR 0034, 0035).
+var CheckImage func(old, image string) string
 var Runs func(image string) bool
 
 // judgeImage: a new digest carries the versions it names, for the card's
 // words (#959), and whether it pins what runs; our own image comes only
 // with our CI's signature, a digest it already runs passes (ADR 0034).
 func judgeImage(c *proposal.Change) error {
-	if c.Op != "~" || !strings.HasSuffix(c.Key, "IMAGE") || !strings.Contains(c.New, "@") {
+	if !imageChange(*c) {
 		return nil
 	}
 	if ImageVersion != nil {
 		c.OldVersion, c.NewVersion = ImageVersion(c.Old), ImageVersion(c.New)
 	}
 	c.Pin = Runs != nil && strings.HasPrefix(c.New, c.Old+"@") && Runs(c.New)
-	_, d, _ := strings.Cut(c.New, "@")
-	if VerifyImage == nil || !strings.HasPrefix(c.New, "ghcr.io/mdopp/") || strings.HasSuffix(c.Old, "@"+d) || c.Pin {
-		return nil
-	}
-	if why := VerifyImage(c.New); why != "" {
-		return fmt.Errorf("%s: %s ist nicht von Laibs CI signiert, Laib schlägt es nicht vor (ADR 0034): %s", c.Service, c.New, why)
+	if why := checkImage(*c); why != "" {
+		return fmt.Errorf("%s: %s, Laib schlägt es nicht vor (ADR 0034)", c.Service, why)
 	}
 	return nil
+}
+
+func imageChange(c proposal.Change) bool {
+	return c.Op == "~" && strings.HasSuffix(c.Key, "IMAGE") && strings.Contains(c.New, "@")
+}
+
+func checkImage(c proposal.Change) string {
+	if CheckImage == nil || c.Pin {
+		return ""
+	}
+	return CheckImage(c.Old, c.New)
+}
+
+// checked is the run's code and reason after checkBatch: refused, with
+// its reason journaled, when an image does not hold; else as they were.
+func checked(env *cli.Env, st *state.State, batch []*proposal.Proposal, code int, because string) (int, string) {
+	if why := checkBatch(batch); why != "" {
+		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "apply", Result: "red", Detail: why})
+		return cli.ExitRefused, why
+	}
+	return code, because
+}
+
+// checkBatch is the check before a run applies its approvals (ADR 0035):
+// every new image digest they bring, checked again by the kernel itself
+// — the proposal's word and the updater's count for nothing here. The
+// first that fails, in the owner's words; "" when all hold.
+func checkBatch(batch []*proposal.Proposal) string {
+	for _, p := range batch {
+		for _, c := range p.Changes {
+			if !imageChange(c) {
+				continue
+			}
+			if why := checkImage(c); why != "" {
+				return "weil Laib das neue Programm für " + c.Service + " vor dem Einspielen geprüft hat und es nicht stimmt: " + why
+			}
+		}
+	}
+	return ""
 }
 
 // note is --note <service>/<KEY>=<text> (ADR 0034): one line, capped, as the card shows it.

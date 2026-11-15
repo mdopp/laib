@@ -1,0 +1,21 @@
+# Rendered by laib: the registries, changelogs and signatures for laib updates, in its container (ADR 0035).
+[Unit]
+Description=Laib updater
+After=laib.service
+
+[Container]
+Image=ghcr.io/mdopp/laib-updater:latest
+Network=host
+Timezone=Europe/Berlin
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+Environment="UPDATER_LISTEN=127.0.0.1:5903"
+Secret=laib.laib-updater.laib-updater.UPDATER_KEY,type=env,target=UPDATER_KEY
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

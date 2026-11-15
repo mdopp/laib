@@ -17,10 +17,10 @@ cleanup() {
   podman secret rm laib.whoami.whoami.TOKEN >/dev/null 2>&1 || true
   podman secret rm laib.usage-metrics.usage-metrics.USAGE_METRICS_TOKEN >/dev/null 2>&1 || true
   for s in HOMES_PROXY_SECRET LAIB_TOKEN HOMES_USAGE_TOKEN; do podman secret rm "laib.homes-boot.homes-boot.$s" >/dev/null 2>&1 || true; done
-  systemctl --user stop laib-operator.service laib-haushalt.service 2>/dev/null || true
-  for s in laib-operator.laib-operator.LAIB_TOKEN laib-haushalt.laib-haushalt.LAIB_TOKEN laib-haushalt.laib-haushalt.HAUSHALT_KEY; do podman secret rm "laib.$s" >/dev/null 2>&1 || true; done
+  systemctl --user stop laib-operator.service laib-haushalt.service laib-updater.service 2>/dev/null || true
+  for s in laib-operator.laib-operator.LAIB_TOKEN laib-haushalt.laib-haushalt.LAIB_TOKEN laib-haushalt.laib-haushalt.HAUSHALT_KEY laib-updater.laib-updater.UPDATER_KEY; do podman secret rm "laib.$s" >/dev/null 2>&1 || true; done
   [ -z "${CANARY:-}" ] || sudo rm -rf /mnt/data/laib
-  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$LAIB_QUADLET/homes-boot" "$LAIB_QUADLET/laib-operator" "$LAIB_QUADLET/laib-haushalt" "$WORK" "$(dirname "$LAIB_QUADLET")/containers.conf.d/50-laib.conf"
+  rm -rf "$LAIB_QUADLET/whoami" "$LAIB_QUADLET/usage-metrics" "$LAIB_QUADLET/homes-boot" "$LAIB_QUADLET/laib-operator" "$LAIB_QUADLET/laib-haushalt" "$LAIB_QUADLET/laib-updater" "$WORK" "$(dirname "$LAIB_QUADLET")/containers.conf.d/50-laib.conf"
   systemctl --user daemon-reload 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -301,6 +301,19 @@ for s in LAIB_TOKEN HAUSHALT_KEY; do
   [ -n "$v" ] || { echo "FAIL: no podman secret $s for laib-haushalt"; exit 1; }
   if grep -rqF -- "$v" "$LAIB_QUADLET/laib-haushalt" || grep -qF -- "$v" <<<"$(podman inspect "$HHC" --format "{{.Config.CreateCommand}}")"; then echo "FAIL: laib-haushalt's $s is in its unit or on podman run's argv"; exit 1; fi
 done
+# ADR 0035 (#1233): laib-updater in its own container, for real — laib updates is answered by it
+# (the registries over the net), a call without the door's key is refused, it mounts nothing and
+# holds no token of laib's; the pinned cosign is in its image.
+[ -n "${UPDATER_IMAGE:-}" ] && podman image exists "$UPDATER_IMAGE" || { echo "FAIL: no updater image $UPDATER_IMAGE (boot.yml builds it)"; exit 1; }
+for i in $(seq 1 15); do [ "$(systemctl --user is-active laib-updater.service)" = active ] && break; sleep 1; done
+[ "$(systemctl --user is-active laib-updater.service)" = active ] || { echo "FAIL: laib-updater.service is not active"; journalctl --user -u laib-updater.service --no-pager | tail -30; exit 1; }
+UC=systemd-laib-updater
+grep -qx "$UPDATER_IMAGE" <<<"$(podman inspect "$UC" --format '{{.ImageName}}')" || { echo "FAIL: laib-updater runs another image"; exit 1; }
+OUT="$(LAIB_ACTOR=human:boot "$BIN" updates --json 2>&1)" && python3 -c 'import sys,json; r=json.load(sys.stdin); assert isinstance(r, list) and any(u["service"]=="whoami" for u in r), r' <<<"$OUT" || { echo "FAIL: laib updates did not come from laib-updater: $OUT"; journalctl --user -u laib-updater.service --no-pager | tail -30; exit 1; }
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{"argv":["updates"]}' http://127.0.0.1:5903/call)" = 401 ] || { echo "FAIL: laib-updater takes a call without the door's key"; exit 1; }
+[ -z "$(podman inspect "$UC" --format '{{range .Mounts}}{{.Source}} {{end}}' | tr -d ' ')" ] || { echo "FAIL: laib-updater mounts $(podman inspect "$UC" --format '{{range .Mounts}}{{.Source}} {{end}}')"; exit 1; }
+podman cp "$UC:/cosign" "$WORK/cosign" && test -s "$WORK/cosign" || { echo "FAIL: the pinned cosign is not in laib-updater's image"; exit 1; }
+if grep -q "LAIB_TOKEN" <<<"$(podman inspect "$UC" --format '{{json .Config.Env}}')"; then echo "FAIL: laib-updater holds a token of laib's"; exit 1; fi
 # #1071: a green nightly run removes the images nothing needs, and keeps every one a unit names (CI only:
 # on a box it would judge the box's images by this test's state)
 if [ -n "${CI:-}" ]; then
@@ -310,11 +323,11 @@ if [ -n "${CI:-}" ]; then
   LAIB_ACTOR=laib "$BIN" updates --run > updates.out || { echo "FAIL: updates --run exit $?"; cat updates.out; "$BIN" journal --verb updates; exit 1; }
   if podman image exists mirror.gcr.io/library/busybox:stable; then echo "FAIL: the green run left an image nothing needs"; podman images; exit 1; fi
   # (the Operator's image may go: it was disabled above, no unit names it, enable pulls it again)
-  for i in docker.io/traefik/whoami:v1.10 "$HAUSHALT_IMAGE"; do
+  for i in docker.io/traefik/whoami:v1.10 "$HAUSHALT_IMAGE" "$UPDATER_IMAGE"; do
     [ -z "$i" ] || podman image exists "$i" || { echo "FAIL: the green run removed $i, which a unit names"; exit 1; }
   done
   "$BIN" journal --json | python3 -c 'import sys,json; es=json.load(sys.stdin); assert any(e["verb"]=="updates" and "Abbilder entfernt" in e.get("detail","") for e in es), [e.get("detail") for e in es if e["verb"]=="updates"]'
   red="$("$BIN" status --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["ready"]["red"])')"
   [ "$red" -le "$RED_BEFORE" ] || { echo "FAIL: red $RED_BEFORE before the image run, $red after"; "$BIN" status; "$BIN" diag; "$BIN" journal --verb updates; exit 1; }
 fi
-echo "boot test ok: whoami answered through a real Quadlet unit, and the operator restarted it for real; usage-metrics counted with its token only and kept the count across a restart, kept a miss and forgot it past its 30 days; Haus counted a page view and a widget tap into it, never who; the Operator ran in its own container and saw its folder, not the age key, secrets.age or the state repo; laib-haushalt answered the door in its own container, refused a call without the key, and the age key, secrets.age, the state repo and the journal were not in it"
+echo "boot test ok: whoami answered through a real Quadlet unit, and the operator restarted it for real; usage-metrics counted with its token only and kept the count across a restart, kept a miss and forgot it past its 30 days; Haus counted a page view and a widget tap into it, never who; the Operator ran in its own container and saw its folder, not the age key, secrets.age or the state repo; laib-haushalt answered the door in its own container, refused a call without the key, and the age key, secrets.age, the state repo and the journal were not in it; laib-updater answered laib updates in its own container, with no mount and no token"

@@ -130,3 +130,25 @@ lists, one card per new source (#1244).
 - A household verb or an observation added later goes to ring 0b by
   default; ring 0a needs a reason in the PR. A new program is placed in a
   layer first; one that needs the host is layer 0 or asks layer 0.
+
+## Implementation note (#1233): the updater
+
+- **laib-updater** (`updater/`, `ghcr.io/mdopp/laib-updater`, pinned by
+  the release as haushalt's is) answers the kernel on 127.0.0.1:5903 with
+  the door's key `LAIB_UPDATER_KEY`. It mounts nothing and holds no Laib
+  token: `laib updates` hands it the image values, the RepoDigests and
+  labels podman has of an unpinned one and `state/host/image`; it asks the
+  registries, runs the pinned cosign from its own image as the pre-check
+  behind `unsigned`, and reads the changelogs, without a GitHub token
+  (they moved out of laib-haushalt). A card's version labels come from it.
+- **Who proposes.** The Operator's `versionen` still files the nightly
+  card, because it writes the summaries with the box's model; the updater
+  only answers, so it needs neither a hand nor a token — a right it would
+  never use is one more to steal. The card the owner taps is unchanged.
+- **What the kernel checks itself** (`registry.Check`): a new digest's form
+  (`sha256:` and 64 hex digits) and our own image's signature, when the
+  proposal is made and again right before the run that applies it
+  (`inbox.checkBatch`); a refusal takes the run back before anything is
+  snapshotted or written, the card says why (Ablauf L-57).
+- Kernel 22,646 → 22,543 lines (103 out), cap 22,650 → 22,547; haushalt cap 1,219; the
+  updater's 760.
