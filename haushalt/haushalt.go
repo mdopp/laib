@@ -2,7 +2,9 @@
 // household verbs that read what the door hands over, leave an order for a
 // service, file a proposal, tell one person something or file a wish —
 // scan, net geraete, tell, zuhause, person signal (#677), wish (#797),
-// and module (#1036); an image's changelog is laib-updater's (ADR 0035). It runs in its own
+// and module (#1036), and since #1234 person invite and pending, calendar and
+// aufgabe, whose one write the kernel's part does on the door's Auftrag; an
+// image's changelog is laib-updater's (ADR 0035). It runs in its own
 // container (ADR 0027): the kernel checks hand, tier and verb, then hands
 // each call over HTTP on 127.0.0.1 with the caller's actor, the verb's
 // ceiling and the facts the verbs need. A proposal goes back to laib over
@@ -35,6 +37,9 @@ type Call struct {
 	Actor   string       `json:"actor"`
 	Ceiling string       `json:"ceiling"`
 	LanIP   string       `json:"lanIp"`
+	TZ      string       `json:"tz,omitempty"`      // box.yml timezone (#1234)
+	Auftrag string       `json:"auftrag,omitempty"` // the way to the verb's kernel part, as the caller (#1234)
+	Stdin   string       `json:"stdin,omitempty"`   // laib calendar subscribe's address, one line (#1234)
 	Scan    *ScanService `json:"scan,omitempty"`
 	Zuhause *Zuhause     `json:"zuhause,omitempty"` // box.yml zuhause, for laib zuhause (#677)
 	Intake  *Intake      `json:"intake,omitempty"`  // box.yml intake, for laib wish (#797)
@@ -58,6 +63,8 @@ type Laib interface {
 	Propose(ctx context.Context, ceiling string, args ...string) (id int, class string, err error)
 	Aufgabe(ctx context.Context, ceiling string, args ...string) (id int, err error)
 	Read(ctx context.Context, ceiling, tool string, out any, args ...string) error
+	// Kern: a verb's kernel part, on the door's Auftrag, as the caller (#1234)
+	Kern(ctx context.Context, auftrag, tool, stdin string, out any, args ...string) error
 }
 
 // Env is one call's world.
@@ -72,7 +79,7 @@ type Env struct {
 	Journal io.Writer
 }
 
-// Run is one verb: scan …, net geraete …, tell …, zuhause …, person_signal … or wish ….
+// Run is one verb: scan …, net geraete …, tell …, zuhause …, person_* …, calendar …, aufgabe …, wish … or module ….
 func Run(ctx context.Context, env *Env, args []string) int {
 	switch {
 	case len(args) > 0 && args[0] == "scan":
@@ -85,12 +92,20 @@ func Run(ctx context.Context, env *Env, args []string) int {
 		return cmdZuhause(ctx, env, args[1:])
 	case len(args) > 0 && args[0] == "person_signal":
 		return cmdPersonSignal(ctx, env, args[1:])
+	case len(args) > 0 && args[0] == "person_invite":
+		return cmdPersonInvite(ctx, env, args[1:])
+	case len(args) > 0 && args[0] == "person_pending":
+		return cmdPersonPending(ctx, env, args[1:])
+	case len(args) > 0 && args[0] == "calendar":
+		return cmdCalendar(ctx, env, args[1:])
+	case len(args) > 0 && args[0] == "aufgabe":
+		return cmdAufgabe(ctx, env, args[1:])
 	case len(args) > 0 && args[0] == "wish":
 		return Wish(ctx, env, args[1:])
 	case len(args) > 0 && args[0] == "module":
 		return cmdModule(ctx, env, args[1:])
 	}
-	return env.fail(errors.New("usage: scan … | net geraete … | tell … | zuhause … | person_signal … | wish … | module … (the kernel serves them as laib scan, laib net geraete, laib tell, laib zuhause, laib person signal, laib wish, laib module)"))
+	return env.fail(errors.New("usage: scan … | net geraete … | tell … | zuhause … | person_signal|person_invite|person_pending … | calendar … | aufgabe … | wish … | module … (the kernel serves them as laib scan, laib net geraete, laib tell, laib zuhause, laib person …, laib calendar, laib aufgabe, laib wish, laib module)"))
 }
 
 // Handler serves the door: POST /call with the door's key, GET /health.
@@ -127,6 +142,13 @@ func (e *Env) fail(err error) int {
 	fmt.Fprintln(e.Err, "laib:", strings.TrimSpace(err.Error()))
 	return 1
 }
+
+// kernFailed: the kernel part said no; its sentence is the verb's (#1234).
+func (e *Env) kernFailed(err error) int {
+	return e.refused(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(err.Error()), "laib:")))
+}
+
+func (e *Env) stdin() io.Reader { return strings.NewReader(e.Stdin) }
 
 func (e *Env) refused(msg string) int {
 	fmt.Fprintln(e.Err, "laib:", msg)

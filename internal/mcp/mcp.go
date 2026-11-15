@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/policy"
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/token"
 )
@@ -110,17 +112,7 @@ func handler(env *cli.Env) http.HandlerFunc {
 			rpcReply(w, nil, nil, &rpcError{-32700, "parse error"})
 			return
 		}
-		hand := rec.Hand
-		// a call back from behind the verb door (ADR 0026, 0027) runs under its
-		// ceiling: the header can only lower it, a door hand is held to its own
-		ceiling := r.Header.Get("X-Laib-Ceiling")
-		if ceiling != "" && policy.Index(ceiling) < 0 {
-			ceiling = "read"
-		}
-		if c, ok := DoorHands[hand]; ok && (ceiling == "" || policy.Index(ceiling) > policy.Index(c)) {
-			ceiling = c
-		}
-		ctx := context.WithValue(r.Context(), ceilingKey{}, ceiling)
+		hand, ctx := doorCaller(env, r, rec.Hand)
 		// a call in a skill's name (ADR 0023): only the skill's granted tools
 		inSkill := r.Header.Get("X-Laib-Skill")
 		ctx = InSkill(ctx, inSkill)
@@ -160,11 +152,29 @@ func handler(env *cli.Env) http.HandlerFunc {
 	}
 }
 
+// doorCaller: a call back from behind the verb door (ADR 0026, 0027) runs
+// under its ceiling: the header can only lower it, a door hand is held to
+// its own; on the door's Auftrag (#1234) it is the caller's, for that verb's
+// kernel part only.
+func doorCaller(env *cli.Env, r *http.Request, hand string) (string, context.Context) {
+	ctx, ceiling := r.Context(), r.Header.Get("X-Laib-Ceiling")
+	if ceiling != "" && policy.Index(ceiling) < 0 {
+		ceiling = "read"
+	}
+	if a, ok := readAuftrag(env, r.Header.Get("X-Laib-Auftrag"), time.Now()); ok && DoorHands[hand] != "" {
+		hand, ceiling, ctx = proposal.Hand(a.actor), "", context.WithValue(ctx, auftragKey{}, a)
+	}
+	if c, ok := DoorHands[hand]; ok && (ceiling == "" || policy.Index(ceiling) > policy.Index(c)) {
+		ceiling = c
+	}
+	return hand, context.WithValue(ctx, ceilingKey{}, ceiling)
+}
+
 // Tools derives the tool list from the verb table.
 func Tools(st *state.State, hand string) []map[string]any {
 	var tools []map[string]any
 	for _, v := range Verbs {
-		if !v.MCP || !policy.Allowed(st.Policy, hand, v.Tier) || !policy.MayVerb(st.Policy, hand, v.Name) {
+		if !v.MCP || v.Behind != "" || !policy.Allowed(st.Policy, hand, v.Tier) || !policy.MayVerb(st.Policy, hand, v.Name) {
 			continue
 		}
 		tools = append(tools, map[string]any{
@@ -192,7 +202,7 @@ func InputSchema(verb string) map[string]any {
 
 // readActions are the actions of a writing verb that only read (#1030):
 // Homes' list of Box-Aufgaben waited for every running call.
-var readActions = map[string][]string{"aufgabe": {"list", "zeigen"}}
+var readActions = map[string][]string{"aufgabe_kern": {"list"}}
 
 // Call runs one verb as the hand, capturing stdout.
 func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string, args map[string]any) (string, int) {
@@ -206,10 +216,16 @@ func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string,
 	if v == nil || !v.MCP {
 		return "unknown tool " + name, cli.ExitUsage
 	}
-	if !policy.Allowed(st.Policy, hand, v.Tier) {
+	// a door verb's kernel part runs on its Auftrag only, which the kernel signed
+	// once it let the caller in: the caller's checks were the door verb's (#1234)
+	a, _ := ctx.Value(auftragKey{}).(auftrag)
+	if v.Behind != a.verb {
+		return fmt.Sprintf("%s läuft nur im Auftrag der Tür, aus laib-haushalt: dort nur der Kern-Teil seines Verbs (#1234)", verbName), cli.ExitRefused
+	}
+	if a.verb == "" && !policy.Allowed(st.Policy, hand, v.Tier) {
 		return fmt.Sprintf("%s may not %s (tier %s); propose instead", hand, verbName, v.Tier), cli.ExitRefused
 	}
-	if !policy.MayVerb(st.Policy, hand, verbName) {
+	if a.verb == "" && !policy.MayVerb(st.Policy, hand, verbName) {
 		return fmt.Sprintf("%s may not %s: policy.yml limits it to %s", hand, verbName, strings.Join(st.Policy.Hands[hand].Verbs, ", ")), cli.ExitRefused
 	}
 	ceiling, _ := ctx.Value(ceilingKey{}).(string)
@@ -225,6 +241,9 @@ func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string,
 	// side (#1030); a verb behind the door takes nothing: its call back does
 	// (ADR 0027)
 	action, _ := args["action"].(string)
+	if s, _ := args["args"].(string); action == "" {
+		action = append(SplitArgs(s), "")[0]
+	}
 	switch {
 	case v.Door:
 	case v.Tier == "read" && verbName != "skill" && verbName != "template" && verbName != "session",
@@ -239,7 +258,7 @@ func Call(ctx context.Context, env *cli.Env, st *state.State, hand, name string,
 	// stdout nor its stderr is ever swapped, so nothing another goroutine
 	// prints can land in a reply
 	var buf, errBuf bytes.Buffer
-	callEnv := &cli.Env{Paths: env.Paths, JSON: true, Actor: hand, MCP: true, Out: &buf, ErrOut: &errBuf, Ceiling: ceiling}
+	callEnv := &cli.Env{Paths: env.Paths, JSON: true, Actor: cmp.Or(a.actor, hand), MCP: true, Out: &buf, ErrOut: &errBuf, Ceiling: ceiling}
 	if stdin != "" {
 		callEnv.In = strings.NewReader(stdin)
 	}

@@ -18,6 +18,7 @@ import (
 // and the next write stores it as homes, so kalender mirrors it into homes/.
 func TestASubscriptionStoredForHausIsHomess(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env) // behind the door since #1234
 	b, _ := json.Marshal([]Abo{{Person: "haus", Name: "muellabfuhr", Kind: "abo", Title: "Müllabfuhr", URL: "https://example.org/abfuhr.ics", Since: "2026-10-21T00:00:00Z"}})
 	sec, err := secrets.Load(env.Paths.Secrets, env.Paths.Key)
 	if err != nil {

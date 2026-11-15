@@ -65,7 +65,6 @@ const (
 var (
 	fuerRe  = regexp.MustCompile(`^person:[a-z0-9][a-z0-9._-]{0,63}$`)
 	seiteRe = regexp.MustCompile(`^/[a-z0-9][a-z0-9/_-]{0,63}$`)
-	keyRe   = regexp.MustCompile(`^schluessel:([A-Z][A-Z0-9_]{0,63})$`)
 )
 
 // Fuer checks who a task is for.
@@ -76,17 +75,14 @@ func Fuer(s string) error {
 	return nil
 }
 
-// ParseWeg reads a weg: a Homes page's path, gespraech, or schluessel:<NAME>.
-func ParseWeg(s string) (*Weg, error) {
-	switch m := keyRe.FindStringSubmatch(s); {
-	case s == "gespraech":
-		return &Weg{Gespraech: true}, nil
-	case seiteRe.MatchString(s):
-		return &Weg{Seite: s}, nil
-	case m != nil:
-		return &Weg{Schluessel: m[1]}, nil
+// CheckWeg holds a way laib-haushalt composed (#1234): one of the three,
+// a page only as a Homes path, never an address elsewhere.
+func CheckWeg(w Weg) error {
+	n := map[bool]int{true: 1}
+	if n[w.Seite != ""]+n[w.Gespraech]+n[w.Schluessel != ""] != 1 || w.Seite != "" && !seiteRe.MatchString(w.Seite) {
+		return fmt.Errorf("%+v ist kein Weg: eine Seite von Homes (/stimme), gespraech oder ein Schlüssel", w)
 	}
-	return nil, fmt.Errorf("%q ist kein Weg: eine Seite von Homes (/stimme), gespraech (gemeinsam mit dem Boten) oder schluessel:<NAME> (ein Schlüssel auf der Box-Seite)", s)
+	return nil
 }
 
 // Sees: may a caller see a task? whole: its hand sees the whole list;
@@ -126,20 +122,10 @@ func (a Aufgabe) Open() bool { return a.Erledigt == nil }
 // Due: open, and its reminder day has come.
 func (a Aufgabe) Due(today string) bool { return a.Open() && a.Erinnern != "" && a.Erinnern <= today }
 
-var befundRe = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}( [A-Za-z0-9][A-Za-z0-9._-]{0,63})?$`) // a key's topic is its NAME
-
 // Day checks a YYYY-MM-DD date.
 func Day(s string) error {
 	if _, err := time.Parse(time.DateOnly, s); err != nil {
 		return fmt.Errorf("%q ist kein Datum der Form JJJJ-MM-TT", s)
-	}
-	return nil
-}
-
-// Befund checks a befund: a diag probe, optionally a service or topic.
-func Befund(s string) error {
-	if !befundRe.MatchString(s) {
-		return fmt.Errorf("%q ist kein Befund: die Probe aus laib diag, dahinter wahlweise Dienst oder Thema, z. B. raid, watchdog, backup offsite, unit immich", s)
 	}
 	return nil
 }

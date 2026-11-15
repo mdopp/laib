@@ -25,7 +25,7 @@ func (m MCP) Propose(ctx context.Context, ceiling string, args ...string) (int, 
 		ID    int    `json:"id"`
 		Class string `json:"class"`
 	}
-	err := m.call(ctx, "laib_propose", ceiling, args, &p)
+	err := m.call(ctx, "laib_propose", ceiling, "", "", args, &p)
 	if err == nil && p.ID == 0 {
 		err = errors.New("laib propose answered without a number")
 	}
@@ -39,18 +39,27 @@ func (m MCP) Aufgabe(ctx context.Context, ceiling string, args ...string) (int, 
 			ID int `json:"id"`
 		} `json:"aufgabe"`
 	}
-	err := m.call(ctx, "laib_aufgabe", ceiling, args, &p)
+	err := m.call(ctx, "laib_aufgabe", ceiling, "", "", args, &p)
 	return p.Aufgabe.ID, err
 }
 
 // Read runs `laib <tool> <args>`, a read, and decodes its answer into out (#1038).
 func (m MCP) Read(ctx context.Context, ceiling, tool string, out any, args ...string) error {
-	return m.call(ctx, tool, ceiling, args, out)
+	return m.call(ctx, tool, ceiling, "", "", args, out)
+}
+
+// Kern runs a verb's kernel part (#1234) on the door's Auftrag: laib runs it
+// as the caller the Auftrag names, the one write this program may not do.
+func (m MCP) Kern(ctx context.Context, auftrag, tool, stdin string, out any, args ...string) error {
+	if auftrag == "" {
+		return errors.New("die Tür gab keinen Auftrag mit: laib kann den Kern-Teil nicht für den Aufrufer ausführen")
+	}
+	return m.call(ctx, tool, "", auftrag, stdin, args, out)
 }
 
 // call runs one of laib's tools with args quoted one by one (a SANE device
 // name has blanks, never a quote) and decodes its answer into out.
-func (m MCP) call(ctx context.Context, tool, ceiling string, args []string, out any) error {
+func (m MCP) call(ctx context.Context, tool, ceiling, auftrag, stdin string, args []string, out any) error {
 	if m.URL == "" || m.Token == "" {
 		return errors.New("laib-haushalt has no token for laib (LAIB_TOKEN): laib apply mints it")
 	}
@@ -59,12 +68,15 @@ func (m MCP) call(ctx context.Context, tool, ceiling string, args []string, out 
 		quoted[i] = `"` + strings.ReplaceAll(a, `"`, "") + `"`
 	}
 	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-		"params": map[string]any{"name": tool, "arguments": map[string]string{"args": strings.Join(quoted, " ")}}})
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+		"params": map[string]any{"name": tool, "arguments": map[string]string{"args": strings.Join(quoted, " "), "stdin": stdin}}})
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute) // the door waits as long (cmd/laib door.go)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, m.URL, bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+m.Token)
 	req.Header.Set("X-Laib-Ceiling", ceiling)
+	if auftrag != "" {
+		req.Header.Set("X-Laib-Auftrag", auftrag)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("laib antwortet nicht (%s): %w", m.URL, err)

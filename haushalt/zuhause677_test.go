@@ -32,6 +32,11 @@ func (p *proposals) Aufgabe(context.Context, string, ...string) (int, error) {
 	return 0, errors.New("unexpected laib aufgabe")
 }
 
+// Kern: no verb here asks a kernel part (calendar1234_test's kern does).
+func (p *proposals) Kern(context.Context, string, string, string, any, ...string) error {
+	return errors.New("unexpected kernel part")
+}
+
 // Read: no verb here reads laib back (wish1038_test's box does).
 func (p *proposals) Read(context.Context, string, string, any, ...string) error {
 	return errors.New("unexpected laib read")

@@ -163,6 +163,7 @@ schichtregeln:
       - "0a Kern: nur Freigabe, Schlüssel, Rechte, Apply, Journal, Kartentexte"
       - 0a spricht nicht mit dem Internet außer zum Prüfen (Updater #1233)
       - "0b Helfer: Container, eigenes Token, lesen und vorschlagen"
+      - "was ein Helfer-Verb schreiben muss und nur der Kern darf (Kalender-Abos in secrets.age, LLDAP-Konten, aufgaben.yml), tut der Kern-Teil des Verbs: nur mit dem Auftrag, den der Kern für einen echten Aufruf signiert, als dieser Aufrufer, zwei Minuten, nur für dieses Verb (#1234)"
       - Eingriffsbudget je Hand und Stunde
       - steht ohne Homes (#1236)
   - titel: Schicht 1 · Bausteine
@@ -205,6 +206,8 @@ wasPassiert:
     folge: nur seine Bereiche, nur solange die Person den Tresor offen hat; Nachrichten bleiben für den Stammbaum unerreichbar
   - fall: eine Registry oder ein Changelog ist manipuliert
     folge: der Updater liefert höchstens falsche Angaben; der Kern fragt nie selbst im Netz und prüft Prüfsumme und Signatur vor dem Vorschlag und noch einmal vor dem Einspielen selbst (#1233)
+  - fall: laib-haushalt wird übernommen
+    folge: es schlägt vor wie bisher; einen Kern-Teil erreicht es nur mit dem Auftrag eines echten Aufrufs, also höchstens, was dieser Aufrufer in diesem Aufruf durfte (ein Admin-Konto nur, wenn ein Mensch es anlegt); eine Kalender-Adresse sieht es, während sie abonniert wird (#1234)
   - fall: ein Agent irrt sich
     folge: er kann nur vorschlagen oder im Budget anwenden; jede Änderung hat einen Snapshot und läuft zurück, wenn sie rot wird
   - fall: jemand stiehlt die Box

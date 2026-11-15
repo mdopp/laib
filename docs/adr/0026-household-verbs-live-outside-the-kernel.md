@@ -99,3 +99,25 @@ secrets.age are not a path proposal. Moving them needs a new mechanism (a
 template hook that carries out an approved invitation, a status file for
 the pending ones) or a secret in the state repo, which the door may not
 get.
+
+## Note (#1234, ADR 0035): calendar, person and aufgabe
+
+`calendar`, `person_invite`, `person_pending` and `aufgabe` moved behind
+the door, without a secret for the door and without a mount of the state
+repo. laib-haushalt parses, checks and words them; the one write each
+needs — `KALENDER_ABOS` in secrets.age and the kalender apply, the LLDAP
+account by the identity template's tool, `aufgaben.yml` with who sees
+and changes which task — is the verb's **kernel part** (`calendar_kern`,
+`person_invite_kern`, `person_pending_kern`, `aufgabe_kern`; `Verb.Behind`
+in the table). A kernel part is no MCP tool and no shell verb. It runs
+only on the door's **Auftrag**: the door signs the caller and the verb for
+two minutes with a key derived from the age key and hands it over with
+the call (`mcp.Auftrag`); laib-haushalt sends it back in
+`X-Laib-Auftrag`, and laib runs that verb's kernel part as the caller —
+the caller's checks were the door verb's — and nothing else. So the
+container still holds no secret and cannot act on its own: without a
+call there is no Auftrag, and with one it reaches only what that caller
+could in that call. A human still invites an admin; the account's rule
+is checked in the kernel part, by the Auftrag's caller. The invite's
+Signal number is proposed by laib-haushalt as the haushalt hand, as
+`laib person signal` is since #677.

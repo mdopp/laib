@@ -90,15 +90,19 @@ func init() {
 		{Name: "version", Tier: "read", MCP: true, Help: "print the version", Run: cmdVersion},
 		{Name: "self", Tier: "apply", Help: "rollback: the previous binaries back and the units restarted (humans only)", Run: cmdSelf},
 		{Name: "recovery-sheet", Tier: "destroy", Help: "print the one page that restores the box (age key, restic repo and password, four steps); --confirm once it is stored (humans at the console only)", Run: backup.RecoverySheet},
-		{Name: "person_invite", Tier: "apply", MCP: true, Help: "<user> --first F --last L --email E [--group family|admins] [--resend] [--signal +49…]: a new resident in LLDAP without a password; Authelia mails the set-password link, without SMTP the link comes back; --signal proposes the number for box.yml people (`laib person invite`)", Run: cmdPersonInvite},
+		{Name: "person_invite", Tier: "apply", MCP: true, Help: "<user> --first F --last L --email E [--group family|admins] [--resend] [--signal +49…]: a new resident in LLDAP without a password; Authelia mails the set-password link, without SMTP the link comes back; --signal proposes the number for box.yml people (`laib person invite`); laib-haushalt serves it behind the door (#1234)", Run: served("haushalt", "person_invite", "apply"), Door: true},
+		{Name: "person_invite_kern", Tier: "apply", MCP: true, Behind: "person_invite", Help: "<user> <first> <last> <email> <family|admins|-> <0|1>: person_invite's kernel part, the LLDAP account by the identity template's tool (#1234)", Run: cmdPersonInviteKern},
 		{Name: "person_signal", Tier: "propose", MCP: true, Help: "<user> <+49…>: set or change a person's Signal number in box.yml people, as a proposal a human approves (`laib person signal`, #596); laib-haushalt serves it behind the door (#677)", Run: served("haushalt", "person_signal", "propose"), Door: true},
-		{Name: "person_pending", Tier: "read", MCP: true, Help: "the invited who have not set their password yet (`laib person pending`)", Run: cmdPersonPending},
-		{Name: "calendar", Tier: "apply", MCP: true, Help: "subscribe <person> <name> google|abo [<title>] (the ICS address on stdin, kept in secrets.age, never answered) | unsubscribe <person> <name> | list: the calendars the kalender template mirrors into Radicale (#495)", Run: cmdCalendar},
+		{Name: "person_pending", Tier: "read", MCP: true, Help: "the invited who have not set their password yet (`laib person pending`); laib-haushalt serves it behind the door (#1234)", Run: served("haushalt", "person_pending", "read"), Door: true},
+		{Name: "person_pending_kern", Tier: "read", MCP: true, Behind: "person_pending", Help: "person_pending's kernel part: the identity template's tool lists them (#1234)", Run: cmdPersonPendingKern},
+		{Name: "calendar", Tier: "apply", MCP: true, Help: "subscribe <person> <name> google|abo [<title>] (the ICS address on stdin, kept in secrets.age, never answered) | unsubscribe <person> <name> | list: the calendars the kalender template mirrors into Radicale (#495); laib-haushalt serves it behind the door (#1234)", Run: served("haushalt", "calendar", "apply"), Door: true},
+		{Name: "calendar_kern", Tier: "apply", MCP: true, Behind: "calendar", Help: "subscribe|every|unsubscribe <person> <name> | list: calendar's kernel part, KALENDER_ABOS in secrets.age and the kalender apply (#1234)", Run: cmdCalendarKern},
 		{Name: "zuhause", Tier: "propose", MCP: true, Help: "show | set [--street S] [--postcode P] [--city C] [--country DE] [--latitude N --longitude E] [--elevation M]: the household's address in box.yml; set replaces it as a proposal a human approves (#561); laib-haushalt serves it behind the door (#677)", Run: served("haushalt", "zuhause", "propose"), Door: true},
 		{Name: "scan", Tier: "propose", MCP: true, Help: "[status] | start | weiter | abschliessen | verwerfen | redo --stapel <zeit> [--person p]: the scan service's state, or an order for it — a stack from the scanner, after a jam go on, finish or drop, a stack again from its archive (#568)", Run: served("haushalt", "scan", "propose"), Door: true},
 		{Name: "module", Tier: "propose", MCP: true, Help: "aus [<modul>,…] [--grund \"<Satz>\"]: the Homes modules to leave off although their backend runs (homes ADR 0001 §5), as a proposal for services/homes/values.yml MODULE_AUS that waits in the Inbox; empty: every module whose backend runs (#1036); laib-haushalt serves it behind the door", Run: served("haushalt", "module", "propose"), Door: true},
 		{Name: "tell", Tier: "propose", MCP: true, Help: "<person> \"<text>\": one message to one person of box.yml people through the Bote, on their first reachable channel; answers {sent, message} (#676)", Run: served("haushalt", "tell", "propose"), Door: true},
-		{Name: "aufgabe", Tier: "propose", MCP: true, Help: "list [--alle] [--faellig] | zeigen <id> | add \"<titel>\" [--warum W] [--erinnern JJJJ-MM-TT] [--fertig-wenn \"<probe> [<dienst|thema>]\"] [--fuer admins|alle|person:<login>] [--weg /seite|gespraech] | erledigt <id> | zurueckstellen <id> <JJJJ-MM-TT> | befund <id> \"<probe> [<dienst|thema>]\": the box's to-do list (aufgaben.yml), owner actions no code closes; bookkeeping, no proposal; a fertig_wenn defers its diag finding to the task and is closed by laib when diag measures it gone (#667); Homes and the Bote see a person's own only for that person (--von, #878)", Flags: []string{"--alle", "--faellig", "--warum", "--erinnern", "--fertig-wenn", "--fuer", "--weg", "--von"}, Run: cmdAufgabe},
+		{Name: "aufgabe", Tier: "propose", MCP: true, Help: "list [--alle] [--faellig] | zeigen <id> | add \"<titel>\" [--warum W] [--erinnern JJJJ-MM-TT] [--fertig-wenn \"<probe> [<dienst|thema>]\"] [--fuer admins|alle|person:<login>] [--weg /seite|gespraech] | erledigt <id> | zurueckstellen <id> <JJJJ-MM-TT> | befund <id> \"<probe> [<dienst|thema>]\": the box's to-do list (aufgaben.yml), owner actions no code closes; bookkeeping, no proposal; a fertig_wenn defers its diag finding to the task and is closed by laib when diag measures it gone (#667); Homes and the Bote see a person's own only for that person (--von, #878)", Flags: []string{"--alle", "--faellig", "--warum", "--erinnern", "--fertig-wenn", "--fuer", "--weg", "--von"}, Run: served("haushalt", "aufgabe", "propose"), Door: true}, // laib-haushalt serves it (#1234)
+		{Name: "aufgabe_kern", Tier: "propose", MCP: true, Behind: "aufgabe", Help: "list | add (JSON on stdin) | erledigt <id> | zurueckstellen <id> <tag> | befund <id> <befund> [--von <login>]: aufgabe's kernel part, aufgaben.yml in the state repo and who sees and changes which task (#1234)", Run: cmdAufgabeKern},
 		{Name: "pause", Tier: "apply", MCP: true, Help: "<service> [--until 2h] [--stop <unit>]… [--restart <unit>]… [\"<grund>\"]: converge leaves the service alone for a while; --stop/--restart act on its own units now, resume brings them back (the GPU lease, ADR 0027)", Flags: []string{"--until", "--stop", "--restart"}, Run: cmdPause},
 		{Name: "resume", Tier: "apply", MCP: true, Help: "<service>: lift a pause, start and restart what it stopped and restarted", Flags: []string{}, Run: cmdResume},
 	}
@@ -158,7 +162,7 @@ func runArgs(args []string) int {
 		if v.Name == rest[0] && env.Ceiling != "" && policy.Index(v.Tier) > policy.Index(env.Ceiling) { // a program behind the door (ADR 0026)
 			return cli.Refused(env, fmt.Sprintf("%s ist Stufe %s; ein Programm hinter der Tür darf höchstens %s", v.Name, v.Tier, env.Ceiling))
 		}
-		if v.Name == rest[0] {
+		if v.Name == rest[0] && v.Behind == "" {
 			return v.Run(ctx, env, rest[1:])
 		}
 	}
@@ -181,6 +185,9 @@ func usage() {
 	sorted := slices.Clone(mcp.Verbs)
 	slices.SortFunc(sorted, func(a, b cli.Verb) int { return strings.Compare(a.Name, b.Name) })
 	for _, v := range sorted {
+		if v.Behind != "" {
+			continue
+		}
 		fmt.Fprintf(os.Stderr, "  %-10s [%s]  %s\n", v.Name, v.Tier, v.Help)
 	}
 	fmt.Fprintln(os.Stderr, "\nFlags: --json on every verb. Env: LAIB_HOME, LAIB_STATE, LAIB_QUADLET, LAIB_ACTOR.")

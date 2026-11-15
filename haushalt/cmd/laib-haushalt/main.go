@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // an invite's expiry in the box's time zone (#1234), whatever the image carries
 
 	"github.com/mdopp/laib/haushalt"
 )

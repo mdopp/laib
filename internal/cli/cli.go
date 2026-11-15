@@ -182,6 +182,10 @@ type Verb struct {
 	// MCP: an agent reaches it over MCP, under its hand's ceiling and verb
 	// list; without it the verb is the shell's alone (#800)
 	MCP bool
+	// Behind: the kernel's part of a door verb (ADR 0035, #1234), the one
+	// write laib-haushalt may not do itself; it runs only on that verb's
+	// Auftrag, as its caller, and is no tool and no shell verb
+	Behind string
 }
 
 // Guard is every verb's front door (#590): --help or -h shows the usage and

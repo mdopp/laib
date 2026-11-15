@@ -60,6 +60,7 @@ func callTasks(t *testing.T, env *cliEnv, hand string, args map[string]any) (off
 // Ablauf L-19
 func TestATaskIsForSomeoneAndHausSeesOnlyItsPersonsOwn(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env) // behind the door since #1234
 	t.Setenv("LAIB_DISK", "/nonexistent")
 	st := mustState(t, env)
 	tools := mcp.Tools(st, "homes")
@@ -178,6 +179,7 @@ func TestATaskIsForSomeoneAndHausSeesOnlyItsPersonsOwn(t *testing.T) {
 // Ablauf L-20
 func TestAFertigWennLaibCannotMeasureSaysSo(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env) // behind the door since #1234
 	t.Setenv("LAIB_DISK", "/nonexistent")
 	out, code := mcp.Call(context.Background(), env, mustState(t, env), "claude", "laib_aufgabe", map[string]any{"action": "add", "titel": "/boot aufräumen", "fertig_wenn": "boot"})
 	if code != cli.ExitOK || !strings.Contains(out, "hakt sie nicht selbst ab") {

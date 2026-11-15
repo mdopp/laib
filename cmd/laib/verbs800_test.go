@@ -25,7 +25,7 @@ func TestTheVerbTableIsTheOnlyVerbList(t *testing.T) {
 	var table, exposed []string
 	for _, v := range mcp.Verbs {
 		table = append(table, v.Name)
-		if v.MCP {
+		if v.MCP && v.Behind == "" { // a door verb's kernel part is no tool (#1234)
 			exposed = append(exposed, v.Name)
 		}
 		if proposal.VerbTier[v.Name] != v.Tier {

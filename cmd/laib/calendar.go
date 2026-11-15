@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -23,7 +21,8 @@ import (
 // The calendar subscriptions (#495): Homes hands an address over once, laib
 // keeps it in secrets.age as KALENDER_ABOS and applies the kalender template,
 // whose timer mirrors each into Radicale. The address is never answered,
-// journalled or put on argv: it arrives on stdin.
+// journalled or put on argv: it arrives on stdin. laib-haushalt serves laib
+// calendar (#1234); this is its kernel part, the one write it may not do.
 const abosSecret = "KALENDER_ABOS"
 
 // Abo is one subscription, mirrored into <person>/google-<name> or
@@ -38,24 +37,27 @@ type Abo struct {
 	Every  string `json:"every,omitempty"` // how often it is fetched (#619): 30m, 12h, 30d; empty: Google every run, a public abo ABO_EVERY_DAYS
 }
 
+// what the kalender template makes paths and fetches of: held here, whatever laib-haushalt sent
 var aboName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 var aboPerson = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 var aboEvery = regexp.MustCompile(`^[1-9][0-9]{0,3}[mhd]$`)
 
-// cmdCalendar: `laib calendar subscribe <person> <name> google|abo [<title>]`
-// (the address on stdin) | every <person> <name> | unsubscribe <person> <name>
-// | list; subscribe and every take --every <30m|12h|30d>, per calendar (#619).
-func cmdCalendar(ctx context.Context, env *cliEnv, args []string) int {
-	every := ""
-	if i := slices.Index(args, "--every"); i >= 0 && i+1 < len(args) {
-		every, args = args[i+1], slices.Delete(slices.Clone(args), i, i+2)
+// cmdCalendarKern: `subscribe <person> <name>` (the Abo as JSON on stdin,
+// its address in it) | `every <person> <name> <30m|12h|30d>` | `unsubscribe
+// <person> <name>` | `list`; answers {abos, kalender} with every address blanked.
+func cmdCalendarKern(ctx context.Context, env *cliEnv, args []string) int {
+	args = append(args, "", "", "", "") // padded: a missing argument is "", the checks below refuse it
+	act, pos := args[0], args[1:3]
+	var in Abo
+	if act == "subscribe" {
+		json.NewDecoder(env.Stdin()).Decode(&in)
+	} else if act == "every" {
+		in.Every = args[3]
 	}
-	// padded: a missing argument is "", the checks below refuse it
-	args = append(args, "", "", "", "", "")
-	act, pos, kind, title := args[0], args[1:3], args[3], args[4]
-	if act != "list" && (!aboPerson.MatchString(pos[0]) || !aboName.MatchString(pos[1])) || act == "subscribe" && kind != "google" && kind != "abo" ||
-		every != "" && !aboEvery.MatchString(every) || act == "every" && every == "" {
-		return env.Fail(errors.New("usage: laib calendar subscribe <person> <name> google|abo [<title>] [--every 30d] (address on stdin) | every <person> <name> --every 30m|12h|30d | unsubscribe <person> <name> | list"))
+	u, err := url.Parse(in.URL)
+	if act != "list" && (!aboPerson.MatchString(pos[0]) || !aboName.MatchString(pos[1])) || in.Every != "" && !aboEvery.MatchString(in.Every) ||
+		act == "subscribe" && (in.Kind != "google" && in.Kind != "abo" || err != nil || u.Scheme != "https" || u.Host == "" || len(in.URL) > 2048) || act == "every" && in.Every == "" {
+		return env.Fail(errors.New("usage: laib calendar_kern subscribe <person> <name> (the Abo as JSON on stdin) | every <person> <name> 30m|12h|30d | unsubscribe <person> <name> | list"))
 	}
 	st, err := cli.LoadState(env)
 	if err != nil {
@@ -65,48 +67,26 @@ func cmdCalendar(ctx context.Context, env *cliEnv, args []string) int {
 	if err != nil {
 		return env.Fail(err)
 	}
-	var abos []Abo
-	if raw := sec[abosSecret]; raw != "" {
-		b, _ := base64.RawURLEncoding.DecodeString(raw)
-		if err := json.Unmarshal(b, &abos); err != nil {
-			return env.Fail(fmt.Errorf("%s ist nicht lesbar: %v", abosSecret, err))
-		}
-	}
-	// the household's calendar account was haus until ADR 0031 (#1021): a subscription stored
-	// for it is the account homes's, and the next write stores it so; goes at #1021 step 9
-	for i := range abos {
-		if abos[i].Person == "haus" {
-			abos[i].Person = "homes"
-		}
+	abos, err := abosOf(sec)
+	if err != nil {
+		return env.Fail(err)
 	}
 	if pos[0] == "haus" {
 		pos[0] = "homes"
 	}
-	msg := ""
 	switch act {
 	case "list":
 	case "subscribe":
-		line, _ := bufio.NewReader(env.Stdin()).ReadString('\n')
-		u, err := url.Parse(strings.Replace(strings.TrimSpace(line), "webcal://", "https://", 1))
-		switch {
-		case err != nil || u.Scheme != "https" || u.Host == "" || len(line) > 2048:
-			return cli.Refused(env, "Das ist keine Kalender-Adresse (https:// oder webcal://).")
-		case kind == "google" && (u.Host != "calendar.google.com" || !strings.HasSuffix(u.Path, ".ics")):
-			return cli.Refused(env, "Das ist nicht Googles „Geheime Adresse im iCal-Format“ (https://calendar.google.com/…/basic.ics).")
-		}
 		abos = slices.DeleteFunc(abos, func(a Abo) bool { return a.Person == pos[0] && a.Name == pos[1] })
-		abos = append(abos, Abo{Person: pos[0], Name: pos[1], Kind: kind, Title: title, URL: u.String(), Since: time.Now().UTC().Format(time.RFC3339), Every: every})
-		msg = "„" + cmp.Or(title, pos[1]) + "“ ist verbunden. Die Termine erscheinen in den nächsten 15 Minuten."
+		abos = append(abos, Abo{Person: pos[0], Name: pos[1], Kind: in.Kind, Title: in.Title, URL: in.URL, Since: time.Now().UTC().Format(time.RFC3339), Every: in.Every})
 	case "every":
 		i := slices.IndexFunc(abos, func(a Abo) bool { return a.Person == pos[0] && a.Name == pos[1] })
 		if i < 0 {
 			return cli.Refused(env, "Diesen Kalender gibt es nicht: "+pos[0]+"/"+pos[1])
 		}
-		abos[i].Every = every
-		msg = "„" + cmp.Or(abos[i].Title, pos[1]) + "“ wird ab jetzt alle " + every + " abgeglichen."
+		abos[i].Every = in.Every
 	case "unsubscribe":
 		abos = slices.DeleteFunc(abos, func(a Abo) bool { return a.Person == pos[0] && a.Name == pos[1] })
-		msg = "Getrennt. Beim nächsten Abgleich verschwindet die Kopie aus Radicale."
 	default:
 		return env.Fail(fmt.Errorf("unknown calendar subcommand %q", act))
 	}
@@ -117,14 +97,33 @@ func cmdCalendar(ctx context.Context, env *cliEnv, args []string) int {
 			return env.Fail(err)
 		}
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "calendar", Service: "kalender", Result: "info", Detail: act + " " + pos[0] + "/" + pos[1]})
-		if st.Services["kalender"] == nil {
-			msg += " (Der Abgleich läuft, sobald das Template kalender installiert ist.)"
-		} else if c := apply.ApplyLocked(ctx, &cli.Env{Paths: env.Paths, JSON: true, Actor: env.Actor, Out: &strings.Builder{}, ErrOut: env.Errw()}, st, "kalender", "calendar "+act); c != cli.ExitOK {
-			return c
+		if st.Services["kalender"] != nil {
+			if c := apply.ApplyLocked(ctx, &cli.Env{Paths: env.Paths, JSON: true, Actor: env.Actor, Out: &strings.Builder{}, ErrOut: env.Errw()}, st, "kalender", "calendar "+act); c != cli.ExitOK {
+				return c
+			}
 		}
 	}
 	for i := range abos {
 		abos[i].URL = ""
 	}
-	return cli.Emit(env, map[string]any{"message": msg, "abos": abos})
+	return cli.Emit(env, map[string]any{"abos": abos, "kalender": st.Services["kalender"] != nil})
+}
+
+// abosOf reads KALENDER_ABOS. The household's calendar account was haus until
+// ADR 0031 (#1021): a subscription stored for it is the account homes's, and
+// the next write stores it so; goes at #1021 step 9.
+func abosOf(sec map[string]string) ([]Abo, error) {
+	var abos []Abo
+	if raw := sec[abosSecret]; raw != "" {
+		b, _ := base64.RawURLEncoding.DecodeString(raw)
+		if err := json.Unmarshal(b, &abos); err != nil {
+			return nil, fmt.Errorf("%s ist nicht lesbar: %v", abosSecret, err)
+		}
+	}
+	for i := range abos {
+		if abos[i].Person == "haus" {
+			abos[i].Person = "homes"
+		}
+	}
+	return abos, nil
 }

@@ -15,6 +15,7 @@ import (
 // proposal (#575).
 func TestHomesKeepsTheBoxAufgabenFromTheDefaults(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env) // behind the door since #1234
 	t.Setenv("LAIB_DISK", "/nonexistent")
 	if !slices.ContainsFunc(mcp.Tools(mustState(t, env), "homes"), func(tool map[string]any) bool { return tool["name"] == "laib_aufgabe" }) {
 		t.Fatal("laib_aufgabe is not in the homes hand's tools/list: the Box-Aufgaben page stays empty")

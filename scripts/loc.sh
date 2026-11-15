@@ -28,6 +28,11 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 22,471: lowered by #1234 (ADR 0035, 2026-11-15): laib calendar, person invite and pending and aufgabe
+# run in laib-haushalt; the kernel keeps their one write each (KALENDER_ABOS in secrets.age, the LLDAP
+# account by the identity tool, aufgaben.yml with who sees and changes which task) as a door verb's
+# kernel part, run on the door's signed Auftrag as the caller. 76 kernel lines, the cap
+# lowered by them from #1233's 22,547.
 # 22,547: lowered by what moved (ADR 0035, #1233): the registries, the changelogs and the
 # signature pre-check of laib updates went to laib-updater, the ring-1 program that reads the net;
 # the kernel keeps the values it hands over, the rows it prints and the check of what it runs
@@ -76,7 +81,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 22547 cmd internal
+budget kernel 22471 cmd internal
 budget operator 3300 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,
@@ -133,7 +138,10 @@ budget notify 660 notify        # laib-notify: the watchdog ping and the owner's
 # so the dial never approves it; 1,197 lines with it, 95 % of 1,250
 # haushalt 1,219: lowered by what moved (ADR 0035, #1233): an image's changelog went to laib-updater,
 # 1,318 → 1,217, the cap lowered by the same 101
-budget haushalt 1219 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677); wish (#797); a module's wish and its stand (#1038); module aus (#1036)
+# haushalt 1,725: the owner's ADR 0035 („Mach das“, 2026-11-15, #1234): laib calendar, person invite and
+# pending and aufgabe move here from the kernel, their input checks, words and lists; the cap raised
+# by the 506 lines that came in
+budget haushalt 1725 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677); wish (#797); a module's wish and its stand (#1038); module aus (#1036); calendar, person invite and pending, aufgabe (#1234)
 # lease 1,300: set by the owner, mdopp, 2026-10-26, on #677 ("a+b"): the lease leaves the kernel
 # as its own program (the llama template's policy proxy and GPU lease, ADR 0011, 0027), reversing
 # 2026-10-17's "lease stays" (ADR 0005); 1,076 lines in the kernel, 1,154 with its own MCP client

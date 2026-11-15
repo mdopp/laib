@@ -28,6 +28,10 @@ func (b *box) Aufgabe(_ context.Context, ceiling string, args ...string) (int, e
 	return 12, nil
 }
 
+func (b *box) Kern(context.Context, string, string, string, any, ...string) error {
+	return errors.New("unexpected kernel part")
+}
+
 func (b *box) Read(_ context.Context, ceiling, tool string, out any, args ...string) error {
 	b.reads, b.ceilings = append(b.reads, tool+" "+strings.Join(args, " ")), append(b.ceilings, ceiling)
 	text := map[string]string{"laib_aufgabe": `{"offen": 1, "faellig": 0, "aufgaben": [` + b.aufgaben + `]}`, "laib_inbox": "[" + b.inbox + "]"}[tool]

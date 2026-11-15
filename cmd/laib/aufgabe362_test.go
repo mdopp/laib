@@ -21,6 +21,7 @@ import (
 // Ablauf L-18
 func TestHomesSeesTheKeysTheBoxWaitsForAndATaskClosesOnTheKey(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env) // behind the door since #1234
 	t.Setenv("LAIB_DISK", "/nonexistent")
 	svc := filepath.Join(env.Paths.State, "services", "whoami")
 	owner := "    external: true\n    optional: true\n    owner: {label: \"Whoami: Post\", warum: \"Damit whoami Post liest.\", hilfe: \"Beim Anbieter.\"}\n"
