@@ -501,21 +501,6 @@ def strangers():
         print("home-assistant: in Home Assistant and not Laib's (the owner decides, nothing deleted, #591): " + "; ".join(out))
 
 
-def drop_legacy():
-    """the user haus („Haus“), Homes's own until ADR 0031 (#1021), deleted once HOMES_HA_TOKEN works on
-    the user homes (machine() above returned): its tokens go with it. Only the login Laib made; goes at #1021 step 9"""
-    old = next((u for u in USERS or [] if u.get("username") == "haus"), None)
-    if not old:
-        return
-    ws = WS(admin_session())
-    try:
-        ws("config/auth/delete", user_id=old["id"])
-    finally:
-        ws.close()
-    USERS.remove(old)
-    print("home-assistant: user haus deleted, Homes is the user homes now (ADR 0031)")
-
-
 NAMES_TOKEN = ""   # the user Laib-Namen's, once main() has it (#760)
 
 
@@ -524,7 +509,6 @@ def main():
     session = next((E["LAIB_SECRET_" + n] for n in ("HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "MUSIC_ASSISTANT_HA_TOKEN", "HA_TOKEN") if kind(E.get("LAIB_SECRET_" + n, "")) == "admin"), None)
     for secret in ("HA_TOKEN", "HOMES_HA_TOKEN", "BOTE_AUTOMAT_HA_TOKEN", "BOTE_HA_TOKEN", "STIMME_HA_TOKEN", "FRAGE_HA_TOKEN"):
         machine(secret)
-    drop_legacy()
     NAMES_TOKEN = machine("HA_NAMES_TOKEN")[0]
     print("home-assistant: tokens for the check, Homes, the Automat, the Bote, Stimme, Frage and the names work, each on its own user")
 

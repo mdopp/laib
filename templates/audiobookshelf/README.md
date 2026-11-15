@@ -17,7 +17,7 @@ player's shuffle plays music only (docs/SERVICES.md, #646).
 - Music Assistant's account `musicassistant` (listens, changes nothing)
   and an API key for it, handed back as `ABS_MA_TOKEN`; music-assistant
   renders it, so the same apply adds Audiobookshelf as MA's source.
-- the account `homes` (was `haus`, renamed in place, ADR 0031), Homes's, an administrator (subscribing, checking a feed
+- the account `homes`, Homes's, an administrator (subscribing, checking a feed
   and asking for new episodes are admin-only in ABS), and its API key,
   handed back as `HOMES_ABS_TOKEN` (#676, haus#123); homes renders it as
   `HOMES_ABS_TOKEN` beside `HOMES_ABS_URL`, so the same apply gives Homes

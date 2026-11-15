@@ -41,11 +41,11 @@ dich“, with „Erledigt“. Until 2026-11-08 the domain redirected to `www.`
 
 Homes was called Haus until 2026-11-03 (ADR 0031, #1021). Its addresses
 `haus.<domain>` and `homes.<domain>` are gone since 2026-11-07, no
-redirect: a phone paired to either pairs again with `www.<domain>`. What
-still carries the old name: the `was:` lines in `laib.yml` that carried the
-data and secrets along. The program's own logins were renamed with it (the
-owner, 2026-11-03): `homes` in LLDAP/Radicale, Audiobookshelf, Jellyfin and
-Home Assistant (each hook renames or replaces the old `haus` one, ADR 0031).
+redirect: a phone paired to either pairs again with `www.<domain>`. The
+program's own logins were renamed with it (the owner, 2026-11-03): `homes`
+in LLDAP/Radicale, Audiobookshelf, Jellyfin and Home Assistant. The box
+moved that day; the transition's `was:` lines and the hooks' handling of
+the old `haus` logins went on 2026-11-14 (#1021).
 
 With `HOMES_HA_TOKEN`, an administrator's long-lived token that
 home-assistant's post-deploy mints and hands back (#349; nothing to click
@@ -73,8 +73,7 @@ template seeds it in LLDAP with the generated `HOMES_RADICALE_PASSWORD`, and
 in that account. Radicale's rights let every family account read and write
 their entries, but not delete the calendar. On a phone, add it in DAVx⁵ with
 your own login: Account → CalDAV → the collection URL
-`https://caldav.<domain>/homes/haushalt/` (until ADR 0031 `/haus/haushalt/`:
-a phone subscribed there subscribes again). Without the account the Kalender
+`https://caldav.<domain>/homes/haushalt/`. Without the account the Kalender
 page says so in one sentence (haus, laib#418) instead of landing on Start.
 
 Podcasts (haus#123, #676): Homes subscribes a podcast by its link in

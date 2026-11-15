@@ -17,7 +17,9 @@ import (
 // HOMES_HAUSHALT_TOKEN with was: HAUS_HAUSHALT_TOKEN, so the kept reference
 // named an undeclared secret and `laib template update scan` never loaded;
 // a values-only proposal failed the other way. The update renames the
-// reference with the secret (laib#1021), in the same proposal.
+// reference with the secret (laib#1021), in the same proposal. The
+// templates' was: lines went once the box moved; the mechanism stays, so
+// the test puts its own back.
 func TestTemplateUpdateRenamesAReferenceToASecretsFormerName(t *testing.T) {
 	ctx := context.Background()
 	repo, inbox := goldenRepo(t)
@@ -31,6 +33,9 @@ func TestTemplateUpdateRenamesAReferenceToASecretsFormerName(t *testing.T) {
 	for _, e := range entries {
 		b, _ := os.ReadFile(filepath.Join(src, e.Name()))
 		b = regexp.MustCompile(`(?m)^after:.*$`).ReplaceAll(b, nil)
+		if e.Name() == "laib.yml" { // the template as it was until the box moved: the scan's own went with #1021
+			b = regexp.MustCompile(`(?m)^(  - name: HOMES_HAUSHALT_TOKEN.*)$`).ReplaceAll(b, []byte("$1\n    was: HAUS_HAUSHALT_TOKEN"))
+		}
 		tmpl[e.Name()] = &fstest.MapFile{Data: b}
 		name, s := e.Name(), string(b)
 		switch name {

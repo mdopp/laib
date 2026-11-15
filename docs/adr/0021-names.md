@@ -98,11 +98,9 @@ which kind of name goes where.
 | ServiceBay | the predecessor, migrated once (2026-10-19, ADR 0010) | its data dir is deleted, 30 days after migration day |
 | `${PERSONA}`, `${PERSONA_DISPLAY}`, `${PERSONA_PHRASE}`, `${PERSONA_WAKEWORD}`, `${PERSONA_VOICE}`, `${PERSONA_LANGUAGES}`, `${PERSONA_REV}` | `state.LegacyBuiltins`: a box's units from before ADR 0030 load and render as 0.x rendered them for the builtin Joshua, so the update to 1.x changes nothing for them (#1024); `render/persona/` stays on disk | no service on the box names one: each builtin template that did was updated once on the box after 1.0; then the map goes, with `newsSince`'s `${PERSONA_DISPLAY}` |
 | `haus_device_` | the device-token prefix of phones paired with the Haus app; Homes accepts it (ADR 0031) | every phone runs the Homes app (#1021 step 9) |
-| `was: HAUS_…`, `was: ${DATA_DIR}/haus…` | the `was:` lines in templates/homes and the templates that declare its secrets (ADR 0031) | the box moved (#1021 step 7) |
 | `X-Archiv-Haus`, `ARCHIV_HAUS_SECRET` | archiv reads them beside `X-Archiv-Homes` and `ARCHIV_HOMES_SECRET` (ADR 0031) | the box moved (#1021 step 7) |
 | `X-HAUS-*`, Haus PRODIDs | iCal properties and PRODIDs in entries Radicale already stores: data, kept on purpose (ADR 0031) | never in code; the stored entries keep them |
-| `haus` (accounts) | renamed `homes` (the owner, 2026-11-03, ADR 0031): auth deletes the LDAP user `haus` and keeps the name reserved, Home Assistant's post-deploy deletes its user `haus` once `homes` works, Radicale's pre-start moves `haus/` to `homes/`, ABS and Jellyfin rename their user and count the keys „Haus (laib)“, „Haus (Gesehen)“ as Homes's | #1021 step 9 |
-| person `haus` | a calendar subscription stored for it is read as `homes` (`laib calendar`, kalender.py, ADR 0031) | #1021 step 9 |
+| person `haus` | a calendar subscription stored for it is read as `homes` (`laib calendar`, kalender.py, ADR 0031): the subscriptions are a secret the box keeps, written again only when one changes | kept: stored data, until no stored subscription names `haus` |
 | `homeassistant/haus-<collection>` | Home Assistant's copies of the household's calendars keep their path: HA's calendar entities are bound to it (ADR 0031) | kept: stored data |
 
 ### Retired names

@@ -439,29 +439,8 @@ class PostDeploy(unittest.TestCase):
         p = self.run_hook(LAIB_SECRET_HOMES_JELLYFIN_KEY=key)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         new = self.handed(p).get("HOMES_JELLYFIN_KEY")
-        self.assertEqual(JF["keys"], {new: "Homes (Gesehen)", "key-other": "Something else"}, "another app's key was touched, or Haus holds two")
+        self.assertEqual(JF["keys"], {new: "Homes (Gesehen)", "key-other": "Something else"}, "another app's key was touched, or Homes holds two")
         self.assertIn("HOMES_JELLYFIN_KEY minted (replaces one Jellyfin refuses)", p.stdout)
-
-    def test_the_old_account_haus_is_renamed_homes_and_keeps_its_token_and_key(self):
-        # laib#1021, ADR 0031: renamed in place (same id, what it played kept), its token still answers as
-        # homes (HOMES_JELLYFIN_TOKEN was HAUS_JELLYFIN_TOKEN), its key named "Haus (Gesehen)" still works: kept
-        self.box()
-        JF["users"]["haus"] = {"Name": "haus", "Id": "u-haus", "pw": "random", "Policy": {
-            "IsAdministrator": False, "IsHidden": True, "EnableAllFolders": False, "EnabledFolders": [],
-            "AuthenticationProviderId": "Default", "PasswordResetProviderId": "Default"}}
-        JF["tokens"]["jf-haus-old"] = ("haus", "laib-haus")
-        JF["keys"]["key-haus"] = "Haus (Gesehen)"
-        p = self.run_hook(LAIB_SECRET_HOMES_JELLYFIN_TOKEN="jf-haus-old", LAIB_SECRET_HOMES_JELLYFIN_KEY="key-haus")
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertEqual((JF["users"]["homes"]["Id"], "haus" in JF["users"], JF["created"], JF.get("renamed")), ("u-haus", False, 0, 1))
-        self.assertEqual(self.handed(p), {}, "a token or key that works was replaced")
-        self.assertEqual(JF["tokens"]["jf-haus-old"][0], "homes")
-        self.assertEqual(JF["keys"].get("key-haus"), "Haus (Gesehen)")
-        # the key refused later: the old name counts as Homes's, one new key under the new name
-        JF["keys"] = {"key-haus": "Haus (Gesehen)"}
-        p = self.run_hook(LAIB_SECRET_HOMES_JELLYFIN_TOKEN="jf-haus-old", LAIB_SECRET_HOMES_JELLYFIN_KEY="a-key-jellyfin-forgot")
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertEqual(list(JF["keys"].values()), ["Homes (Gesehen)"])
 
     def test_an_existing_homes_account_is_cut_back_to_the_music(self):
         # one made by hand, an administrator who sees everything, gets the music only; spoken word is no music (#646)

@@ -570,10 +570,10 @@ func merge3(cur, base, theirs []byte) ([]byte, bool) {
 // update never leaves a new placeholder without a value, and what the
 // operator set stays as it is, byte for byte. A key the example no longer
 // has whose !secret the new contract does not declare goes (#696: the
-// retired HAUS_DISCOGS_TOKEN): kept, the update would not load. Without
+// retired Discogs token): kept, the update would not load. Without
 // declared (nil) nothing goes; a plain value never does. A !secret naming a
 // secret's former name (was:) names the new one, or neither loads (laib#1021);
-// under a key the example no longer has, it goes (archiv's HAUS_SECRET).
+// under a key the example no longer has, it goes (archiv's old secret).
 func newValues(path string, example []byte, declared map[string]string) error {
 	have, _ := os.ReadFile(path)
 	var cur, ex yaml.Node

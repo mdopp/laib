@@ -265,23 +265,6 @@ class PostDeploy(unittest.TestCase):
         self.assertEqual([u["type"] for u in ABS["users"] if u["username"] == "homes"], ["admin"])
         self.assertTrue(self.handed.get("HOMES_ABS_TOKEN"))
 
-    def test_the_old_account_haus_is_renamed_homes_and_keeps_its_key(self):
-        # laib#1021, ADR 0031: renamed in place, so ABS keeps its id, its podcasts and its API key, which
-        # HOMES_ABS_TOKEN carries (was: HAUS_ABS_TOKEN); no second account, no new key
-        fresh()
-        ABS["init"] = True
-        ABS["users"] = [{"id": "usr-haus", "username": "haus", "type": "admin", "permissions": {}}]
-        ABS["keys"] = [{"id": "key-old", "name": "Haus (laib)", "userId": "usr-haus", "isActive": True, "apiKey": "abs-old-key"}]
-        self.run_hook(homes_key="abs-old-key")
-        self.assertEqual([(u["id"], u["username"]) for u in ABS["users"] if u["id"] == "usr-haus"], [("usr-haus", "homes")])
-        self.assertFalse([u for u in ABS["users"] if u["username"] == "haus"])
-        self.assertNotIn("HOMES_ABS_TOKEN", self.handed, "the key that works was replaced")
-        self.assertIn("abs-old-key", [k["apiKey"] for k in ABS["keys"]])
-        # a refused key is replaced, and the old name counts: never two keys of Homes's
-        self.run_hook(homes_key="a-key-abs-does-not-know")
-        self.assertEqual([(k["name"], k["userId"]) for k in ABS["keys"] if k["userId"] == "usr-haus"], [("Homes (laib)", "usr-haus")])
-        self.assertEqual(sum(1 for u in ABS["users"] if u["username"] == "homes"), 1)
-
     # the box's admins are ABS's admins (2026-10-31): an OIDC-registered owner was „user“ in ABS and could make
     # no API key (admin-only there) for an app like Symfonium. LLDAP's group admins is who administers the box
     def household(self, admins, family=(), users=()):
