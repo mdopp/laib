@@ -11,9 +11,9 @@ import (
 	"github.com/mdopp/laib/internal/cli"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/mcp"
+	"github.com/mdopp/laib/internal/policy"
 	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/state"
-	"github.com/mdopp/laib/internal/sysd"
 )
 
 // #598: laib propose --path sets one value at a named path of box.yml as a
@@ -55,15 +55,13 @@ func TestProposePathIsACommentKeepingEdit(t *testing.T) {
 }
 
 // #598: a hand with a verb list proposes only the paths policy.yml grants it;
-// without the grant laib_person_invite --signal is refused before anything
-// is written or anyone invited. The default sync proposes the grant, once.
-// (laib_zuhause and laib_person_signal are served behind the door since
-// #677: the verb grant gates them, and laib-haushalt's hand holds the
-// paths; zuhause561_test.go, person596_test.go.)
+// the default sync proposes the grant, once. (laib_zuhause, laib_person_signal
+// and since #1234 laib_person_invite --signal are served behind the door: the
+// verb grant gates them, and laib-haushalt's hand holds the paths;
+// zuhause561_test.go, person596_test.go.)
 func TestAHandWithoutThePathGrantIsRefusedUntilTheOwnerGrantsIt(t *testing.T) {
-	env, calls := personBox(t, `{"user":"mama","name":"Mama","email":"mama@box.test","mailed":true,"expires":"2026-10-19T10:00:00Z"}`)
+	env, _ := testBox(t)
 	ctx := context.Background()
-	invite := map[string]any{"user": "mama", "first": "Mama", "email": "mama@box.test", "signal": "+4900000002"}
 	pol := filepath.Join(env.Paths.State, "policy.yml")
 	old := strings.Replace(state.DefaultPolicy, ", paths: [zuhause, people.*.signal]}", "}", 1)
 	if old == state.DefaultPolicy {
@@ -73,16 +71,8 @@ func TestAHandWithoutThePathGrantIsRefusedUntilTheOwnerGrantsIt(t *testing.T) {
 	if err := proposal.CommitDirty(ctx, env.Paths.State, "human:test"); err != nil {
 		t.Fatal(err)
 	}
-	branches := func() string {
-		out, _ := sysd.Run(ctx, "git", "-C", env.Paths.State, "branch", "--list")
-		return out
-	}
-	before := branches()
-	if out, code := mcp.Call(ctx, env, mustState(t, env), "homes", "laib_person_invite", invite); code == cli.ExitOK || len(*calls) != 0 {
-		t.Fatalf("invite --signal without the path grant: exit %d, %d tool runs: %s", code, len(*calls), out)
-	}
-	if all, _ := proposal.List(cli.InboxDir(env), false); len(all) != 0 || branches() != before {
-		t.Fatalf("a refused path left %d proposals or a branch", len(all))
+	if policy.MayPath(mustState(t, env).Policy, "homes", "box.yml:people.mama.signal") {
+		t.Fatal("homes may propose a path policy.yml does not grant it")
 	}
 	env.Actor = "laib"
 	sync := func() *proposal.Proposal {
@@ -106,7 +96,7 @@ func TestAHandWithoutThePathGrantIsRefusedUntilTheOwnerGrantsIt(t *testing.T) {
 	if code := inbox.Approve(ctx, env, []string{"1"}); code != cli.ExitOK {
 		t.Fatalf("approve: exit %d", code)
 	}
-	if out, code := mcp.Call(ctx, env, mustState(t, env), "homes", "laib_person_invite", invite); code != cli.ExitOK {
-		t.Fatalf("after the grant: exit %d: %s", code, out)
+	if !policy.MayPath(mustState(t, env).Policy, "homes", "box.yml:people.mama.signal") {
+		t.Fatal("after the grant homes still may not propose the path")
 	}
 }

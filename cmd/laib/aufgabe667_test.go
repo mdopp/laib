@@ -45,6 +45,7 @@ func callAufgabe(t *testing.T, env *cliEnv, hand string, args map[string]any) (a
 // Ablauf L-20
 func TestBoxAufgabenOverMCP(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env) // behind the door since #1234
 	t.Setenv("LAIB_DISK", "/nonexistent")
 	st := mustState(t, env)
 	tools := mcp.Tools(st, "claude")

@@ -732,7 +732,7 @@ rc=0; LAIB_ACTOR=ops "$BIN" apply whoami >/dev/null 2>&1 || rc=$?; [ "$rc" = 3 ]
 # kernel's judge answers it (scan wants paperless and file-share, which
 # this box has not), through the program to the caller
 HHSEC="$WORK/podsec/laib.laib-haushalt.laib-haushalt"
-LAIB_LISTEN=127.0.0.1:5978 "$BIN" serve >/dev/null 2>&1 & echo $! > "$WORK/hhserve.pid"
+LAIB_HAUSHALT_URL=http://127.0.0.1:5979 LAIB_LISTEN=127.0.0.1:5978 "$BIN" serve >/dev/null 2>&1 & echo $! > "$WORK/hhserve.pid"   # laib_aufgabe is the door's too (#1234)
 HAUSHALT_LISTEN=127.0.0.1:5979 HAUSHALT_KEY="$(cat "$HHSEC.HAUSHALT_KEY")" LAIB_MCP_URL=http://127.0.0.1:5978/mcp LAIB_TOKEN="$(cat "$HHSEC.LAIB_TOKEN")" \
   "${LAIB_HAUSHALT:-$ROOT/laib-haushalt}" 2>"$WORK/haushalt.log" & echo $! > "$WORK/haushalt.pid"
 export LAIB_HAUSHALT_URL=http://127.0.0.1:5979

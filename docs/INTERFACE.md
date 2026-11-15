@@ -102,7 +102,12 @@ laib tell <person> "<text>"          one message to one person of box.yml people
                                      sending: not a person's name, an empty text, more than 1000 characters. The journal names
                                      the person and the channel, never the text. Without a Bote on the box: sent false
                                      (laib scan, laib net geraete and laib tell are laib-haushalt's, in its container: the verb door hands
-                                     each call over HTTP on 127.0.0.1:5902, ADR 0026, 0027; laib updates asks laib-updater on 127.0.0.1:5903, ADR 0035)
+                                     each call over HTTP on 127.0.0.1:5902, ADR 0026, 0027; so are laib calendar, laib person invite
+                                     and pending and laib aufgabe since #1234, whose one write each — KALENDER_ABOS, the LLDAP account,
+                                     aufgaben.yml — is the verb's kernel part (calendar_kern, person_invite_kern, person_pending_kern,
+                                     aufgabe_kern): no tool and no shell verb, it runs only on the Auftrag the door signs for the
+                                     call, as the caller, for that verb, two minutes; the answers are unchanged; laib updates asks laib-updater
+                                     on 127.0.0.1:5903, ADR 0035)
 laib updates [--run|--now|--notes]   what is behind: patch and minor releases of pinned images (#287), the registry digest of a tag or pin (#528), a floating tag's
                                      digest the box runs (pin); --notes adds a new digest's versions, its changelog from GitHub
                                      and our own image's signature check (laib-updater's, ADR 0034, 0035); --run is laib-images.timer's nightly run — it pulls nothing (ADR 0034) — and first

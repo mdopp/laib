@@ -32,15 +32,15 @@ func TestFuerAndWeg(t *testing.T) {
 			t.Errorf("%q was taken for a fuer", bad)
 		}
 	}
-	if w, err := ParseWeg("/stimme"); err != nil || w.Seite != "/stimme" || w.Gespraech {
-		t.Fatalf("a page: %+v %v", w, err)
+	// the way laib-haushalt composed (#1234): one of three, a page only as a Homes path
+	for _, ok := range []Weg{{Seite: "/stimme"}, {Gespraech: true}, {Schluessel: "OPENAI_KEY"}} {
+		if err := CheckWeg(ok); err != nil {
+			t.Errorf("%+v: %v", ok, err)
+		}
 	}
-	if w, err := ParseWeg("gespraech"); err != nil || w.Seite != "" || !w.Gespraech {
-		t.Fatalf("the conversation: %+v %v", w, err)
-	}
-	for _, bad := range []string{"", "stimme", "https://evil.example/", "//evil.example", "/a b", "/x?y=<b>", "Gespräch"} {
-		if _, err := ParseWeg(bad); err == nil {
-			t.Errorf("%q was taken for a weg", bad)
+	for _, bad := range []Weg{{}, {Seite: "https://evil.example/"}, {Seite: "//evil.example"}, {Seite: "/x?y=<b>"}, {Seite: "/stimme", Gespraech: true}} {
+		if CheckWeg(bad) == nil {
+			t.Errorf("%+v was taken for a weg", bad)
 		}
 	}
 }

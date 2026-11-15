@@ -21,7 +21,7 @@ section at the end ("On the box, 2026-11-10"), from `laib status`.
 **People.** A person is an LLDAP user in the group `family` or `admins`
 (templates/auth). `laib person invite <user> --group family|admins` makes
 the user without a password and Authelia mails the set-password link;
-only a human invites an admin (cmd/laib/person.go `cmdPersonInvite`,
+only a human invites an admin (cmd/laib/person.go `cmdPersonInviteKern`, the kernel part laib-haushalt asks for the account, #1234;
 cmd/laib/person360_test.go `TestOnlyAHumanInvitesAnAdmin`). A person's
 messenger numbers are box.yml `people`, changed only by a proposal
 (docs/STATE.md, "people").
@@ -257,6 +257,10 @@ a public ICS, entered in Homes) into `<person>/google-<name>` or
 household's calendars into Home Assistant's own Radicale home. The
 addresses are secrets (`KALENDER_ABOS`, one secret for every person's
 subscriptions). Its data folder holds only the status and the last run.
+An address being subscribed passes laib-haushalt, which serves `laib
+calendar` (#1234): it checks it and hands it on to the kernel's part on
+stdin, keeps nothing and never answers it; only the kernel reads or
+writes `KALENDER_ABOS`.
 
 ### reitti
 

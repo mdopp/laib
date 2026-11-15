@@ -18,6 +18,15 @@ import (
 	"github.com/mdopp/laib/internal/proposal"
 )
 
+// Invite and Pending are laib person invite's and pending's answers, as Homes reads them.
+type Invite struct {
+	User, Name, Email, Link, Expires, Message string
+	Mailed                                    bool
+	Proposal                                  int
+}
+
+type Pending struct{ User, Name, Email string }
+
 // personBox: testBox with an identity service whose person.py is the
 // given fake (apply.RunHook swapped: the hooks image is not here).
 func personBox(t *testing.T, reply string) (*cliEnv, *[][]string) {
@@ -38,6 +47,7 @@ func personBox(t *testing.T, reply string) (*cliEnv, *[][]string) {
 	if _, err := cli.LoadState(env); err != nil {
 		t.Fatal(err)
 	}
+	withHaushalt(t, env) // behind the door since #1234; the account is the kernel's part
 	var calls [][]string
 	real := apply.RunHook
 	t.Cleanup(func() { apply.RunHook = real })
@@ -116,7 +126,7 @@ func TestOnlyAHumanInvitesAnAdmin(t *testing.T) {
 	if argv[0] != "person_invite" {
 		t.Fatalf("laib person invite is %q", argv)
 	}
-	if code := cmdPersonInvite(context.Background(), env, argv[1:]); code != cli.ExitOK {
+	if code := verb(t, "person_invite").Run(context.Background(), env, argv[1:]); code != cli.ExitOK {
 		t.Fatalf("the human: exit %d", code)
 	}
 	if !strings.Contains(buf.String(), "Bob ist eingeladen") || len(*calls) != 1 || (*calls)[0][7] != "admins" {

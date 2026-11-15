@@ -1,6 +1,6 @@
 # scripts/ratchet.py mutation: surviving mutants, the number is how many on that line's text
 # written by `scripts/ratchet.py --update`; lowered in the PR that fixes one, raised only with --accept
-# total 543
+# total 542
 3 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: Warum: "Der Bote kam bei " + svc.Name + " nicht weiter; was er wusste und der Stand liegen in " + p}, env.Actor, time.Now())
 2 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: bad = append(bad, c.What+" "+c.Detail)
 1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: case args[i] == "--container" && i+1 < len(args):
@@ -176,9 +176,8 @@
 4 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if edit.Add == nil || i+1 >= len(args) {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if edit.At == nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if edit.Set == nil {
-14 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err != nil {
+13 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := Anchor(cli.InboxDir(env), p, anchor); err != nil {
-1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := MayPaths(st, env.Actor, at); err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := judgeImage(&r.Changes[i]); err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, "laib", stateLoads, recomputeFor(env, st, p)); err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if err := proposal.ApproveChecked(ctx, env.Paths.State, cli.InboxDir(env), p, env.Actor, stateLoads, recomputeFor(env, st, p)); err != nil {

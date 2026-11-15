@@ -37,6 +37,7 @@ func grepTree(dir, s string) bool {
 // journal line or argument carries it.
 func TestHomesSubscribesACalendarAndTheAddressStaysInSecrets(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env) // behind the door since #1234
 	svc := filepath.Join(env.Paths.State, "services", "kalender")
 	os.MkdirAll(svc, 0o755)
 	os.WriteFile(filepath.Join(svc, "laib.yml"), []byte("name: kalender\nsecrets:\n  - name: KALENDER_ABOS\n    external: true\n    optional: true\nhealth:\n  none: a timer\n"), 0o644)

@@ -44,6 +44,7 @@ func TestABotesWishLandsOnTheAdminsBoxAufgaben(t *testing.T) {
 // tick one off or defer it.
 func TestTheWishCarriesWhoAskedAndHaushaltOnlyAddsTasks(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env) // behind the door since #1234
 	t.Setenv("LAIB_DISK", "/nonexistent")
 	st := mustState(t, env)
 	argv, _, err := mcp.Argv(st, "wish", map[string]any{"text": "ein Kalender", "von": "lena"})

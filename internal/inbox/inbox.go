@@ -711,21 +711,6 @@ func MayPaths(st *state.State, actor string, at map[string]*yaml.Node) error {
 	return nil
 }
 
-// ProposeAt files values at named paths as one proposal (#598): laib
-// zuhause, laib person signal. The reason reaches the inbox, the journal and
-// the owner's chat: no address, no number.
-func ProposeAt(ctx context.Context, env *cli.Env, st *state.State, verb, reason string, at map[string]*yaml.Node) (int, error) {
-	if err := MayPaths(st, env.Actor, at); err != nil {
-		return 0, err
-	}
-	p, err := proposal.CreateFromEdit(ctx, env.Paths.State, cli.InboxDir(env), env.Actor, reason, proposal.Edit{At: at}, JudgeFor(st, env.Actor))
-	if err != nil {
-		return 0, err
-	}
-	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: verb, Result: "info", Reason: reason, Detail: fmt.Sprintf("#%d wartet auf Freigabe", p.ID)})
-	return p.ID, nil
-}
-
 const defaultsReason = "Neue Standard-Verben für eingebaute Hände: "
 
 // ProposeDefaults files one proposal that adds the verbs and path grants the built-in hands

@@ -322,7 +322,7 @@ class CheckedLikeAPerson(unittest.TestCase):
 class OnceAWeek(unittest.TestCase):
     """#1241: the Operator's log wishes are collected; once a week one card, a row per pattern."""
 
-    # Ablauf L-57
+    # Ablauf L-58
     def test_patterns_gather_over_the_week_and_come_as_one_wish_with_a_row_each(self):
         wed = homes("2026-10-21T05:00:00", "2026-10-21T05:10:00", "2026-10-21T05:20:00")
         s = Fake(wed, now="2026-10-21T06:30:00+02:00")

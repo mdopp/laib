@@ -221,6 +221,7 @@ Nur die Namen, aus `secrets:` jeder `laib.yml`; die Werte liegen nur in `secrets
 - 0a Kern: nur Freigabe, Schlüssel, Rechte, Apply, Journal, Kartentexte
 - 0a spricht nicht mit dem Internet außer zum Prüfen (Updater
 - 0b Helfer: Container, eigenes Token, lesen und vorschlagen
+- was ein Helfer-Verb schreiben muss und nur der Kern darf (Kalender-Abos in secrets.age, LLDAP-Konten, aufgaben.yml), tut der Kern-Teil des Verbs: nur mit dem Auftrag, den der Kern für einen echten Aufruf signiert, als dieser Aufrufer, zwei Minuten, nur für dieses Verb (#1234)
 - Eingriffsbudget je Hand und Stunde
 - steht ohne Homes (#1236)
 
@@ -354,6 +355,7 @@ Je Vorlage: `archiv` 4, `bote` 5, `frage` 1, `homes` 13, `kalender` 1, `scan` 7.
 | Homes wird übernommen | der Angreifer hat Homes' Dienstkonten (meist lesend) und Homes' Hand (vorschlagen, nicht freigeben); keine Tresore, kein Host (nach |
 | ein Archiv-Programm hat einen Fehler | nur seine Bereiche, nur solange die Person den Tresor offen hat; Nachrichten bleiben für den Stammbaum unerreichbar |
 | eine Registry oder ein Changelog ist manipuliert | der Updater liefert höchstens falsche Angaben; der Kern fragt nie selbst im Netz und prüft Prüfsumme und Signatur vor dem Vorschlag und noch einmal vor dem Einspielen selbst (#1233) |
+| laib-haushalt wird übernommen | es schlägt vor wie bisher; einen Kern-Teil erreicht es nur mit dem Auftrag eines echten Aufrufs, also höchstens, was dieser Aufrufer in diesem Aufruf durfte (ein Admin-Konto nur, wenn ein Mensch es anlegt); eine Kalender-Adresse sieht es, während sie abonniert wird (#1234) |
 | ein Agent irrt sich | er kann nur vorschlagen oder im Budget anwenden; jede Änderung hat einen Snapshot und läuft zurück, wenn sie rot wird |
 | jemand stiehlt die Box | Tresore bleiben verschlüsselt; die übrigen Daten liegen unverschlüsselt auf der Platte (Lücke, |
 

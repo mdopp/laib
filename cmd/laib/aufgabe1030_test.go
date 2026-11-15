@@ -14,6 +14,7 @@ import (
 // reads; adding one still runs alone.
 func TestAufgabeListRunsBesideReadsAndAddStillRunsAlone(t *testing.T) {
 	env, _ := testBox(t)
+	withHaushalt(t, env) // behind the door since #1234
 	st := mustState(t, env)
 	mcp.Mu.RLock() // another read is running
 	for _, action := range []string{"list", "zeigen"} {
