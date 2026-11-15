@@ -41,6 +41,15 @@ trust**. A layer depends only on the layers below it (owner, 2026-11-15:
 | **1 · Building blocks** | standard programs that hold data or give a capability, no household logic of their own | Immich, Paperless, Home Assistant, Radicale, Vaultwarden, Jellyfin, Music Assistant, the share, Mosquitto, the model server, Stimme, the print server |
 | **2 · Value** | what gives the family something through technology, built on the blocks | Homes, the archive, the Bote, Frage, documents/scan, calendar subscriptions, the poll |
 
+**Layer 2 is several independent programs, not Homes.** Homes, the
+archive's programs, the poll, the Bote and Frage stand beside each other,
+each with its own repo, address and login. Homes is one of them: a small
+core with modules over building blocks and optional plugins (homes ADR
+0003). The archive splits into the vault, a building block, and programs
+that work in an open vault (archiv ADR 0001). A program may register with
+Homes as a plugin; it never has to (owner, 2026-11-15: „die Abstimmung hat
+nichts mit Homes zu tun, es ist eine eigene App“).
+
 ### Inside layer 0: two rings by trust
 
 1. **Ring 0a, the trust kernel (host, `laib`).** Only what decides about
