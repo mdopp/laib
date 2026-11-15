@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.34.1](https://github.com/mdopp/laib/compare/v2.34.0...v2.34.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* **self-update:** let cosign's nonroot user read the release it verifies ([#1266](https://github.com/mdopp/laib/issues/1266)) ([7c9ce8e](https://github.com/mdopp/laib/commit/7c9ce8ec36144c3678682312d83fa79b104b6766))
+
 ## [2.34.0](https://github.com/mdopp/laib/compare/v2.33.0...v2.34.0) (2026-11-15)
 
 
