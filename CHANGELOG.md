@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.35.0](https://github.com/mdopp/laib/compare/v2.34.1...v2.35.0) (2026-11-19)
+
+
+### Features
+
+* **template:** volume and podcasts by voice, the room quiet while a satellite listens ([#1273](https://github.com/mdopp/laib/issues/1273)) ([9526d0e](https://github.com/mdopp/laib/commit/9526d0ec7f1bf8b79ea3d886e56115fd30b2361e)), closes [#1272](https://github.com/mdopp/laib/issues/1272)
+
 ## [2.34.1](https://github.com/mdopp/laib/compare/v2.34.0...v2.34.1) (2026-11-15)
 
 
