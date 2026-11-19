@@ -28,6 +28,7 @@ Spiele Musik von“). The stations come from the list home-assistant's
 pre-start renders for Assist's LaibRadio (#933), handed in as LAIB_SENDER, so Whisper writes a form Assist
 matches. The verbs are written first but filled after the named things, so a full budget cuts them, never a
 device. No station list (no Home Assistant, no stations on the share): the switching words and the names.
+Behind them, with or without stations, how the podcast and the volume sentences start (#1272).
 
 It runs inside the Whisper container (stimme-names.service, `podman exec -i …
 python3 -`), the stdlib only, and prints "names changed" only when the file
@@ -198,6 +199,9 @@ def stations(rendered: str) -> list:
 
 
 SWITCH = ["Schalte das Licht an", "Schalte es aus"]   # #961: the verb Assist's most common sentence starts with
+# #1272: how Assist's LaibPodcast and LaibLautstaerke start (home-assistant's pre-start); last, so a full budget
+# cuts them before a station. Not measured: that Whisper writes them better with these two in the prompt
+MORE = ["Spiele den Podcast", "Lautstärke auf 20 Prozent"]
 
 
 def frame(said: list) -> list:
@@ -205,8 +209,8 @@ def frame(said: list) -> list:
     van Bion.“ with Bambi in the prompt, but no „Schalte“; generic, not a device's name twice, 16 tokens on the box.
     Then the stations and the music sentence („Spiele Einslive, …, Radio Bob, Spiele Musik von“), the verb once,
     not before each station: on the box „Spiele“ is two tokens, nine stations with it did not leave room for the
-    music sentence. Without a station no „Spiele“"""
-    return SWITCH + ([f"Spiele {said[0]}"] + said[1:] + ["Spiele Musik von"] if said else [])
+    music sentence. Without a station no „Spiele Musik von“. Last the podcast and the volume (#1272)"""
+    return SWITCH + ([f"Spiele {said[0]}"] + said[1:] + ["Spiele Musik von"] if said else []) + MORE
 
 
 def prompt(tiers, count=lambda text: len(text) // 2, first=()) -> str:

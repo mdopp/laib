@@ -350,7 +350,8 @@ class Voice(unittest.TestCase):
         hit = lambda name: {"intent": {"name": name}, "match": True, "source": "builtin"}
         H["intents"] = {("de", "Wie spät ist es"): hit("HassGetCurrentTime"), ("de", "Stelle einen Timer auf 5 Minuten"): hit("HassStartTimer"),
                         ("de", "Spiele Einslive"): hit("LaibRadio"), ("de", "Spiele Musik von Queen"): hit("LaibMusik"),
-                        ("de", "Schalte Sofalicht ein"): hit("HassTurnOn")}
+                        ("de", "Schalte Sofalicht ein"): hit("HassTurnOn"),
+                        ("de", "Stelle die Lautstärke auf 20 Prozent"): hit("LaibLautstaerke"), ("de", "Spiele den Podcast Lage der Nation"): hit("LaibPodcast")}
         H["registry"] = [{"entity_id": "light.sofa", "platform": "hue", "disabled_by": None, "options": {"conversation": {"should_expose": True}}},{"entity_id": "select.voice_kueche_pipeline", "platform": "esphome", "translation_key": "pipeline", "disabled_by": None},
                          {"entity_id": "select.voice_kueche_wake_word", "platform": "esphome", "translation_key": "wake_word", "disabled_by": None}]
         H["states"] = {"light.sofa": {"state": "off", "attributes": {"friendly_name": "Sofalicht"}}, "select.voice_kueche_pipeline": {"state": "Homes", "attributes": {"options": ["preferred", "Homes"], "friendly_name": "Küche Assistent"}},
@@ -444,6 +445,22 @@ class Voice(unittest.TestCase):
         r = self.check()
         details = " | ".join(f["detail"] for f in r["findings"] if f["severity"] == "gelb")
         self.assertIn("„Spiele Musik von Queen“ nimmt HassMediaSearchAndPlay, nicht LaibMusik", details, r)
+
+    # Ablauf L-60, L-61
+    def test_the_volume_and_the_podcast_sentence_are_laibs_or_a_finding(self):
+        """#1272: on the box HA's own volume intent took „Lautstärke auf 10 %“ and set the room's unreachable players.
+        The check asks both new sentences as text; one that Laib's intent does not take is a finding, and ADR 0015's
+        five keep their count."""
+        r = self.check()
+        self.assertEqual(self.voice(r), [])
+        self.assertIn("Absichten: 5 von 5 erkannt", r["detail"], "both taken by Laib's intents, and counted among ADR 0015's five")
+        fake.HA["intents"][("de", "Stelle die Lautstärke auf 20 Prozent")] = {"intent": {"name": "HassSetVolume"}, "match": True}
+        fake.HA["intents"].pop(("de", "Spiele den Podcast Lage der Nation"))
+        r = self.check()
+        self.assertIn("Absichten: 5 von 5 erkannt", r["detail"], r)
+        self.assertEqual(self.voice(r), ["Sprache: „Stelle die Lautstärke auf 20 Prozent“ nimmt HassSetVolume, nicht LaibLautstaerke",
+                                         "Sprache: „Spiele den Podcast Lage der Nation“ wird nicht erkannt"], r)
+        self.assertEqual(fake.HA["calls"], [], "the check switched something")
 
     def test_without_an_exposed_switch_the_switch_is_said_unmeasured(self):
         fake.HA["registry"][0]["options"] = {}

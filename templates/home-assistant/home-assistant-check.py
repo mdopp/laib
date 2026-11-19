@@ -273,6 +273,9 @@ APPLY = "laib apply home-assistant (#634)"
 # {name} is a light or switch exposed to Assist. What this does not measure: the microphone, Whisper, the music.
 FIVE = [("Timer", "Stelle einen Timer auf 5 Minuten", "HassStartTimer"), ("Einslive", "Spiele Einslive", "LaibRadio"),
         ("Musik", "Spiele Musik von Queen", "LaibMusik"), ("Frage", "Was ist ein Igel", None), ("Schalter", "Schalte {name} ein", "HassTurnOn")]
+# #1272: Laib's further sentences, asked the same way; not among ADR 0015's five, so not in its count: a miss is a
+# finding. HA's own volume intent taking the sentence is one: it set the room's unreachable players (2026-11-19).
+MORE = [("Lautstärke", "Stelle die Lautstärke auf 20 Prozent", "LaibLautstaerke"), ("Podcast", "Spiele den Podcast Lage der Nation", "LaibPodcast")]
 
 
 def five(ws, lang: str, reg: list, states: dict) -> tuple:
@@ -284,20 +287,21 @@ def five(ws, lang: str, reg: list, states: dict) -> tuple:
                and ((r.get("options") or {}).get("conversation") or {}).get("should_expose") is True]
     name = next((n for e in exposed if (n := ((states.get(e) or {}).get("attributes") or {}).get("friendly_name"))), "")
     probes = [(w, s.format(name=name), i) for w, s, i in FIVE if name or "{name}" not in s]
+    counted, probes = len(probes), probes + MORE
     t0 = time.monotonic()
     got = (ws("conversation/agent/homeassistant/debug", sentences=[s for _, s, _ in probes], language=lang) or {}).get("results") or []
     ms = round((time.monotonic() - t0) * 1000)
     ok, out = [], []
-    for (what, sentence, want), hit in zip(probes, got + [None] * len(probes)):
+    for i, ((what, sentence, want), hit) in enumerate(zip(probes, got + [None] * len(probes))):
         took = ((hit or {}).get("intent") or {}).get("name") if (hit or {}).get("match") else None
         if (want is None and not took) or (want is not None and took == want):
-            ok.append(what)
+            ok += [what] if i < counted else []
         else:
             out.append({"severity": "gelb", "detail": f"Sprache: „{sentence}“ " + (f"nimmt {took}, nicht {want or 'Frage'}" if took else "wird nicht erkannt"),
                         "fix": "eigene Sätze in Home Assistant (ADR 0015, Prüfung 1); laib logs home-assistant"})
     missing = "" if name else " · Schalter nicht geprüft: kein Licht oder Schalter für Assist freigegeben"
-    print(f"Absichten: {len(ok)} von {len(probes)} erkannt in {ms} ms: " + ", ".join(ok) + missing, flush=True)  # the unit's journal
-    return f"Absichten: {len(ok)} von {len(probes)} erkannt" + missing, out
+    print(f"Absichten: {len(ok)} von {counted} erkannt in {ms} ms: " + ", ".join(ok) + missing, flush=True)  # the unit's journal
+    return f"Absichten: {len(ok)} von {counted} erkannt" + missing, out
 
 
 def voice(base: str, token: str, name: str, wake_id: str, phrase: str) -> tuple:

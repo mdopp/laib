@@ -150,6 +150,86 @@ when intent_script was not set up at its start. The check counts the two
 sentences only when Laib's intents take them. What it does not measure: that
 the station plays, and on which speaker.
 
+## Volume, podcasts and quiet while listening (#1272)
+
+On the box, 2026-11-19, with the soundbar playing through Music Assistant:
+„Lautstärke auf 10 %“ was taken by Home Assistant's own volume intent, which
+set three players of the room that were unavailable and not the one that
+played; „Spiele die aktuelle Lage der Nation“ matched no sentence; and the
+box's own automation muted one named player while the satellite listened.
+What was there before: #933's two intents above, and that hand-written
+automation in the box's `automations.yaml`. pre-start now renders three
+more things into the same two files.
+
+- **LaibLautstaerke**, the volume to a value: „[Stell(e)] [die] Lautstärke
+  auf <0–100> [Prozent | %]“, „Mach(e) [es] auf <0–100> Prozent | %“; and by
+  a step: „[Mach(e)] [es | die Musik] lauter | leiser“ (ten points),
+  „[Die] Lautstärke um <n> [Prozent | %] erhöhen | reduzieren | verringern“.
+  It goes to the media players in the area of the satellite that heard it
+  whose state is `playing`, never a satellite's own players. A speaker is
+  often there twice, as Music Assistant's player and as a cast player: when
+  one of Music Assistant's plays, only those are set, so a step counts
+  once. Nothing plays: the room's standard speaker, picked as for
+  LaibRadio. None: „Ich finde hier keinen Lautsprecher.“ The answer says
+  the value, „Lautstärke 25 Prozent.“ (the first player's after a step);
+  values are held to 0–100.
+- **LaibPodcast**: „Spiel(e) [den] Podcast <Name>“ and „Spiel(e) die | den
+  aktuelle(n) | neueste(n) | letzte [Folge [von | vom Podcast]] <Name>“, the
+  name a wildcard, played like LaibMusik: `music_assistant.play_media` with
+  `media_type: podcast` on the same player, and Music Assistant finds the
+  podcast by its name among its sources (Audiobookshelf's podcasts, #646).
+  A sentence like „Spiele die neuesten Songs von Queen“ is taken as a
+  podcast named „Songs von Queen“: the second sentence has no word that
+  says podcast.
+- **Quiet while listening**: the automation `laib_stumm_beim_zuhoeren` in
+  `packages/laib_medien.yaml`. When a satellite goes to `listening`, every
+  media player in its area that plays, is not muted and is not a
+  satellite's own is muted, each with its own call; when the satellite
+  leaves `listening`, or after 20 s, exactly those are unmuted. The players
+  are found when it triggers, none is named. The satellites are named: a
+  state trigger takes entities, not a domain, so pre-start lists the
+  `assist_satellite` entities of Home Assistant's entity registry
+  (`.storage/core.entity_registry`, the ones not disabled). **A new
+  satellite is in the automation after the next `laib apply
+  home-assistant`** (an update of this template is one); until then it
+  mutes nothing. No satellite, no automation.
+
+A satellite's own players are those of a device with an `assist_satellite`
+entity, and the media players named after that device (a Voice PE's
+speaker is there once more as Music Assistant's player, on a device of its
+own); a satellite whose device is named like an area has no such twin,
+the room's players keep that name.
+
+post-deploy's one reload after a change now also calls `automation.reload`,
+with the same restart when Home Assistant does not know the service.
+`home-assistant-check` asks „Stelle die Lautstärke auf 20 Prozent“ and
+„Spiele den Podcast Lage der Nation“ as text as it does the five: another
+intent taking one, or none, is a yellow finding; they are not in the count
+of five. Stimme's prompt for Whisper ends its verbs with „Spiele den
+Podcast, Lautstärke auf 20 Prozent“.
+
+**The box's own automation must go** once this is on the box: the
+hand-written one in the box's `automations.yaml` (`laib_soundbar_…`) mutes
+and unmutes the same soundbar a second time. It is not Laib's file; the
+owner removes it.
+
+Not measured, all of it only the box and a person at the speaker can say:
+
+- that Home Assistant accepts the rendered package, and what its template
+  engine makes of the expressions (the tests read the rendered text; they
+  were run once by hand under plain Jinja2 with stand-ins for Home
+  Assistant's functions, and the sentences under hassil; neither runs in
+  CI);
+- that the volume of the playing speaker changes, and that a Music
+  Assistant player follows `media_player.volume_set`;
+- that Music Assistant finds a podcast by the name Whisper wrote, and that
+  playing a podcast starts its **newest** episode: `play_media` hands Music
+  Assistant the podcast, which episode it starts is its choice;
+- that every muted player comes back, and that 20 s is enough: a player
+  that became unavailable while muted stays muted until someone unmutes it;
+- that Whisper writes the new sentences better with the two verbs in its
+  prompt.
+
 ## The names as Whisper writes them (#760)
 
 „Schalte Sofa-Licht aus“ was heard right and missed HA's own intents: the

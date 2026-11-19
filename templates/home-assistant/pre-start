@@ -21,7 +21,9 @@ configuration.yaml is only ever added to.
    (settings.json.servicebay, .sb-bak-…). Each is 0600 for the store's
    owner, the user the zwave container runs as (its root, which is the
    box's core); home-assistant-check names one that others can read.
-5. The media sentences (#933).
+5. The media sentences (#933): the house's stations, music by artist, a podcast by name and the volume (#1272),
+   answered on the speakers of the room whose satellite heard them; and the automation that mutes what plays in a
+   room while its satellite listens (#1272).
 6. The tone for a wake nobody meant (owner 2026-11-14): www/laib/falsch.wav,
    served at /local/laib/falsch.wav; Frage plays it on the satellite instead
    of an answer (frage/gate.go). Computed, so every apply writes the same bytes."""
@@ -188,9 +190,22 @@ def stations():
 SAY = "(spielen|abspielen|anmachen|einschalten)"
 # „Spiele“ as Whisper writes it: „Spieler 1 live.“ (2026-10-31), „Spiel …“, „Spielt …“
 PLAY = "(spiel|spiele|spieler|spielt)"
+PROZENT = "{laib_prozent}[ ][Prozent|%]"
 intents = {"LaibMusik": {"data": [{"sentences": [PLAY + " (Musik|Lieder|Songs|[et]was) (von|vom) {laib_kuenstler}",
-                                                 "(Musik|Lieder|Songs|[et]was) (von|vom) {laib_kuenstler} " + SAY]}]}}
-lists = {"laib_kuenstler": {"wildcard": True}}
+                                                 "(Musik|Lieder|Songs|[et]was) (von|vom) {laib_kuenstler} " + SAY]}]},
+           # #1272: a podcast by its name; „die aktuelle“ needs no „Podcast“ („Spiele die aktuelle Lage der Nation“)
+           "LaibPodcast": {"data": [{"sentences": [
+               PLAY + " [den ]Podcast {laib_podcast}",
+               PLAY + " (die|den) (aktuelle|aktuellen|neueste|neuesten|letzte) [Folge [(von|vom Podcast) ]]{laib_podcast}"]}]},
+           # #1272: the volume, to a value or a step; laib_richtung says which, the script reads it
+           "LaibLautstaerke": {"data": [
+               {"sentences": ["[(stell|stelle) ][die ]Lautstärke auf " + PROZENT, "(mach|mache) [es ]auf {laib_prozent}[ ](Prozent|%)"],
+                "slots": {"laib_richtung": "auf"}},
+               {"sentences": ["[(mach|mache) ][(es|die Musik) ]lauter", "[die ]Lautstärke um " + PROZENT + " erhöhen"],
+                "slots": {"laib_richtung": "lauter"}},
+               {"sentences": ["[(mach|mache) ][(es|die Musik) ]leiser", "[die ]Lautstärke um " + PROZENT + " (reduzieren|verringern)"],
+                "slots": {"laib_richtung": "leiser"}}]}}
+lists = {"laib_kuenstler": {"wildcard": True}, "laib_podcast": {"wildcard": True}, "laib_prozent": {"range": {"from": 0, "to": 100}}}
 if names := stations():
     intents["LaibRadio"] = {"data": [{"sentences": [PLAY + " [(den Sender|das Radio|Radio) ]{laib_sender}",
                                                     "[(den Sender|das Radio|Radio) ]{laib_sender} " + SAY]}]}
@@ -207,10 +222,36 @@ changed = write("custom_sentences/de/laib_medien.yaml", "# rendered by laib pre-
 # one named like the area (MA's players have no area of their own: media_player.wohnzimmer_2 is the Wohnzimmer's),
 # else none, and the answer says so. The satellite's own answer stays on the satellite: only the music goes there.
 STANDARD = "Standard-Lautsprecher"
-PLAYER = ("{% set ma = integration_entities('music_assistant') | select('match', 'media_player[.]') | list %}"
-          "{% set a = preferred_area_id | default('', true) %}"
-          "{% set std = (label_entities('" + STANDARD + "') | select('in', ma) | select('in', area_entities(a)) | list) if a else [] %}"
-          "{{ (std + (ma | select('in', area_entities(a)) | list) + (ma | select('search', a) | list) if a else []) | first | default('') }}")
+MA = "{% set ma = integration_entities('music_assistant') | select('match', 'media_player[.]') | list %}"
+AREA = "{% set a = preferred_area_id | default('', true) %}"   # the area of the satellite that heard it
+STD = ("{% set std = (label_entities('" + STANDARD + "') | select('in', ma) | select('in', area_entities(a)) | list) if a else [] %}"
+       "{% set player = (std + (ma | select('in', area_entities(a)) | list) + (ma | select('search', a) | list) if a else []) | first | default('') %}")
+PLAYER = MA + AREA + STD + "{{ player }}"
+# #1272, the room's speakers: every media player in the area `a` (and Music Assistant's named like it), never a
+# satellite's own. Those are the players of a device that has an assist_satellite, and the ones named after that
+# device (a Voice PE is media_player.<device> once more as Music Assistant's player, on a device of its own);
+# a satellite named like a room has no such twin, the room's players keep that name. Needs `ma` and `a`.
+ROOM = ("{% set ns = namespace(own=[]) %}"
+        "{% for d in states.assist_satellite | map(attribute='entity_id') | map('device_id') | select('string') | unique %}"
+        "{% set n = device_attr(d, 'name') | default('', true) | slugify %}"
+        "{% set ns.own = ns.own + device_entities(d) + (states.media_player | map(attribute='entity_id')"
+        " | select('match', 'media_player[.]' ~ n ~ '(_|$)') | list if n and n not in areas() else []) %}"
+        "{% endfor %}"
+        "{% set room = ((area_entities(a) | select('match', 'media_player[.]') | list) + (ma | select('search', a) | list) if a else [])"
+        " | unique | reject('in', ns.own) | list %}")
+# whose volume: what plays in the room, Music Assistant's players alone when one of them plays (the same speaker is
+# often there twice, as a cast player too: a step must not count twice), else the standard speaker as PLAYER picks
+# it. [[player, percent], …], 0 to 100
+ZIELE = (MA + AREA + STD + ROOM + "{% set on = room | select('is_state', 'playing') | list %}"
+         "{% set step = laib_prozent | default(10) | int(10) %}{% set z = namespace(l=[]) %}"
+         "{% for p in (on | select('in', ma) | list) or on or ([player] if player else []) %}"
+         "{% set now = ((state_attr(p, 'volume_level') | float(0)) * 100) | round | int %}"
+         "{% set z.l = z.l + [[p, ([0, step if laib_richtung == 'auf' else now + step if laib_richtung == 'lauter' else now - step, 100] | sort)[1]]] %}"
+         "{% endfor %}{{ z.l }}")
+# what goes quiet while a satellite listens: what plays in its room and is not muted already
+STUMM = (MA + "{% set a = area_id(trigger.entity_id) | default('', true) %}" + ROOM
+         + "{{ room | select('is_state', 'playing') | reject('is_state_attr', 'is_volume_muted', true) | list }}")
+NONE = "Ich finde hier keinen Lautsprecher."
 
 
 def play(slot, kind, said):
@@ -232,16 +273,83 @@ def play(slot, kind, said):
       - stop: ""
         response_variable: result
     speech:
-      text: "{{{{ ('{said} ' ~ {slot} ~ '.') if action_response.player else 'Ich finde hier keinen Lautsprecher.' }}}}"
+      text: "{{{{ ('{said} ' ~ {slot} ~ '.') if action_response.player else '{NONE}' }}}}"
 """
 
 
-changed = write("packages/laib_medien.yaml", "# rendered by laib pre-start (templates/home-assistant, #933); do not edit by hand\nintent_script:\n"
+def each(of, service, data):
+    """one call per player, so one that fails does not keep the others from theirs"""
+    return f"""      - repeat:
+          for_each: "{{{{ {of} }}}}"
+          sequence:
+            - action: media_player.{service}
+              continue_on_error: true
+              target:
+                entity_id: "{{{{ repeat.item{'[0]' if of == 'ziele' else ''} }}}}"
+              data:
+                {data}
+"""
+
+
+SET = each("ziele", "volume_set", 'volume_level: "{{ repeat.item[1] / 100 }}"')
+VOLUME = f"""    action:
+      - variables:
+          ziele: "{ZIELE}"
+{SET}      - variables:
+          result:
+            ziele: "{{{{ ziele }}}}"
+      - stop: ""
+        response_variable: result
+    speech:
+      text: "{{{{ ('Lautstärke ' ~ action_response.ziele[0][1] ~ ' Prozent.') if action_response.ziele else '{NONE}' }}}}"
+"""
+
+
+def satellites():
+    """the assist satellites Home Assistant knows, from its entity registry (read before it starts): a state trigger
+    names its entities, there is none for a whole domain. A new satellite is in it on the next apply."""
+    try:
+        with open(os.path.join(C, ".storage", "core.entity_registry"), encoding="utf-8") as f:
+            reg = json.load(f)["data"]["entities"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+    return sorted(e["entity_id"] for e in reg if isinstance(e, dict) and str(e.get("entity_id", "")).startswith("assist_satellite.")
+                  and re.fullmatch(r"[a-z0-9_.]+", e["entity_id"]) and not e.get("disabled_by"))
+
+
+def mute(sats):
+    """#1272: while a satellite listens, what plays in its room is muted, and exactly that unmuted when it stops
+    listening or after 20 s; a run per satellite, side by side"""
+    return f"""automation:
+  - id: laib_stumm_beim_zuhoeren
+    alias: "Laib: Lautsprecher im Raum stumm, solange das Sprachgerät zuhört"
+    mode: parallel
+    max: 10
+    trigger:
+      - platform: state
+        entity_id:
+{"".join(f"          - {s}{chr(10)}" for s in sats)}        to: listening
+    variables:
+      stumm: "{STUMM}"
+    condition:
+      - condition: template
+        value_template: "{{{{ stumm | count > 0 }}}}"
+    action:
+{each("stumm", "volume_mute", "is_volume_muted: true")}      - wait_template: "{{{{ not is_state(trigger.entity_id, 'listening') }}}}"
+        timeout: 20
+{each("stumm", "volume_mute", "is_volume_muted: false")}"""
+
+
+sats = satellites()
+changed = write("packages/laib_medien.yaml", "# rendered by laib pre-start (templates/home-assistant, #933, #1272); do not edit by hand\nintent_script:\n"
                 + "  LaibRadio:\n" + play("laib_sender", "radio", "Ich spiele")
-                + "  LaibMusik:\n" + play("laib_kuenstler", "artist", "Ich spiele Musik von")) or changed
+                + "  LaibMusik:\n" + play("laib_kuenstler", "artist", "Ich spiele Musik von")
+                + "  LaibPodcast:\n" + play("laib_podcast", "podcast", "Ich spiele den Podcast")
+                + "  LaibLautstaerke:\n" + VOLUME + (mute(sats) if sats else "")) or changed
 if changed:
     write(".laib-sentences-changed", "")   # post-deploy reloads them once (#933)
-    print("custom_sentences/de/laib_medien.yaml: " + (f"{len(names)} Sender" if names else "keine Sender auf der Freigabe") + ", Musik von …")
+    print("custom_sentences/de/laib_medien.yaml: " + (f"{len(names)} Sender" if names else "keine Sender auf der Freigabe")
+          + f", Musik von …, Podcast …, Lautstärke; stumm beim Zuhören für {len(sats)} Sprachgerät(e)")
 
 
 def tone(rate=16000):
