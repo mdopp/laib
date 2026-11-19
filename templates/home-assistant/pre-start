@@ -196,7 +196,8 @@ intents = {"LaibMusik": {"data": [{"sentences": [PLAY + " (Musik|Lieder|Songs|[e
            # #1272: a podcast by its name; „die aktuelle“ needs no „Podcast“ („Spiele die aktuelle Lage der Nation“)
            "LaibPodcast": {"data": [{"sentences": [
                PLAY + " [den ]Podcast {laib_podcast}",
-               PLAY + " (die|den) (aktuelle|aktuellen|neueste|neuesten|letzte) [Folge [(von|vom Podcast) ]]{laib_podcast}"]}]},
+               PLAY + " [in ](die|den|der) (aktuelle|aktuellen|neue|neueste|neuesten|letzte) [Folge [(von|vom|des) [Podcast ]]]{laib_podcast}",
+               PLAY + " [die ](Folge|Episode) (von|vom|des) [Podcast ]{laib_podcast}"]}]},
            # #1272: the volume, to a value or a step; laib_richtung says which, the script reads it
            "LaibLautstaerke": {"data": [
                {"sentences": ["[(stell|stelle) ][die ]Lautstärke auf " + PROZENT, "(mach|mache) [es ]auf {laib_prozent}[ ](Prozent|%)"],

@@ -317,7 +317,8 @@ class PreStart(unittest.TestCase):
         for text, name in {"Spiele die aktuelle Lage der Nation.": "Lage der Nation", "Spiele den Podcast Lage der Nation": "Lage der Nation",
                            "Spiel Podcast Fest und Flauschig": "Fest und Flauschig", "Spieler den Podcast Zeit Verbrechen.": "Zeit Verbrechen",
                            "Spiele die neueste Folge von Lage der Nation": "Lage der Nation", "Spiele die aktuelle Folge Lage der Nation": "Lage der Nation",
-                           "Spiele die letzte Folge vom Podcast Zeit Verbrechen": "Zeit Verbrechen", "Spiele den neuesten Tatort": "Tatort"}.items():
+                           "Spiele die letzte Folge vom Podcast Zeit Verbrechen": "Zeit Verbrechen", "Spiele den neuesten Tatort": "Tatort",
+                           "Spiele in der neueste Folge Lage der Nation": "Lage der Nation", "Spiele die Folge von Lage der Nation": "Lage der Nation"}.items():
             self.assertEqual(self.heard(doc, text), ("LaibPodcast", {"laib_podcast": name}), text)
         for text, want in {"Spiele Einslive": ("LaibRadio", {"laib_sender": "1LIVE"}), "Spieler 1 live.": ("LaibRadio", {"laib_sender": "1LIVE"}),
                            "Spiele das Radio NDR zwei": ("LaibRadio", {"laib_sender": "NDR 2"}), "Radio Einslive anmachen": ("LaibRadio", {"laib_sender": "1LIVE"}),
