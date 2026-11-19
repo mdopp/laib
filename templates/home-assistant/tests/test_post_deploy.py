@@ -212,6 +212,8 @@ class FakeHA(BaseHTTPRequestHandler):
                 st["state"] = b["option"]
             if self.path == "/api/services/intent_script/reload" and HA.get("no_intent_script"):   # #933: HA set it up at start only
                 return self.reply(400, {"message": "Service intent_script.reload not found"})
+            if self.path == "/api/services/automation/reload" and HA.get("no_automation"):   # #1272: the same for a package's automation:
+                return self.reply(400, {"message": "Service automation.reload not found"})
             if self.path == "/api/services/update/install" and HA.get("marketplace") is not None and self.user() not in HA["marketplace"]["accepted"]:
                 return self.reply(500, {"message": "Open the Marketplace and read the warning first"})   # update.py: warning_accepted(user_id), #1209
             if self.path == "/api/services/update/install":   # HA's REST call returns while HACS still downloads (#528)
@@ -964,9 +966,10 @@ class FrageAgent(Hook):
 class Sentences(Hook):
     """#933: pre-start writes Laib's media sentences and their intent_script and leaves a marker when they
     changed; Home Assistant reads them only on a reload, which an apply that changed no unit does not do.
-    post-deploy reloads them once (conversation, intent_script), or restarts Home Assistant when
-    intent_script was not set up at its start; no marker, no call."""
+    post-deploy reloads them once (conversation, intent_script, and automation for the mute while a satellite
+    listens, #1272), or restarts Home Assistant when one was not set up at its start; no marker, no call."""
 
+    # Ablauf L-62
     def test_changed_sentences_are_reloaded_once(self):
         d = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, d, True)
@@ -978,7 +981,7 @@ class Sentences(Hook):
         p, _, log = self.run_hook(data_dir=d)
         self.assertEqual(p.returncode, 0, log)
         self.assertEqual([c[0] for c in HA["calls"] if "reload" in c[0] or "restart" in c[0]],
-                         ["/api/services/conversation/reload", "/api/services/intent_script/reload"], log)
+                         ["/api/services/conversation/reload", "/api/services/intent_script/reload", "/api/services/automation/reload"], log)
         self.assertFalse(marker.exists(), "the marker stays: the next apply reloads again")
         HA["calls"].clear()
         p, _, log = self.run_hook(data_dir=d)
@@ -989,6 +992,16 @@ class Sentences(Hook):
         p, _, log = self.run_hook(data_dir=d)
         self.assertEqual(p.returncode, 0, log)
         self.assertIn(("/api/services/homeassistant/restart", {}), HA["calls"], log)
+        self.assertFalse(marker.exists())
+        # #1272: the same for the automation: a package's automation: that Home Assistant did not load at its start
+        HA["calls"].clear()
+        marker.write_text("")
+        HA["no_intent_script"], HA["no_automation"] = False, True
+        p, _, log = self.run_hook(data_dir=d)
+        self.assertEqual(p.returncode, 0, log)
+        self.assertEqual([c[0] for c in HA["calls"] if "reload" in c[0] or "restart" in c[0]][-2:],
+                         ["/api/services/automation/reload", "/api/services/homeassistant/restart"], log)
+        self.assertIn("startet neu (automation)", log)
         self.assertFalse(marker.exists())
 
 

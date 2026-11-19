@@ -316,6 +316,23 @@ Wenn in einem Raum ein Standard-Lautsprecher gewählt ist und jemand dort „Spi
 Dann läuft die Musik auf diesem Lautsprecher, und die Antwort kommt weiter vom Sprachgerät.
 Und ohne gewählten Standard spielt sie wie bisher auf dem Lautsprecher im Raum.
 
+### L-60 Die Lautstärke per Sprache trifft den Lautsprecher, der im Raum gerade spielt
+Wenn im Wohnzimmer Musik läuft und jemand dort „Lautstärke auf 25 Prozent“, „lauter“ oder „mach es leiser“ sagt,
+Dann ändert sich die Lautstärke des Lautsprechers, der in diesem Raum gerade spielt, und das Sprachgerät antwortet „Lautstärke 25 Prozent.“
+Und spielt dort nichts, gilt es für den Standard-Lautsprecher des Raums; gibt es keinen, sagt es „Ich finde hier keinen Lautsprecher.“
+Und das Sprachgerät selbst wird dabei nicht leiser oder lauter.
+
+### L-61 Ein Podcast spielt per Sprache mit seinem Namen
+Wenn jemand „Spiele den Podcast Lage der Nation“ oder „Spiele die aktuelle Lage der Nation“ sagt,
+Dann spielt der Podcast auf dem Lautsprecher des Raums, auf dem auch Radio und Musik laufen, und das Sprachgerät antwortet „Ich spiele den Podcast Lage der Nation.“
+Und „Spiele Einslive“ und „Spiele Musik von Queen“ spielen weiter das Radio und die Musik.
+
+### L-62 Solange das Sprachgerät zuhört, sind die Lautsprecher im Raum stumm
+Wenn jemand das Sprachgerät weckt, während im selben Raum etwas spielt,
+Dann werden alle Lautsprecher dieses Raums stumm, die gerade spielen.
+Und sobald es nicht mehr zuhört, spätestens nach 20 Sekunden, sind genau diese wieder laut; was vorher schon stumm war, bleibt stumm.
+Und ein neues Sprachgerät macht das nach der nächsten Aktualisierung von Home Assistant auch.
+
 ### L-47 Wer den Lautsprecher aus Versehen weckt, hört nur einen kurzen Ton statt einer langen Antwort
 Wenn der Lautsprecher auf ein Gespräch am Tisch oder den Fernseher hin aufwacht und nichts hört, das an ihn gerichtet ist,
 Dann sagt er nichts, sondern spielt nur einen kurzen, leisen Ton „düü-doow“.

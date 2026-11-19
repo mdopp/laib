@@ -124,16 +124,17 @@ class Stations(unittest.TestCase):
     def test_the_verb_comes_first_then_the_named_things(self):
         p = names.prompt(names.fetch(FakeWS(HOUSE)), first=names.frame(names.stations(RENDERED)))
         self.assertTrue(p.startswith("Schalte das Licht an, Schalte es aus, Spiele Einslive, Antenne Niedersachsen, Deutschlandfunk, NDR zwei, NDR zwei Niedersachsen, radio ffn, "
-                                     "WDR zwei, SWR drei, Radio Bob, Spiele Musik von, Sofalicht, Sofa, Couch, Bambi, Badmini, Wohnzimmer"), p)
+                                     "WDR zwei, SWR drei, Radio Bob, Spiele Musik von, Spiele den Podcast, Lautstärke auf 20 Prozent, Sofalicht, Sofa, Couch, Bambi, Badmini, Wohnzimmer"), p)
 
     def test_without_stations_the_switching_words_still_lead(self):
         """#961: „Schalte Bambi an“ came back as „Schade van Bion.“ with Bambi in the prompt: the verb was not.
-        The switching words lead whatever the share holds; no station, no „Spiele“"""
+        The switching words lead whatever the share holds; no station, no „Spiele Musik von“. #1272: the podcast
+        and the volume need no station, how their sentences start stands behind either way"""
         before = names.prompt(names.fetch(FakeWS(HOUSE)))
-        self.assertEqual(names.frame([]), ["Schalte das Licht an", "Schalte es aus"])
+        self.assertEqual(names.frame([]), ["Schalte das Licht an", "Schalte es aus", "Spiele den Podcast", "Lautstärke auf 20 Prozent"])
         p = names.prompt(names.fetch(FakeWS(HOUSE)), first=names.frame(names.stations("")))
-        self.assertEqual(p, "Schalte das Licht an, Schalte es aus, " + before)
-        self.assertNotIn("Spiele", p)
+        self.assertEqual(p, "Schalte das Licht an, Schalte es aus, Spiele den Podcast, Lautstärke auf 20 Prozent, " + before)
+        self.assertNotIn("Musik von", p)
         self.assertRegex(p, r"\bSchalte\b.*\ban\b.*\baus\b")
 
     def test_no_names_no_frame(self):
