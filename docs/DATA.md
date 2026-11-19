@@ -429,7 +429,7 @@ writes `KALENDER_ABOS`.
   prompt is not kept. On the box the running llama-server has no flag
   that writes prompts (`--verbose`, `--log-file`, `--slot-save-path`,
   `--log-verbosity`)
-  <!-- box: laib look llama --container systemd-llama -- ps -eo args ~ /app/llama-server --host !~ \s(--verbose|-v|--log-file|--slot-save-path|--log-verbosity|-lv)(\s|$) --> *(box 2026-11-12: yes)*;
+  <!-- box: laib look llama --container systemd-llama -- ps -eo args ~ /app/llama-server --host !~ \s(--verbose|-v|--log-file|--slot-save-path|--log-verbosity|-lv)(\s|$) --> *(box 2026-11-19: yes)*;
   what laib-lease keeps is the code's claim above. The model process is the household's, so root reads its
   memory while it answers, as it reads an open vault (flow 22).
 - **Inbox `archiv-eingang/<person>/`:** Homes writes it as the device's
