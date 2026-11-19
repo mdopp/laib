@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.35.1](https://github.com/mdopp/laib/compare/v2.35.0...v2.35.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **home-assistant:** podcast sentence takes what Whisper really hears ([#1275](https://github.com/mdopp/laib/issues/1275)) ([7aa8fa1](https://github.com/mdopp/laib/commit/7aa8fa178ecb98828a54c3c6f4b069f75150ea29))
+
 ## [2.35.0](https://github.com/mdopp/laib/compare/v2.34.1...v2.35.0) (2026-11-19)
 
 
