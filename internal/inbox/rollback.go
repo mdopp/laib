@@ -485,14 +485,16 @@ func offer(ctx context.Context, env *cli.Env, batch []*proposal.Proposal, snaps 
 		f, _ = fileRepair(ctx, env, st, who+": nach vorne reparieren, die neue Version wieder aufspielen", "Das Update von "+who+" lief nicht. Statt die Sicherung zurückzuspielen, kommt die neue Version wieder auf die Daten nach dem Update.",
 			"Zurück zum alten Stand geht es danach mit „Sicherung zurückspielen“.", []string{onward(st, false), kept}, forwards)
 	}
+	var ways []proposal.Weg // ADR 0036
+	if rerr == nil {
+		ways = append(ways, proposal.Weg{Label: "Sicherung zurückspielen", Folge: "Die Daten kommen aus der Sicherung zurück; die von jetzt sichert Laib vorher.", Vorschlag: r.ID})
+	}
+	if f != nil {
+		ways = append(ways, proposal.Weg{Label: "Nach vorne reparieren", Folge: "Die neue Version wird wieder aufgespielt, die Daten bleiben, wie das Update sie gelassen hat.", Vorschlag: f.ID})
+	}
 	for _, p := range batch {
 		p.Because = strings.TrimSuffix(p.Because, ".") + ". " + told
-		if rerr == nil {
-			p.Restore = r.ID
-		}
-		if f != nil {
-			p.Forward = f.ID
-		}
+		p.Wahl = ways
 		proposal.Save(cli.InboxDir(env), p)
 	}
 	detail := told + " Nichts wird von selbst zurückgespielt."

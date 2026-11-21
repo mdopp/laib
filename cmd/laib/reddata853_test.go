@@ -118,10 +118,10 @@ func TestARedRunWithDataSaysTheDataStayAndOffersTwoWays(t *testing.T) {
 	if at == "" || !strings.Contains(p.Because, want) {
 		t.Fatalf("the card does not say where the data are and which snapshot is there: %q", p.Because)
 	}
-	if p.Restore == 0 || p.Forward == 0 || p.Restore == p.Forward {
+	if len(p.Wahl) != 2 || p.Wahl[0].Vorschlag == 0 || p.Wahl[0].Vorschlag == p.Wahl[1].Vorschlag || p.Wahl[0].Folge == "" {
 		t.Fatalf("no restore and forward proposal filed: %+v", p)
 	}
-	restore, err := proposal.Get(cli.InboxDir(env), p.Restore)
+	restore, err := proposal.Get(cli.InboxDir(env), p.Wahl[0].Vorschlag)
 	if err != nil || restore.Status != "open" || restore.Actor != "laib" {
 		t.Fatalf("the restore is not laib's open proposal: %+v %v", restore, err)
 	}
@@ -131,7 +131,7 @@ func TestARedRunWithDataSaysTheDataStayAndOffersTwoWays(t *testing.T) {
 	if diff := proposal.Diff(context.Background(), env.Paths.State, restore); !strings.Contains(diff, "laib restore 4f9a2c1e vault") {
 		t.Fatalf("the restore does not name the run's snapshot: %s", diff)
 	}
-	forward, err := proposal.Get(cli.InboxDir(env), p.Forward)
+	forward, err := proposal.Get(cli.InboxDir(env), p.Wahl[1].Vorschlag)
 	if err != nil || forward.Status != "open" || forward.Actor != "laib" || len(forward.Snapshot) != 0 {
 		t.Fatalf("the forward is not laib's open proposal without a new snapshot: %+v %v", forward, err)
 	}
@@ -155,7 +155,7 @@ func TestARedRunWithDataSaysTheDataStayAndOffersTwoWays(t *testing.T) {
 	}
 	do := inboxMux(env)
 	body := do("GET", "/inbox", nil)
-	for _, w := range []string{want, fmt.Sprintf("/inbox/%d/approve", p.Restore), "Sicherung zurückspielen", fmt.Sprintf("/inbox/%d/approve", p.Forward), "Nach vorne reparieren"} {
+	for _, w := range []string{want, fmt.Sprintf("/inbox/%d/approve", p.Wahl[0].Vorschlag), "Sicherung zurückspielen", fmt.Sprintf("/inbox/%d/approve", p.Wahl[1].Vorschlag), "Nach vorne reparieren"} {
 		if !strings.Contains(body, w) {
 			t.Errorf("the red card lacks %q:\n%s", w, body)
 		}
@@ -169,13 +169,13 @@ func TestARedRunWithDataSaysTheDataStayAndOffersTwoWays(t *testing.T) {
 // comes back, the old program stays.
 func TestSicherungZurückspielenRestoresTheRunsSnapshot(t *testing.T) {
 	env, p, calls, _ := redDataRun(t)
-	if code := inbox.Approve(context.Background(), &cliEnv{Paths: env.Paths, Actor: "human:test", Out: io.Discard, ErrOut: io.Discard}, []string{fmt.Sprint(p.Restore)}); code != cli.ExitOK {
+	if code := inbox.Approve(context.Background(), &cliEnv{Paths: env.Paths, Actor: "human:test", Out: io.Discard, ErrOut: io.Discard}, []string{fmt.Sprint(p.Wahl[0].Vorschlag)}); code != cli.ExitOK {
 		t.Fatalf("the restore's approval: %d", code)
 	}
 	if !slices.ContainsFunc(calls(), func(c string) bool { return strings.HasPrefix(c, "restore 4f9a2c1e:") }) {
 		t.Fatalf("the run's snapshot was not restored: %q", calls())
 	}
-	if r, _ := proposal.Get(cli.InboxDir(env), p.Restore); r.Because != "" {
+	if r, _ := proposal.Get(cli.InboxDir(env), p.Wahl[0].Vorschlag); r.Because != "" {
 		t.Fatalf("the restore failed: %q", r.Because)
 	}
 }
@@ -187,7 +187,7 @@ func TestNachVorneReparierenPutsTheNewVersionOnAndKeepsTheRestore(t *testing.T) 
 	env, p, calls, _ := redDataRun(t)
 	n := len(calls())
 	since := time.Now().Add(-time.Second)
-	if code := inbox.Approve(context.Background(), &cliEnv{Paths: env.Paths, Actor: "human:test", Out: io.Discard, ErrOut: io.Discard}, []string{fmt.Sprint(p.Forward)}); code == cli.ExitOK {
+	if code := inbox.Approve(context.Background(), &cliEnv{Paths: env.Paths, Actor: "human:test", Out: io.Discard, ErrOut: io.Discard}, []string{fmt.Sprint(p.Wahl[1].Vorschlag)}); code == cli.ExitOK {
 		t.Fatal("the new version is still red; the forward cannot end green")
 	}
 	if b, _ := os.ReadFile(filepath.Join(env.Paths.Quadlet, "vault", "vault.container")); !strings.Contains(string(b), "@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") {
@@ -202,10 +202,10 @@ func TestNachVorneReparierenPutsTheNewVersionOnAndKeepsTheRestore(t *testing.T) 
 	}) {
 		t.Fatalf("no red line names vault for the Operator's incident: %+v", es)
 	}
-	if r, _ := proposal.Get(cli.InboxDir(env), p.Restore); r.Status != "open" {
+	if r, _ := proposal.Get(cli.InboxDir(env), p.Wahl[0].Vorschlag); r.Status != "open" {
 		t.Fatalf("the restore is no longer there: %+v", r)
 	}
-	f, _ := proposal.Get(cli.InboxDir(env), p.Forward)
+	f, _ := proposal.Get(cli.InboxDir(env), p.Wahl[1].Vorschlag)
 	if !strings.Contains(f.Because, "neue Version") || !strings.Contains(f.Because, "Sicherung") || strings.Contains(f.Because, "exit") {
 		t.Fatalf("the forward's card does not say where it stands: %q", f.Because)
 	}
@@ -224,7 +224,7 @@ func TestARedRunWithoutDataOffersNoRestore(t *testing.T) {
 	}
 	inbox.Approve(context.Background(), &cliEnv{Paths: env.Paths, Actor: "human:test", Out: io.Discard, ErrOut: io.Discard}, []string{fmt.Sprint(p.ID)})
 	got, _ := proposal.Get(cli.InboxDir(env), p.ID)
-	if got.Outcome != "rolled-back" || got.Restore != 0 || got.Forward != 0 || strings.Contains(got.Because, "Sicherung") {
+	if got.Outcome != "rolled-back" || len(got.Wahl) != 0 || strings.Contains(got.Because, "Sicherung") {
 		t.Fatalf("a run without data offers a restore: %+v", got)
 	}
 }

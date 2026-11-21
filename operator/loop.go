@@ -355,6 +355,9 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 	if max <= 0 {
 		max = 12
 	}
+	if strings.Contains(tr.Detail, "wahl: nachdenken") { // ADR 0036: the owner sent a choice card back: more steps, the same household model
+		max *= 3
+	}
 	textCalls, before := 0, len(s.Calls) // the model's calls, after the first aid's
 	for pass := 0; pass <= max; pass++ {
 		reply, err := o.chat(ctx, &s, msgs, defs)
@@ -462,7 +465,7 @@ func (o *Operator) Run(ctx context.Context, sk Skill, tr Trigger) (s Session, er
 			} else if out, isErr, err = mcp.Call(ctx, mcpName, args); err != nil {
 				out, isErr = err.Error(), true
 			}
-			if m := proposalID.FindStringSubmatch(out); m != nil && !isErr && (mcpName == "laib_propose" || mcpName == "laib_repair") {
+			if m := proposalID.FindStringSubmatch(out); m != nil && !isErr && slices.Contains([]string{"laib_propose", "laib_repair", "laib_wahl"}, mcpName) {
 				n, _ := strconv.Atoi(m[1])
 				s.Proposed = append(s.Proposed, n)
 			}

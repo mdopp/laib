@@ -61,6 +61,7 @@ laib wish list [--alle] | status [<id> offen|erledigt|verworfen "<grund>"]   an 
                                      „erledigt: …“) per wish; ops, claude and humans. The log review closes the Operator's own;
                                      the morning report says it once; the Inbox's „Zuletzt entschieden“ shows it. No ticket
 laib repair <probe> [service]                 a diag finding's repair (its `repair` field: restart <svc>, apply, backup, backup check, operator enable) as a proposal (repairs/<time>.md, class human); a human approves, then laib runs the verb as the human who approved; any other command in repairs/ is refused (#441)
+laib wahl anlegen --problem "<…>" [--ursache "<…>"] --empfehlung "<…>" -- "<Name>|<Folge>|<Nr | nachdenken>" …   one choice card (ADR 0036): one to three ways, each an open proposal or `nachdenken`, and „Als Aufgabe weitergeben“ laib adds; approving a way rejects the others; `laib wahl nachdenken|ticket <card>` are what those two ways run, humans only
 laib note [--kind report|incident|watch] [--karten N,M] "<text>"   what a hand concluded; report = the morning report; --karten: on a red run's cards and their follow-ups as its cause
 laib aufgabe list [--alle] [--faellig] | zeigen <id> | add "<titel>" [--warum W] [--erinnern JJJJ-MM-TT]
             [--fertig-wenn "<probe> [<dienst|thema>]"] [--fuer admins|alle|person:<login>] [--weg /seite|laib|gespraech]
@@ -201,6 +202,7 @@ splitting a command line, so quotes and spaces survive:
 | `laib_propose` | `reason`, and `service` + `key` + `value` (one values.yml change), `path` + `value` (a value at a named path, `box.yml:people.mama.signal`, as `--path`; #598), `hand` + `verb` (one verb for a hand's list, #575) or `patch`; the anchor `finding?` (`<probe> <service>` from `laib_diag`), `evidence?`, `undo?`, `sources?` (a list of URLs: class human) (#544); `wartet?` (a list, #1194: `vorschlag:<nr>`, `aufgabe:<nr>`, `version:<x.y.z>`, `schluessel:<NAME>` of an owner's key — an approve before they are met holds the card, and laib applies it once they are; anything else is refused) |
 | `laib_wish` | `text`, `saw?`, `better?` (`wartung`, `familie`, `beides`), `von?` (the Bote and Homes: the login of who asked, #883); `modul?` (Homes only: `--modul`, `text` is the module's title) → `{modul, aufgabe, seit, von, neu, message}`; `stand` (one string of `modul=backend` pairs separated by blanks, `werkstatt=` for none; `text` not needed) → `[{modul, backend, stand, aufgabe, seit, von, vorschlag?, grund?}]` (#1038); `args` `list [--alle]` → `[{id, title, text, since, operator, skill?, services, status, grund?, am?, von?}]`, `args` `status` with `stdin` lines `<id> <offen|erledigt|verworfen> <grund>` (#978) |
 | `laib_repair` | `probe` (from `laib_diag`), `service?` → a proposal that runs the finding's repair once a human approves (#441) |
+| `laib_wahl` | `action` (`anlegen`), `problem`, `ursache?` (empty: „nicht gemessen“), `empfehlung`, `wege` (one to three strings `Name\|Folge\|Nr`, Nr an open proposal or `nachdenken`) → `Karte #N angelegt`; tier propose (ADR 0036) |
 | `laib_skill` | `action` (`list`, `enable`, `pause`), `name?` |
 | `laib_backup` | `action` (`check`: restic checks a sample and restores one path into a scratch dir to compare; `run`) |
 | `laib_updates` | `now?` (a boolean, tier apply): start the nightly run now → `{started, unit, message}` (#578) |
@@ -237,7 +239,7 @@ dropped from its reply. The built-in skills' menus:
 | Skill | Trigger | Menu |
 |---|---|---|
 | `routineblick` | every `operator.tick` | `laib_status`, `laib_diag`, `laib_repair`, `laib_note` — the runner reads diag first: unchanged since the last good look, no model and no note; a finding that is not red and carries a repair verb becomes one `laib repair` proposal, not again until it changes or goes away (#543); when it runs, its context is what diag found, the journal's last 15 entries without the Operator's notes and the owner's lessons for the findings it sees (#861), in its own budget (9,000 chars, each result 4,000) whatever the window; Home Assistant's `Update: …`/`Firmware: …` findings are `aktualisierung`'s and wake no look (#550) |
-| `vorfall` | a red journal line, or a red a look sees for the first time (#792) | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_repair`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply`, `laib_planned` (what the service depends on, its planned stops, #978) — for a look's red the runner first reads each service's last real error line (`skills/lib/logzeilen.py`, else its last line), runs the `restart` diag offers when granted, looks again and notes in German what it saw and did, with the fix of a lesson for its finding (its script, #839, #861); still red, the model works it and may wake an unloaded model; an incident that waits 30 minutes (card lent, model failing) is `laib escalate`d once with what was seen and keeps waiting (#792); a session that ends red is escalated by the runner, once, unless the model did (#858) |
+| `vorfall` | a red journal line, or a red a look sees for the first time (#792) | `laib_diag`, `laib_logs`, `laib_inspect`, `laib_restart`, `laib_propose`, `laib_repair`, `laib_wahl`, `laib_escalate`, `laib_note`; a capable model also `laib_look`, `laib_read`, `laib_journal`, `laib_plan`, `laib_apply`, `laib_planned` (what the service depends on, its planned stops, #978) — for a look's red the runner first reads each service's last real error line (`skills/lib/logzeilen.py`, else its last line), runs the `restart` diag offers when granted, looks again and notes in German what it saw and did, with the fix of a lesson for its finding (its script, #839, #861); still red, the model works it and may wake an unloaded model; an incident that waits 30 minutes (card lent, model failing) is `laib escalate`d once with what was seen and keeps waiting (#792); a session that ends red is escalated by the runner, once, unless the model did (#858) |
 | `morgenbericht` | daily at `operator.reportAt` | `laib_status`, `laib_diag`, `laib_journal`, `laib_note` — when the model fails, the runner writes the report its script made from status and journal (#858); it ends with the model's use in the last 24 hours (sessions, tokens in and out, minutes, #859) and, in a month's first report, the lessons the sessions were offered and the findings that came back (#861) |
 | `nutzung` | weekly, Monday 08:00 | `laib_wish`, `laib_note` |
 | `versionen` | daily, 05:30 | `laib_updates`, `laib_propose`, `laib_note`, `laib_inbox` — `modell: kurz` (ADR 0034): its script reads `laib updates --notes` and files, once while open, one card with every new digest (`sets`) and per image the model's summary of its changelog (`notes`, one ask without tools each, at most twelve; no changelog or a busy model is one line), and once „Images festhalten“, the floating values pinned to what runs; our own image whose signature does not hold only in the note |
@@ -756,14 +758,34 @@ the old program comes back, the data stay as the update left them, and each
 proposal of the run says so with the snapshot's time („Das alte Programm
 läuft wieder. Die Daten sind auf dem Stand nach dem Update; die Sicherung
 von 14:05 liegt bereit.“). Laib files two proposals of its own, named on
-the run's proposals as `restore` and `forward` and offered on their cards
-as one tap each: „Sicherung zurückspielen“ (a repair running `laib restore
+the run's proposals as their two `wahl` ways (ADR 0036; `restore` and
+`forward` before it) and offered on their cards as one tap each: „Sicherung zurückspielen“ (a repair running `laib restore
 <snapshot> <service>` for each snapshot of the run) and „Nach vorne
 reparieren“ (a repair running `laib rollback <revert>` for each revert of
 a proposal with data: its change on again, the data untouched, no new
 snapshot). A forward that verifies red leaves its red journal line, which
 the Operator opens as an incident and escalates after 30 minutes as for
 #792; the restore stays open beside it, its snapshot kept a week.
+
+A choice card (ADR 0036, owner 2026-11-21): where two or more ways exclude each
+other, the Operator files one card with `laib wahl anlegen` instead of one
+proposal per way. The card is a repair proposal of laib's whose headline is the
+problem; `ursache` („nicht gemessen“ when it did not measure), each way with
+what follows from it and `Empfehlung` are on it as `ursache`, `wahl` and
+`empfehlung` (`wahl`: `{label, folge, vorschlag}` each, `vorschlag` the proposal
+whose approval is the choice) and as facts. A way is an open proposal that
+exists already (a repair, a patch), `nachdenken` (a repair `laib wahl nachdenken
+<card>`: a red journal line `wahl: nachdenken …` the Operator opens an incident
+on, its session with three times the steps on the same model, which files a new
+card) or, always the last, „Als Aufgabe weitergeben“ (the card itself, `laib wahl
+ticket <card>`: a Box-Aufgabe for the admins with the card's words, nothing
+changes on the box). The ways have no cards of their own in the Inbox and „Alle
+freigeben“ leaves them out; the card has a button per way and no Freigeben.
+Approving a way, on the page, at the shell or over Signal, rejects the card's
+other ways („anderer Weg gewählt: …“) and closes the card („Weg gewählt: …“);
+rejecting the card rejects every way. A card that is decided already (a red run's
+two ways above) excludes nothing. Homes' `/box` draws the same list from the
+proposal's `wahl`.
 `laib pause <service> [--until 2h] [--stop <unit>]… [--restart <unit>]… ["<grund>"]` and `laib resume <service>`
 (apply tier, also over MCP): a paused service is left alone by converge and shows as
 `pausiert von … bis …` in `/ready` (`paused`), status and the box page;

@@ -221,7 +221,7 @@ class H(BaseHTTPRequestHandler):
         names = [t["function"]["name"] for t in body["tools"]]
         # the incident menu for the ops hand: the kernel's typed tools the skill is granted, without approve/apply/converge
         assert "laib_restart" in names and "laib_note" in names and "laib_diag" in names, names
-        assert not set(names) & {"laib_approve", "laib_apply", "laib_converge"} and len(names) <= 8, names
+        assert not set(names) & {"laib_approve", "laib_apply", "laib_converge"} and len(names) <= 9, names
         svc = body["tools"][names.index("laib_restart")]["function"]["parameters"]["properties"]["service"]
         assert "caddy" in svc.get("enum", []), svc
         if i == 2:  # the refused call came back as a tool message, not as an execution
@@ -676,9 +676,9 @@ C="$(SHIM_FAILED_UNITS="tresor.service" LAIB_ACTOR=human:e2e code "$BIN" approve
 "$BIN" inbox "$ID" --json | python3 -c '
 import sys,json,subprocess
 p=json.load(sys.stdin)
-assert p["outcome"]=="rolled-back" and "Die Daten sind auf dem Stand nach dem Update; die Sicherung von " in p["because"] and p.get("restore") and p.get("forward"), p
+assert p["outcome"]=="rolled-back" and "Die Daten sind auf dem Stand nach dem Update; die Sicherung von " in p["because"] and len(p.get("wahl") or []) == 2, p
 ' || fail "the red card does not say where the data are, or files no restore and forward (#853)"
-R="$("$BIN" inbox "$ID" --json | python3 -c 'import sys,json; p=json.load(sys.stdin); print(p["restore"], p["forward"])')"
+R="$("$BIN" inbox "$ID" --json | python3 -c 'import sys,json; p=json.load(sys.stdin); print(*[w["vorschlag"] for w in p["wahl"]])')"
 for n in $R; do
   "$BIN" inbox "$n" --json | python3 -c 'import sys,json; p=json.load(sys.stdin); assert p["status"]=="open" and p["actor"]=="laib", p' || fail "#$n is not laib's open proposal (#853)"
 done

@@ -63,15 +63,31 @@ type Proposal struct {
 	Step         string    `json:"step,omitempty"`    // what the run that carries it does now, for the Inbox (#686)
 	Because      string    `json:"because,omitempty"` // why that run took it back, in the owner's words (#686)
 	Ursache      string    `json:"ursache,omitempty"` // the Operator's reading of that run's cause, plain German (laib note --karten)
-	// a red run with data (#853): laib's two proposals the card offers, the
-	// run's snapshot back („Sicherung zurückspielen“) and its change on
-	// again with the data as they are („Nach vorne reparieren“)
-	Restore int `json:"restore,omitempty"`
-	Forward int `json:"forward,omitempty"`
+	// a choice card (ADR 0036): the ways on, each a proposal of its own, and laib's pick; a red
+	// run with data (#853) offers two: the snapshot back, its change on again with the data as they are
+	Wahl       []Weg  `json:"wahl,omitempty"`
+	Empfehlung string `json:"empfehlung,omitempty"`
 	// what it waits for (#1194): vorschlag:N, version:X.Y.Z, schluessel:NAME,
 	// aufgabe:N; Freigabe is who approved it while it waited (inbox.Release)
 	WartetAuf []string `json:"wartetAuf,omitempty"`
 	Freigabe  string   `json:"freigabe,omitempty"`
+}
+
+// Weg is one way of a choice card (ADR 0036): its label, what follows from it, the proposal whose approval is the choice.
+type Weg struct {
+	Label     string `json:"label"`
+	Folge     string `json:"folge,omitempty"`
+	Vorschlag int    `json:"vorschlag"`
+}
+
+// WayOf is the choice card p is a way of (ADR 0036), not p itself, or nil.
+func WayOf(all []*Proposal, p *Proposal) *Proposal {
+	for _, h := range all {
+		if h.ID != p.ID && slices.ContainsFunc(h.Wahl, func(w Weg) bool { return w.Vorschlag == p.ID }) {
+			return h
+		}
+	}
+	return nil
 }
 
 // Anchor is what a proposal answers (#544): the diag finding it should make
@@ -290,7 +306,7 @@ func Create(ctx context.Context, repo, inbox, actor, reason string, judge Judge)
 	if strings.TrimSpace(status) == "" {
 		return nil, errors.New("nothing to propose: the state repo has no uncommitted change")
 	}
-	id, err := nextID(inbox)
+	id, err := NextID(inbox)
 	if err != nil {
 		return nil, err
 	}
@@ -500,7 +516,7 @@ func List(inbox string, openOnly bool) ([]*Proposal, error) {
 	return out, nil
 }
 
-func nextID(inbox string) (int, error) {
+func NextID(inbox string) (int, error) {
 	if err := os.MkdirAll(inbox, 0o755); err != nil {
 		return 0, err
 	}

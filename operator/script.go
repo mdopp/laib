@@ -98,7 +98,7 @@ func (g *gate) call(ctx context.Context, tool string, args map[string]any) (stri
 	if err != nil {
 		out, isErr = err.Error(), true
 	}
-	if m := proposalID.FindStringSubmatch(out); m != nil && !isErr && (tool == "laib_propose" || tool == "laib_repair") {
+	if m := proposalID.FindStringSubmatch(out); m != nil && !isErr && slices.Contains([]string{"laib_propose", "laib_repair", "laib_wahl"}, tool) {
 		n, _ := strconv.Atoi(m[1])
 		g.s.Proposed = append(g.s.Proposed, n)
 	}

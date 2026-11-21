@@ -184,7 +184,7 @@ def run(s):
         said.append(f"Nur du kannst das: {owner} (Laib hat die Box-Aufgabe dazu schon angelegt, die Karte wartet darauf)")
     elif owner:
         said.append(f"Nur du kannst das: {owner} ({task(s, owner, cause)})")
-    follow = sorted({field(p, k) for _, p in red_ for k in ("restore", "forward") if field(p, k)})
+    follow = sorted({w["vorschlag"] for _, p in red_ for w in field(p, "wahl", []) or [] if w.get("vorschlag")})  # the ways on its cards (ADR 0036)
     text = f"Durchgang #{', #'.join(map(str, ids))} um {hm(at, now)} rot: {cause.rstrip('.')}." + "".join(f" {x}." for x in said)
     r = s.call("laib_note", kind="incident", text=text, karten=",".join(str(i) for i in [i for i, _ in red_] + follow))
     st["done"] = (st.get("done", []) + [run_])[-20:]

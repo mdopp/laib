@@ -16,7 +16,7 @@ func TestARedRunIsReadAndItsInnocentApprovalProposedAgain(t *testing.T) {
 	journal := `[{"t":"2026-11-14T09:55:20Z","verb":"apply","result":"red","reason":"Freigaben ` + run + `","detail":"home-assistant: post-deploy exit status 1\nhome-assistant: update.install update.meross_lan_update v6.0.1: HTTP 500"},` +
 		`{"t":"2026-11-14T09:57:01Z","verb":"apply","result":"green","reason":"rollback ` + run + `"}]`
 	inbox := `[{"id":542,"status":"approved","outcome":"rolled-back","batch":"` + run + `","reason":"Neue Versionen: beets","files":["services/beets/values.yml"],"intent":{"set":{"services/beets/values.yml:IMAGE":"docker.io/linuxserver/beets@sha256:ee3c"}}},` +
-		`{"id":543,"status":"approved","outcome":"rolled-back","batch":"` + run + `","reason":"home-assistant: Erweiterungen installieren","files":["services/home-assistant/values.yml"],"restore":547,"intent":{"set":{"services/home-assistant/values.yml:HA_INSTALL":"update.meross_lan_update=v6.0.1"}}}]`
+		`{"id":543,"status":"approved","outcome":"rolled-back","batch":"` + run + `","reason":"home-assistant: Erweiterungen installieren","files":["services/home-assistant/values.yml"],"wahl":[{"vorschlag":547}],"intent":{"set":{"services/home-assistant/values.yml:HA_INSTALL":"update.meross_lan_update=v6.0.1"}}}]`
 	mcp, calls := fakeMCP(t, map[string]string{"laib_journal": journal, "laib_inbox": inbox, "laib_logs": `{"home-assistant.service":""}`, "laib_propose": `{"id": 571}`})
 	lease, catalogue := household, loaded
 	llm, asked := fakeLease(t, &lease, &catalogue, []Message{{Role: "assistant", Content: "Ursache: Home Assistant hat die Erweiterungen abgelehnt.\nBesitzer: nein"}})
