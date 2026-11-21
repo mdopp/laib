@@ -38,7 +38,7 @@ func Wahl(ctx context.Context, env *cli.Env, args []string) int {
 func parseWege(dir string, raw []string) (ways []proposal.Weg, err error) {
 	for _, r := range raw {
 		f := strings.SplitN(r, "|", 3)
-		if len(f) != 3 || strings.TrimSpace(f[0]) == "" || strings.TrimSpace(f[1]) == "" || utf8.RuneCountInString(f[0]) > 40 || proposal.Technical(f[0]+f[1]) {
+		if len(f) != 3 || strings.TrimSpace(f[0]) == "" || strings.TrimSpace(f[1]) == "" || utf8.RuneCountInString(f[0]) > 40 || proposal.Technical(f[0]+" "+f[1]) {
 			return nil, fmt.Errorf("Weg %q: <Name bis 40 Zeichen>|<was daraus folgt, für Menschen>|<Vorschlag-Nr | nachdenken>", r)
 		}
 		w, kind := proposal.Weg{Label: strings.TrimSpace(f[0]), Folge: strings.TrimSpace(f[1])}, strings.TrimSpace(f[2])
@@ -75,7 +75,7 @@ func wahlAnlegen(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	dir := cli.InboxDir(env)
 	ways, err := parseWege(dir, raw)
-	if err == nil && (len(args)%2 != 0 || flags["problem"] == "" || flags["empfehlung"] == "" || proposal.Technical(flags["problem"]+flags["ursache"]+flags["empfehlung"])) {
+	if err == nil && (len(args)%2 != 0 || flags["problem"] == "" || flags["empfehlung"] == "" || proposal.Technical(strings.Join([]string{flags["problem"], flags["ursache"], flags["empfehlung"]}, " "))) {
 		err = errors.New(wahlUsage + "\n(die Felder für Menschen: ein bis zwei Sätze, ohne Befehl, Unit oder Fehlertext)")
 	}
 	if err != nil {
