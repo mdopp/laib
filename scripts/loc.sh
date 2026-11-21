@@ -28,6 +28,11 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 22,890: the owner's ADR 0036 (2026-11-21, „B hilft mir mehr“: the Operator puts a choice on one card,
+# „mir Optionen zu geben und in einer Karte freigegeben zu lassen“): the choice card (proposal.Wahl, its
+# ways each a proposal, laib wahl anlegen / nachdenken / ticket), choosing one closes the rest where an
+# approval is handled, and the Inbox draws a button per way instead of the fixed two; the owner allowed
+# at most 200 lines. The kernel at 22,677 before, 22,889 with it.
 # 22,690: the owner's #1236 (2026-11-15, ADR 0035 „Laib ist etwas, das ohne Homes funktionieren
 # sollte“): a box without Homes is maintained from Laib's own Status page — the admins' tasks with
 # Erledigt and Zurückstellen and a way of their own (weg laib), the last whole diag's findings, the
@@ -86,8 +91,10 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 22690 cmd internal
-budget operator 3300 operator
+# operator 3,305: ADR 0036: a choice card sent back with „nachdenken“ gets three times the steps on the same model (3 lines), the
+# card's proposals count as the ones a session filed (2 lines); 3,299 before, 3,302 with it
+budget kernel 22890 cmd internal
+budget operator 3305 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,
 # their one door, with them. The owner, 2026-10-27, #839: no more than 50 skills, each of a

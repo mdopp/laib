@@ -22,7 +22,7 @@ flowchart LR
   routineblick -- "ein Rot" --> vorfall
   routineblick -- repair --> inbox[(Inbox)]
   vorfall -- "gelöst, gemessen" --> lehre
-  vorfall -- "propose, repair" --> inbox
+  vorfall -- "propose, repair, wahl" --> inbox
   vorfall -- escalate --> owner([Admin])
   durchgang -- "Ursache auf die Karten, Unbeteiligtes einzeln neu" --> inbox
   durchgang -- "was nur der Owner kann: Box-Aufgabe" --> owner
@@ -51,7 +51,7 @@ kernel's answers the skills read (one source, below).
 | Trigger | Skill | Produces | Read by |
 |---|---|---|---|
 | every tick | `routineblick` | a `watch` note when something changed; one `repair` proposal per diag finding that offers one; a red goes to `vorfall` | the Box page; the owner in the Inbox |
-| a red: a journal line the kernel posts, or a red the look sees first | `vorfall` | first aid (its script: the service's last real error line, the restart diag offers, diag again), then the model: restart, `propose`, `repair`, `escalate`; an `incident` note | the owner (an incident note reaches the webhook); `lehre` |
+| a red: a journal line the kernel posts, or a red the look sees first | `vorfall` | first aid (its script: the service's last real error line, the restart diag offers, diag again), then the model: restart, `propose`, `repair`, `wahl` (one card when ways exclude each other, ADR 0036), `escalate`; an `incident` note | the owner (an incident note reaches the webhook); `lehre` |
 | a red run: an apply of approvals („Freigaben #…“); laib takes it back and applies each approval again alone (#1209) | `durchgang` | its script waits until laib is through, reads the run's journal line and the failing service's error lines of that minute and asks the model for the cause and what only the owner can do; then the cause on the red cards and their follow-ups (`laib note --karten`), a red card that touches no failing service proposed again on its own, as it was, and one Box-Aufgabe for the owner unless laib's precondition filed one; an `incident` note. It never approves, rolls back or passes a consent | the owner in the Inbox and his Box-Aufgaben |
 | daily, 06:30 | `durchsicht` | a `watch` note: the error patterns, and once „Aussortiert, kein Wunsch: …“; once a week one wish, a row per pattern of the week (#1241); the status of the Operator's open log wishes (`laib wish status`) | the owner in the Inbox; `morgenbericht` |
 | daily, report hour | `morgenbericht` | the `report` note: the night, red first, and the lines its script always adds (the rate of the Operator's proposals, a lesson that keeps failing, due Box-Aufgaben, the model's day, durchsicht's „Aussortiert“, the wishes closed) | the owner: the Box page and the morning message |

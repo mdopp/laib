@@ -49,6 +49,9 @@ func Repairable(st *state.State, argv []string) bool {
 	if len(argv) == 2 && argv[0] == "rollback" { // #853: a red run's revert taken back, its change on again
 		return hexID(argv[1])
 	}
+	if len(argv) == 3 && argv[0] == "wahl" { // ADR 0036: a choice card's two ways that are no proposal of their own: think again, a task
+		return (argv[1] == "nachdenken" || argv[1] == "ticket") && argv[2] != "" && strings.Trim(argv[2], "0123456789") == ""
+	}
 	return len(argv) == 2 && argv[0] == "restart" && st.Services[argv[1]] != nil
 }
 

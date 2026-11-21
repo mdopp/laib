@@ -141,7 +141,8 @@ func onCards(env *cliEnv, ids, text string) string {
 	for _, f := range strings.Split(ids, ",") {
 		id, _ := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(f), "#"))
 		i := slices.IndexFunc(all, func(p *proposal.Proposal) bool { return p.ID == id })
-		if i >= 0 && (red(all[i]) || slices.ContainsFunc(all, func(q *proposal.Proposal) bool { return red(q) && (q.Restore == id || q.Forward == id) })) {
+		h := proposal.WayOf(all, &proposal.Proposal{ID: id})
+		if i >= 0 && (red(all[i]) || h != nil && red(h)) {
 			if all[i].Ursache = text; proposal.Save(cli.InboxDir(env), all[i]) == nil {
 				on = append(on, "#"+strconv.Itoa(id))
 			}
