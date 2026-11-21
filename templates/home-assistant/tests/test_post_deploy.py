@@ -216,6 +216,9 @@ class FakeHA(BaseHTTPRequestHandler):
                 return self.reply(400, {"message": "Service automation.reload not found"})
             if self.path == "/api/services/update/install" and HA.get("marketplace") is not None and self.user() not in HA["marketplace"]["accepted"]:
                 return self.reply(500, {"message": "Open the Marketplace and read the warning first"})   # update.py: warning_accepted(user_id), #1209
+            if self.path == "/api/services/update/install" and HA.get("install_breaks"):   # 2026-11-21: the marketplace removed the folder, then failed
+                HA["install_breaks"](b["entity_id"])
+                return self.reply(500, {"message": "The installed content has no usable manifest.json"})
             if self.path == "/api/services/update/install":   # HA's REST call returns while HACS still downloads (#528)
                 st = HA["states"][b["entity_id"]]
                 st["attributes"]["in_progress"] = True
@@ -1121,6 +1124,16 @@ class Extensions(Hook):
         p, _, log = self.run_hook(install="update.senec=2026.10.0", data_dir=self.d)
         self.assertEqual(p.returncode, 1, log)
         self.assertIn("custom_components/senec/manifest.json fehlt", log)
+
+    def test_an_install_that_deletes_the_extension_and_fails_puts_it_back(self):
+        # 2026-11-21: update.install answered 500 and meross_lan/senec had lost their manifest.json
+        import shutil
+        HA["install_breaks"] = lambda eid: shutil.rmtree(self.cc / "senec")
+        p, _, log = self.run_hook(install="update.senec=2026.10.0", data_dir=self.d)
+        self.assertEqual(p.returncode, 1, log)
+        self.assertIn("update.install update.senec 2026.10.0: HTTP 500", log)
+        self.assertEqual(self.manifest("senec")["version"], "2026.6.3", "the working version is back: " + log)
+        self.assertIn("Erweiterung senec: die Installation scheiterte", log)
 
     def test_a_version_other_than_the_approved_one_is_said(self):
         # the box: update.install with version 2026.6.3 still unpacked 2026.10.0
