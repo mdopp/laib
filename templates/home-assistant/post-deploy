@@ -90,7 +90,7 @@ hand-made ~/ha-caldav.sh).
 Tokens and passwords go only into the laib-secret lines: never on argv, never
 in another line of output (#214, #224). Python's standard library only: the
 hooks image has no WebSocket client, so the few frames HA needs are here."""
-import base64, ipaddress, json, os, socket, struct, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
+import base64, ipaddress, json, os, shutil, socket, struct, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 
 E = os.environ
 BASE = E.get("HA_URL", "http://127.0.0.1:8123").rstrip("/")
@@ -996,6 +996,38 @@ WAIT_CONSENT = ("laib-wartet: Home Assistant: Marktplatz für Laib freigeben | L
                 "das dort. Hake die Aufgabe dann ab: Laib installiert die Erweiterungen danach von selbst.")
 
 
+def keep_extensions():
+    """a copy of every custom integration before an install: HA's marketplace removes the folder, and when the
+    install then fails (2026-11-21: "no usable manifest.json", update.install HTTP 500 for meross_lan and senec)
+    the working integration is gone with it. Only folders that have a manifest.json; one copy, replaced each run."""
+    cc, keep = os.path.join(HA_CONFIG, "custom_components"), os.path.join(HA_CONFIG, ".laib-erweiterungen-vorher")
+    shutil.rmtree(keep, ignore_errors=True)
+    try:
+        for n in sorted(os.listdir(cc)):
+            if not n.startswith((".", "_")) and manifest(os.path.join(cc, n)):
+                shutil.copytree(os.path.join(cc, n), os.path.join(keep, n))
+    except OSError:
+        pass
+    return keep
+
+
+def put_back_extensions(keep):
+    """what the failed install took away: a folder the copy has and that has no manifest.json now is put back.
+    The names of those put back."""
+    cc, back = os.path.join(HA_CONFIG, "custom_components"), []
+    try:
+        names = sorted(os.listdir(keep))
+    except OSError:
+        return back
+    for n in names:
+        live = os.path.join(cc, n)
+        if not manifest(live):
+            shutil.rmtree(live, ignore_errors=True)
+            shutil.copytree(os.path.join(keep, n), live)
+            back.append(n)
+    return back
+
+
 def install_updates():
     """HA_INSTALL (#528): the extensions a person approved, "update.a=1.2,update.b=3.0"
     as the Operator proposed them from home-assistant-check.py (laib snapshotted
@@ -1010,6 +1042,7 @@ def install_updates():
     is broken: the hook is red for it after the other steps ran."""
     want = [w.split("=", 1) for w in E.get("HA_INSTALL", "").split(",") if "=" in w]
     installed, broken, refused = [], [], False
+    keep = keep_extensions() if want else None
     for eid, ver in want:
         st, s = update_state(eid, time.monotonic() + WAIT, lambda s: s.get("state") not in GONE)
         a = (s or {}).get("attributes") or {}
@@ -1043,6 +1076,9 @@ def install_updates():
         installed.append((eid, ver))
     if refused:
         print(WAIT_CONSENT)   # the run holds the card for the owner's task instead of calling it red
+    if keep and broken:
+        for n in put_back_extensions(keep):
+            print(f"home-assistant: Erweiterung {n}: die Installation scheiterte und hat sie gelöscht, die Kopie von vorher ist zurück")
     straightened, bad = straighten()
     broken += bad
     for eid, ver in installed:
