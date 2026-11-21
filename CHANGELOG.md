@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.35.2](https://github.com/mdopp/laib/compare/v2.35.1...v2.35.2) (2026-11-21)
+
+
+### Bug Fixes
+
+* **home-assistant:** a failed extension install no longer takes the working one with it ([#1277](https://github.com/mdopp/laib/issues/1277)) ([736375d](https://github.com/mdopp/laib/commit/736375d14e2b9ba7b23f6c27b1515875912c668e))
+
 ## [2.35.1](https://github.com/mdopp/laib/compare/v2.35.0...v2.35.1) (2026-11-19)
 
 
