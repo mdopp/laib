@@ -108,7 +108,7 @@ func CreateFromEdit(ctx context.Context, repo, inbox, actor, reason string, e Ed
 	if err := CommitDirty(ctx, repo, actor); err != nil {
 		return nil, err
 	}
-	id, err := nextID(inbox)
+	id, err := NextID(inbox)
 	if err != nil {
 		return nil, err
 	}

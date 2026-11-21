@@ -411,12 +411,12 @@ func operatorToday(env *cli.Env, now diag.OpWork, t time.Time) OperatorWork {
 	w := OperatorWork{OpWork: now}
 	es, _ := journal.Read(env.Paths.Journal, time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()))
 	for _, e := range es {
-		count := map[string]*int{"restart": &w.Restarts, "propose": &w.Proposals, "repair": &w.Proposals, "escalate": &w.Escalations, "note": &w.Notes}[e.Verb]
+		count := map[string]*int{"restart": &w.Restarts, "propose": &w.Proposals, "repair": &w.Proposals, "wahl": &w.Proposals, "escalate": &w.Escalations, "note": &w.Notes}[e.Verb]
 		if e.Actor != "ops" || count == nil {
 			continue
 		}
 		*count++
-		word := map[string]string{"restart": "Neustart", "propose": "Vorschlag", "repair": "Vorschlag", "escalate": "Eskalation", "note": "Notiz"}[e.Verb]
+		word := map[string]string{"restart": "Neustart", "propose": "Vorschlag", "repair": "Vorschlag", "wahl": "Wahl", "escalate": "Eskalation", "note": "Notiz"}[e.Verb]
 		line := []rune(fmt.Sprintf("%s %s %s: %s", e.T.Local().Format("15:04"), word, e.Service, cmp.Or(e.Detail, e.Reason, map[string]string{"green": "grün", "red": "rot"}[e.Result])))
 		w.Today = append([]string{string(line[:min(len(line), 160)])}, w.Today...)
 	}

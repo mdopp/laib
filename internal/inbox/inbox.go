@@ -444,6 +444,7 @@ func decide(ctx context.Context, env *cli.Env, st *state.State, p *proposal.Prop
 			return env.Fail(err)
 		}
 		cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "reject", Reason: p.Reason, Result: "info", Detail: strings.TrimSuffix(fmt.Sprintf("#%d von %s: %s", p.ID, p.Actor, why), ": ")})
+		closeWays(ctx, env, p, false)
 		fmt.Fprintf(env.W(), "Vorschlag #%d abgelehnt.\n", p.ID)
 		return cli.ExitOK
 	}
@@ -458,6 +459,7 @@ func decide(ctx context.Context, env *cli.Env, st *state.State, p *proposal.Prop
 		return env.Fail(err)
 	}
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s%s", p.ID, p.Actor, recomputed(p))})
+	closeWays(ctx, env, p, true) // a choice card's other ways, ADR 0036
 	if p.Recomputed && !env.JSON {
 		fmt.Fprintf(env.W(), "#%d neu berechnet auf dem aktuellen Stand\n", p.ID)
 	}

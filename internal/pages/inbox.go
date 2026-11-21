@@ -77,13 +77,16 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 		decision := taps[p.ID]
 		f, failed := failedTap(dir, p.ID)
 		failed = failed && decision == ""
+		if onCard(all, p, decision) {
+			continue
+		}
 		if p.Status == "open" && decision == "" {
 			open = append(open, p)
 			red := ""
 			if failed {
 				red = failure(f.say, f.raw)
 			}
-			c := card(r, env, p, domain, box, red)
+			c := card(r, env, all, p, domain, box, red)
 			top.WriteString(c)
 			if failed {
 				ended.WriteString(c)
@@ -168,16 +171,7 @@ func decidedCard(p *proposal.Proposal, all []*proposal.Proposal, domain, text, c
 	if undo, _ := proposal.Undoing(p); text == "fertig" && undo { // what was approved can be taken back (#41), where that undoes something (#852)
 		b.WriteString(DecisionForm(p.ID, "rollback", "Zurücknehmen", ""))
 	}
-	for _, way := range []struct { // a red run with data (#853): its two ways on, laib's proposals, while they are open
-		id    int
-		label string
-	}{{p.Restore, "Sicherung zurückspielen"}, {p.Forward, "Nach vorne reparieren"}} {
-		if way.id != 0 && slices.ContainsFunc(all, func(q *proposal.Proposal) bool {
-			return q.ID == way.id && q.Status == "open" && DecisionState(q.ID) == ""
-		}) {
-			b.WriteString(DecisionForm(way.id, "approve", way.label, ""))
-		}
-	}
+	b.WriteString(wayButtons(all, p)) // a red run with data (#853): its two ways on, while they are open
 	if failed {
 		b.WriteString(details(raw))
 	}
@@ -219,6 +213,8 @@ func progress(p *proposal.Proposal, decision string, locked bool) (text, class s
 	switch {
 	case decision != "":
 		return decision, "gelb", true
+	case p.Status == "rejected" && strings.HasPrefix(p.RejectReason, "Weg gewählt"): // a choice card, closed by its choice (ADR 0036)
+		return p.RejectReason, "info", false
 	case p.Status == "rejected": // #854: a no ends visibly, like a yes
 		return "abgelehnt", "info", false
 	case p.Step != "" && locked:
@@ -248,7 +244,7 @@ func progress(p *proposal.Proposal, decision string, locked bool) (text, class s
 // diff only behind the technical details. red: a tap on it that failed,
 // above everything else. One button row on every card (#941): Freigeben
 // left, Ablehnen right; a no takes a second tap, with its reason.
-func card(r *http.Request, env *cli.Env, p *proposal.Proposal, domain string, box []string, red string) string {
+func card(r *http.Request, env *cli.Env, all []*proposal.Proposal, p *proposal.Proposal, domain string, box []string, red string) string {
 	c := proposal.Card(p, domain, box...)
 	b := &strings.Builder{}
 	fmt.Fprintf(b, "<section class=card id=%d data-f><h2>Vorschlag #%d · %s</h2>%s", p.ID, p.ID, html.EscapeString(c.Summary), red) // /inbox#N, where a message links (#857)
@@ -306,12 +302,32 @@ func card(r *http.Request, env *cli.Env, p *proposal.Proposal, domain string, bo
 	approve := DecisionForm(p.ID, "approve", "Freigeben", accent)
 	if p.Freigabe != "" && len(waits) > 0 {
 		approve = ""
+	} else if len(p.Wahl) > 0 {
+		approve = wayButtons(all, p)
 	}
 	fmt.Fprintf(b, `<div class=knoepfe>%s<button type=button aria-expanded=false onclick="const f=this.parentNode.nextElementSibling;f.hidden=false;this.setAttribute('aria-expanded','true');f.querySelector('input').focus()">Ablehnen</button></div>`, approve)
 	fmt.Fprintf(b, `<form class=nein method=post action=/inbox/%d/reject hidden onsubmit="const b=this.querySelector('button');b.disabled=true;b.textContent='wird abgelehnt …'"><input name=grund maxlength=200 placeholder="Warum nicht? (optional)" aria-label="Warum nicht? (optional)"><span class=knoepfe><button>Ablehnen bestätigen</button><button type=button onclick="this.form.hidden=true;this.form.previousElementSibling.lastChild.setAttribute('aria-expanded','false')">Abbrechen</button></span></form>`, p.ID)
 	fmt.Fprintf(b, "<details><summary>Technische Details</summary><p class=muted>%s</p><pre>%s</pre></details>",
 		html.EscapeString(c.Details), html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
 	return b.String() + "</section>"
+}
+
+// onCard: p is a way of a choice card (ADR 0036), tapped there: no card of its own while both are open, or once the card closed it.
+func onCard(all []*proposal.Proposal, p *proposal.Proposal, decision string) bool {
+	h := proposal.WayOf(all, p)
+	return h != nil && (p.Status == "open" && decision == "" && h.Status == "open" || p.Status == "rejected" && strings.Contains(p.RejectReason, "Weg gewählt"))
+}
+
+// wayButtons are one button per way whose proposal is open: a choice card's, in place of Freigeben (ADR 0036), and a red run's two.
+func wayButtons(all []*proposal.Proposal, p *proposal.Proposal) (b string) {
+	for _, w := range p.Wahl {
+		if slices.ContainsFunc(all, func(q *proposal.Proposal) bool {
+			return q.ID == w.Vorschlag && q.Status == "open" && DecisionState(q.ID) == ""
+		}) {
+			b += DecisionForm(w.Vorschlag, "approve", w.Label, "")
+		}
+	}
+	return b
 }
 
 // approvable are the open proposals a human on the box page may approve
@@ -323,7 +339,8 @@ func approvable(env *cli.Env, open []*proposal.Proposal) []*proposal.Proposal {
 		return nil
 	}
 	return slices.DeleteFunc(slices.Clone(open), func(p *proposal.Proposal) bool {
-		return p.Status != "open" || p.Freigabe != "" || DecisionState(p.ID) != "" || !policy.Allowed(st.Policy, "human", p.Tier)
+		return p.Status != "open" || p.Freigabe != "" || DecisionState(p.ID) != "" || !policy.Allowed(st.Policy, "human", p.Tier) ||
+			len(p.Wahl) > 0 || proposal.WayOf(open, p) != nil // a choice card's ways exclude each other (ADR 0036)
 	})
 }
 
