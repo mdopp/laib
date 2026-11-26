@@ -1129,7 +1129,8 @@ func ScanFolder(st *state.State) (svc, status, orders string) {
 // (net geraete reads its neighbour table), its token and the door's key as
 // podman secrets. Its one mount is the scan service's orders folder, at the
 // same path (the door names it), shared with the scan container. With a
-// Bote, bote-notify's address and bearer for laib tell; with box.yml
+// Bote, bote-notify's address and bearer for laib tell and the Automat's
+// for laib automat (homes ADR 0004 §3); with box.yml
 // intake, the GitHub token for laib wish (#797).
 func haushaltUnit(st *state.State, secrets map[string]string) (string, map[string]string) {
 	var mounts []string
@@ -1142,6 +1143,8 @@ func haushaltUnit(st *state.State, secrets map[string]string) (string, map[strin
 		// laib tell (#676): bote-notify on the host port templates/bote declares, as laib-notify's
 		env = append(env, "BOTE_NOTIFY_URL", "http://127.0.0.1:8645")
 		sec = append(sec, "BOTE_NOTIFY_TOKEN", secretValue(secrets, "BOTE_NOTIFY_TOKEN"))
+		env = append(env, "BOTE_AUTOMAT_URL", "http://127.0.0.1:8646") // laib automat (homes ADR 0004 §3): the Automat's bearer port; its HA token stays in the pod
+		sec = append(sec, "BOTE_AUTOMAT_TOKEN", secretValue(secrets, "BOTE_AUTOMAT_TOKEN"))
 	}
 	if st.Box.Intake.Repo != "" { // laib wish (#797)
 		sec = append(sec, IntakeToken, secretValue(secrets, IntakeToken))

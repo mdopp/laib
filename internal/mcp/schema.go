@@ -97,6 +97,9 @@ var mcpParams = map[string][]mcpParam{
 		{name: "grund", typ: "string", flag: "--grund", desc: "ein Satz für die Familie, was sich ändert, z. B. „Podcasts verschwinden aus Homes und der App.“; leer: Laib nennt die Module"}},
 	"tell": {{name: "person", typ: "string", desc: "der Benutzername in box.yml people, klein", required: true},
 		{name: "text", typ: "string", desc: "ein kurzer deutscher Satz, höchstens 1000 Zeichen", required: true}},
+	"automat": {{name: "action", typ: "string", enum: []string{"entitaeten", "tags", "automationen", "lesen", "schreiben", "loeschen", "wiederherstellen", "einschalten", "ausschalten", "bestaetigen"}, required: true, desc: "lesen: entitaeten, tags (die NFC-Tags mit Namen), automationen, lesen; ändern, jedes erst mit dem Code: schreiben, loeschen, wiederherstellen, einschalten, ausschalten; bestaetigen: der Code, den die Person im Gespräch genannt hat"},
+		{name: "id", typ: "string", flag: "--id", desc: "die Automation, ihr Slug aus automationen (flur_licht_aus); schreiben: leer = aus dem alias"}, {name: "yaml", typ: "string", flag: "--yaml", desc: "schreiben: die Automation in HAs YAML (alias, triggers, conditions, actions)"}, {name: "domain", typ: "string", flag: "--domain", desc: "entitaeten: light, switch, person …"},
+		{name: "suche", typ: "string", flag: "--suche", desc: "entitaeten: Teil des Namens oder der id"}, {name: "code", typ: "string", flag: "--code", desc: "bestaetigen: die vier Ziffern, wie die Person sie gesagt hat; nie von dir aus"}},
 	"calendar": {{name: "action", typ: "string", enum: []string{"subscribe", "every", "unsubscribe", "list"}, required: true}, {name: "person", typ: "string", desc: "wem der Kalender gehört (LLDAP-Benutzer, homes für die Familie: das Haushaltskonto)"},
 		{name: "name", typ: "string", desc: "kurz, klein, a-z 0-9 -"}, {name: "kind", typ: "string", enum: []string{"google", "abo"}, desc: "google: Googles geheime iCal-Adresse; abo: ein öffentlicher Kalender"},
 		{name: "title", typ: "string", desc: "der Name, den die Familie sieht"},
@@ -163,8 +166,8 @@ func mcpSchema(st *state.State, verb string) map[string]any {
 	if verb == "write" {
 		props["stdin"] = map[string]any{"type": "string", "description": "der Inhalt der Datei"}
 	}
-	if verb == "calendar" {
-		props["stdin"] = map[string]any{"type": "string", "description": "subscribe: die Kalender-Adresse (https:// oder webcal://); sie kommt in keiner Antwort vor"}
+	if desc, ok := map[string]string{"calendar": "subscribe: die Kalender-Adresse (https:// oder webcal://); sie kommt in keiner Antwort vor", "automat": "schreiben: das YAML, statt yaml"}[verb]; ok {
+		props["stdin"] = map[string]any{"type": "string", "description": desc}
 	}
 	return map[string]any{"type": "object", "properties": props, "required": required}
 }

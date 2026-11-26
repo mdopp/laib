@@ -13,9 +13,11 @@ import (
 )
 
 // Bote is bote-notify as laib renders it into this program's unit (#676):
-// its address on the host and its bearer; both empty without a Bote.
+// its address on the host and its bearer; both empty without a Bote. The
+// Automat's address and bearer are laib automat's (homes ADR 0004 §3).
 type Bote struct {
-	URL, Token string
+	URL, Token            string
+	Automat, AutomatToken string
 }
 
 // maxTell is bote-notify's own cut (templates/bote/notify.py max_text):
