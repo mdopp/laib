@@ -13,9 +13,11 @@ import (
 )
 
 // Bote is bote-notify as laib renders it into this program's unit (#676):
-// its address on the host and its bearer; both empty without a Bote.
+// its address on the host and its bearer; both empty without a Bote. The
+// Automat's address and bearer are laib automat's (homes ADR 0004 §3).
 type Bote struct {
-	URL, Token string
+	URL, Token            string
+	Automat, AutomatToken string
 }
 
 // maxTell is bote-notify's own cut (templates/bote/notify.py max_text):
@@ -55,25 +57,14 @@ func Tell(ctx context.Context, env *Env, args []string) int {
 	if env.Bote.URL == "" || env.Bote.Token == "" {
 		return told(false, "Auf dieser Box ist kein Bote, der Nachrichten zustellt.")
 	}
-	body, _ := json.Marshal(map[string]string{"an": person, "text": text})
-	ctx, cancel := context.WithTimeout(ctx, time.Minute) // bote-notify tries every channel within 50 s
-	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(env.Bote.URL, "/")+"/mitteilung", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+env.Bote.Token)
-	resp, err := http.DefaultClient.Do(req)
+	kanal, status, err := env.Bote.send(ctx, person, text)
 	if err != nil {
 		return told(false, "Der Bote antwortet nicht; die Nachricht an "+person+" ist nicht verschickt.")
 	}
-	defer resp.Body.Close()
-	var r struct {
-		Kanal string `json:"kanal"`
-	}
-	json.NewDecoder(resp.Body).Decode(&r)
-	switch resp.StatusCode {
+	switch status {
 	case http.StatusOK:
-		env.journal("", "", "an "+person+" über "+r.Kanal)
-		return told(true, fmt.Sprintf("An %s über %s geschickt.", person, r.Kanal))
+		env.journal("", "", "an "+person+" über "+kanal)
+		return told(true, fmt.Sprintf("An %s über %s geschickt.", person, kanal))
 	case http.StatusNotFound:
 		return told(false, person+" steht nicht mit einem Kanal in box.yml people.")
 	case http.StatusTooManyRequests:
@@ -82,5 +73,26 @@ func Tell(ctx context.Context, env *Env, args []string) int {
 		env.journal("", "", "an "+person+": kein Kanal hat angenommen")
 		return told(false, "Kein Kanal von "+person+" hat die Nachricht angenommen.")
 	}
-	return told(false, fmt.Sprintf("Der Bote lehnt ab (HTTP %d); die Nachricht an %s ist nicht verschickt.", resp.StatusCode, person))
+	return told(false, fmt.Sprintf("Der Bote lehnt ab (HTTP %d); die Nachricht an %s ist nicht verschickt.", status, person))
+}
+
+// send posts one message for person to bote-notify and answers the channel
+// it went out on and the HTTP status.
+func (b Bote) send(ctx context.Context, person, text string) (string, int, error) {
+	body, _ := json.Marshal(map[string]string{"an": person, "text": text})
+	ctx, cancel := context.WithTimeout(ctx, time.Minute) // bote-notify tries every channel within 50 s
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(b.URL, "/")+"/mitteilung", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+b.Token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", 0, err
+	}
+	defer resp.Body.Close()
+	var r struct {
+		Kanal string `json:"kanal"`
+	}
+	json.NewDecoder(resp.Body).Decode(&r)
+	return r.Kanal, resp.StatusCode, nil
 }

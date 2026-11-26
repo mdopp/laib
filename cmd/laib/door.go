@@ -45,7 +45,8 @@ type doorCall struct {
 	LanIP   string      `json:"lanIp"`
 	TZ      string      `json:"tz,omitempty"`      // box.yml timezone, for a person's invite (#1234)
 	Auftrag string      `json:"auftrag,omitempty"` // the kernel part's way back, as the caller (mcp.Auftrag, #1234)
-	Stdin   string      `json:"stdin,omitempty"`   // laib calendar subscribe's address, its one line (#495)
+	Stdin   string      `json:"stdin,omitempty"`   // laib calendar subscribe's address, its one line (#495); laib automat schreiben's YAML
+	Person  string      `json:"person,omitempty"`  // box.yml notify.person, a login: whom laib automat sends its code to (laib#1284)
 	Scan    *doorScan   `json:"scan,omitempty"`
 	Zuhause any         `json:"zuhause,omitempty"` // box.yml zuhause, for laib zuhause only (#677)
 	Intake  *doorIntake `json:"intake,omitempty"`  // box.yml intake, for laib wish only (#797)
@@ -87,13 +88,17 @@ func door(ctx context.Context, env *cliEnv, prog, tier string, argv []string) in
 		return env.Fail(err)
 	}
 	call := doorCall{Argv: argv, JSON: env.JSON, Actor: env.Actor, Ceiling: ceiling, LanIP: st.Box.LanIP, TZ: st.Box.Timezone,
-		Auftrag: mcp.Auftrag(env, env.Actor, argv[0], time.Now().Add(2*time.Minute))}
+		Auftrag: mcp.Auftrag(env, env.Actor, argv[0], time.Now().Add(2*time.Minute)), Person: st.Box.Notify.Person}
 	switch argv[0] {
 	case "zuhause":
 		call.Zuhause = st.Box.Zuhause
 	case "calendar":
 		if len(argv) > 1 && argv[1] == "subscribe" {
 			call.Stdin, _ = bufio.NewReader(env.Stdin()).ReadString('\n')
+		}
+	case "automat": // the code goes to the owner (laib#1284); schreiben's YAML on stdin (homes ADR 0004 §3)
+		if len(argv) > 1 && argv[1] == "schreiben" && !slices.Contains(argv, "--yaml") && (!env.MCP || env.In != nil) {
+			call.Stdin, _ = bufio.NewReader(env.Stdin()).ReadString(0) // to the end
 		}
 	case "wish":
 		call.Intake = &doorIntake{Repo: st.Box.Intake.Repo, Label: inbox.WishLabel(st), Domain: st.Box.Domain}

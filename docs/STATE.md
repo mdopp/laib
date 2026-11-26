@@ -729,7 +729,9 @@ Laib's own containers (ADR 0027) get theirs the same way, named
 `laib.laib-operator.laib-operator.LAIB_TOKEN` and so on; an empty one is
 left out of the unit. `laib-haushalt`'s are `LAIB_HAUSHALT_TOKEN` (minted
 on apply for the haushalt hand) and `LAIB_HAUSHALT_KEY` (generated: the
-verb door's bearer) in `secrets.age`; `laib-updater`'s one secret is
+verb door's bearer) in `secrets.age`, and with a Bote its
+`BOTE_NOTIFY_TOKEN` (laib tell) and `BOTE_AUTOMAT_TOKEN` (laib automat,
+the Automat's bearer port; homes ADR 0004 §3); `laib-updater`'s one secret is
 `LAIB_UPDATER_KEY` (generated, the door's bearer; ADR 0035); the lease's laib token is the llama
 template's `LLAMA_LAIB_TOKEN`, minted for the lease hand.
 A key built from a value (`ACCOUNT_${SHARE_USER}`) can hold what podman

@@ -7,6 +7,9 @@ Pod=bote.pod
 Environment=HA_URL=${HA_URL}
 Environment=HA_TOKEN=${AUTOMAT_HA_TOKEN}
 Environment=AUTOMAT_LISTEN=127.0.0.1:8643
+# laib automat (homes ADR 0004 §3): the same tools and codes for laib-haushalt, only with this bearer
+Environment=AUTOMAT_LAIB_LISTEN=0.0.0.0:8646
+Environment=AUTOMAT_TOKEN=${AUTOMAT_TOKEN}
 Environment=AUTOMAT_DATA=/data
 Volume=${DATA_DIR}/bote/automat:/data:Z
 AutoUpdate=registry

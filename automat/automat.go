@@ -7,6 +7,7 @@ package automat
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -31,6 +32,11 @@ type Config struct {
 	HAURL string // http://host.containers.internal:8123
 	Token string // long-lived access token
 	Data  string // where deleted automations are kept for restore (#48)
+	// Laib: the Werkstatt's listener (homes ADR 0004 §3, laib#1284). Every
+	// change waits for a code, restore and switch too, and a draft answers
+	// JSON {text, code}: laib-haushalt sends the code to the person and
+	// hands the agent only the text, so the model never sees it.
+	Laib bool
 }
 
 type client struct {
@@ -41,13 +47,16 @@ type client struct {
 	pending map[string]pendingChange // confirmation code → what will happen
 }
 
-// pendingChange is a write or a delete waiting for its code (#48): the
-// model shows it, the person confirms, only then does Home Assistant change.
+// pendingChange is a change waiting for its code (#48): the model shows
+// it, the person confirms, only then does Home Assistant change. On the
+// Bote's path write and delete wait; on the Werkstatt's (Config.Laib) every
+// change does, restore and switch too (homes ADR 0004 §3).
 type pendingChange struct {
-	Kind    string // write | delete
+	Kind    string // write | delete | restore | switch
 	ID      string
 	Alias   string
 	Config  map[string]any
+	On      bool // switch: on or off
 	Created time.Time
 }
 
@@ -58,7 +67,7 @@ func newCode() string {
 	return fmt.Sprintf("%04d", (int(b[0])<<8|int(b[1]))%10000)
 }
 
-func (c *client) keep(kind, id, alias string, cfg map[string]any) string {
+func (c *client) keep(p pendingChange) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.pending == nil {
@@ -73,7 +82,8 @@ func (c *client) keep(kind, id, alias string, cfg map[string]any) string {
 	for c.pending[code].ID != "" {
 		code = newCode()
 	}
-	c.pending[code] = pendingChange{Kind: kind, ID: id, Alias: alias, Config: cfg, Created: time.Now()}
+	p.Created = time.Now()
+	c.pending[code] = p
 	return code
 }
 
@@ -187,7 +197,7 @@ func Server(cfg Config, version string) *mcpserver.Server {
 	}
 	return &mcpserver.Server{
 		Name: "automat", Version: version,
-		Instructions: "Automationen in Home Assistant lesen, anlegen, ändern, löschen. Schreiben und Löschen passieren nie sofort: die Antwort nennt einen vierstelligen Code; zeige der Person, was passieren würde, und rufe automation_bestaetigen erst, wenn sie den Code genannt hat. Die id ist ein Slug (flur_licht_aus). Jede geschriebene Automation trägt 'laib:' in der Beschreibung.",
+		Instructions: "Automationen in Home Assistant lesen, anlegen, ändern, schalten, löschen. Schreiben und Löschen passieren nie sofort: die Antwort nennt einen vierstelligen Code; zeige der Person, was passieren würde, und rufe automation_bestaetigen erst, wenn sie den Code selbst genannt hat — nie von dir aus. Die id ist ein Slug (flur_licht_aus). Jede geschriebene Automation trägt 'laib:' in der Beschreibung. " + PhoneTriggers,
 		Tools: []mcpserver.Tool{
 			{Name: "entitaeten", Description: "Entitäten von Home Assistant: id, Name, Zustand. Filter: domain (light, switch, media_player, binary_sensor, person …) und/oder suche (Teil des Namens oder der id).",
 				Schema: obj(map[string]any{"domain": map[string]any{"type": "string"}, "suche": map[string]any{"type": "string"}}),
@@ -262,7 +272,7 @@ func Server(cfg Config, version string) *mcpserver.Server {
 					y, _ := yaml.Marshal(cfg)
 					return string(y), nil
 				}},
-			{Name: "automation_schreiben", Description: "Automation anlegen oder ersetzen. yaml: alias, description, trigger(s), condition(s), action(s) wie in HAs Automations-YAML. Erst zeigen und bestätigen lassen; HA lädt sofort neu.",
+			{Name: "automation_schreiben", Description: "Automation anlegen oder ersetzen. yaml: alias, description, trigger(s), condition(s), action(s) wie in HAs Automations-YAML. Erst zeigen und bestätigen lassen; HA lädt sofort neu. Auslöser vom Telefon: siehe tags.",
 				Schema: obj(map[string]any{"id": map[string]any{"type": "string", "description": "Slug, z.B. flur_licht_aus; leer = aus dem alias gebildet"}, "yaml": map[string]any{"type": "string"}}, "yaml"),
 				Call: func(ctx context.Context, a map[string]any) (string, error) {
 					var cfg map[string]any
@@ -290,9 +300,8 @@ func Server(cfg Config, version string) *mcpserver.Server {
 						cfg["description"] = strings.TrimSpace("laib: über den Boten angelegt. " + desc)
 					}
 					cfg["id"] = id
-					code := c.keep("write", id, alias, cfg)
 					y, _ := yaml.Marshal(cfg)
-					return fmt.Sprintf("Vorgemerkt, noch nicht geschrieben: %s (%s). Das wird angelegt:\n%s\nZum Ausführen den Code %s bestätigen (automation_bestaetigen). Gilt zehn Minuten.", alias, id, string(y), code), nil
+					return c.draft(pendingChange{Kind: "write", ID: id, Alias: alias, Config: cfg}, fmt.Sprintf("Vorgemerkt, noch nicht geschrieben: %s (%s). Das wird angelegt:\n%s", alias, id, string(y))), nil
 				}},
 			{Name: "automation_loeschen", Description: "Automation löschen (id). Wird erst mit dem Code ausgeführt, den diese Antwort nennt; die alte Automation bleibt zum Wiederherstellen aufgehoben.",
 				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}}, "id"),
@@ -311,75 +320,147 @@ func Server(cfg Config, version string) *mcpserver.Server {
 					var cfg map[string]any
 					json.Unmarshal(b, &cfg)
 					alias, _ := cfg["alias"].(string)
-					conf := c.keep("delete", id, alias, cfg)
-					return fmt.Sprintf("Vorgemerkt, noch nicht gelöscht: %s (%s). Zum Löschen den Code %s bestätigen (automation_bestaetigen); automation_wiederherstellen %s holt sie danach zurück.", alias, id, conf, id), nil
+					return c.draft(pendingChange{Kind: "delete", ID: id, Alias: alias, Config: cfg}, fmt.Sprintf("Vorgemerkt, noch nicht gelöscht: %s (%s); automation_wiederherstellen %s holt sie danach zurück.", alias, id, id)), nil
 				}},
-			{Name: "automation_bestaetigen", Description: "Führt eine vorgemerkte Änderung aus: der vierstellige Code aus der Antwort von automation_schreiben oder automation_loeschen, wie die Person ihn bestätigt hat.",
+			{Name: "automation_bestaetigen", Description: "Führt eine vorgemerkte Änderung aus: der vierstellige Code aus der Antwort von automation_schreiben oder automation_loeschen, wie die Person ihn genannt hat. Nie mit einem Code aufrufen, den die Person nicht selbst gesagt hat.",
 				Schema: obj(map[string]any{"code": map[string]any{"type": "string"}}, "code"),
-				Call: func(ctx context.Context, a map[string]any) (string, error) {
-					p, ok := c.take(str(a, "code"))
-					if !ok {
-						return "", fmt.Errorf("kein vorgemerkter Vorgang mit diesem Code (oder älter als zehn Minuten)")
-					}
-					switch p.Kind {
-					case "write":
-						if err := c.ok(ctx, "POST", "/api/config/automation/config/"+url.PathEscape(p.ID), p.Config); err != nil {
-							return "", err
-						}
-						return fmt.Sprintf("geschrieben: %s (%s) — automation.%s", p.Alias, p.ID, p.ID), nil
-					case "delete":
-						if err := c.trash(p.ID, p.Config); err != nil {
-							return "", fmt.Errorf("aufheben vor dem Löschen: %w", err)
-						}
-						if err := c.ok(ctx, "DELETE", "/api/config/automation/config/"+url.PathEscape(p.ID), nil); err != nil {
-							return "", err
-						}
-						return fmt.Sprintf("gelöscht: %s (%s); automation_wiederherstellen %s holt sie zurück", p.Alias, p.ID, p.ID), nil
-					}
-					return "", fmt.Errorf("unbekannter Vorgang")
-				}},
+				Call:   func(ctx context.Context, a map[string]any) (string, error) { return c.confirm(ctx, str(a, "code")) }},
 			{Name: "automation_wiederherstellen", Description: "Holt eine gelöschte Automation zurück (id).",
 				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}}, "id"),
-				Call: func(ctx context.Context, a map[string]any) (string, error) {
-					id := str(a, "id")
-					if !idRe.MatchString(id) {
-						return "", fmt.Errorf("id %q: nur a-z, 0-9, _", id)
-					}
-					if c.cfg.Data == "" {
-						return "", fmt.Errorf("nichts Aufgehobenes für %s: kein Datenverzeichnis", id)
-					}
-					y, err := os.ReadFile(filepath.Join(c.cfg.Data, "geloescht", id+".yaml"))
-					if err != nil {
-						return "", fmt.Errorf("nichts Aufgehobenes für %s", id)
-					}
-					var cfg map[string]any
-					if err := yaml.Unmarshal(y, &cfg); err != nil {
-						return "", err
-					}
-					if err := c.ok(ctx, "POST", "/api/config/automation/config/"+url.PathEscape(id), cfg); err != nil {
-						return "", err
-					}
-					return "wiederhergestellt: " + id, nil
-				}},
+				Call:   func(ctx context.Context, a map[string]any) (string, error) { return c.restore(ctx, str(a, "id")) }},
 			{Name: "automation_schalten", Description: "Automation an- oder ausschalten (entity_id automation.<id>, an: true/false).",
 				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}, "an": map[string]any{"type": "boolean"}}, "id", "an"),
 				Call: func(ctx context.Context, a map[string]any) (string, error) {
-					id := str(a, "id")
-					if !idRe.MatchString(id) {
-						return "", fmt.Errorf("id %q: nur a-z, 0-9, _", id)
-					}
 					on, _ := a["an"].(bool)
-					svc := "turn_off"
-					if on {
-						svc = "turn_on"
-					}
-					if err := c.ok(ctx, "POST", "/api/services/automation/"+svc, map[string]any{"entity_id": "automation." + id}); err != nil {
-						return "", err
-					}
-					return fmt.Sprintf("automation.%s: %s", id, svc), nil
+					return c.switchAutomation(ctx, str(a, "id"), on)
+				}},
+			{Name: "tags", Description: "Die NFC-Tags aus Home Assistants Tag-Liste: id · Name (benannt in der Homes-App). " + PhoneTriggers,
+				Schema: obj(map[string]any{}),
+				Call:   func(ctx context.Context, a map[string]any) (string, error) { return c.tags(ctx) }},
+			{Name: "automation_verwerfen", Description: "Verwirft eine vorgemerkte Änderung (code), ohne sie auszuführen.",
+				Schema: obj(map[string]any{"code": map[string]any{"type": "string"}}, "code"),
+				Call: func(ctx context.Context, a map[string]any) (string, error) {
+					c.take(str(a, "code"))
+					return "verworfen", nil
 				}},
 		},
 	}
+}
+
+// draft keeps p for its code. On the Bote's path the answer names the
+// code; on the Werkstatt's it is JSON {text, code} for laib-haushalt, which
+// sends the code to the person and never hands it to the agent.
+func (c *client) draft(p pendingChange, text string) string {
+	code := c.keep(p)
+	if c.cfg.Laib {
+		b, _ := json.Marshal(map[string]string{"text": text, "code": code})
+		return string(b)
+	}
+	return fmt.Sprintf("%s\nZum Ausführen den Code %s bestätigen (automation_bestaetigen). Gilt zehn Minuten.", text, code)
+}
+
+// PhoneTriggers is how the Homes app's reports reach HA (homes ADR 0004
+// §1), for the model that writes an automation from a sentence.
+const PhoneTriggers = "Die Homes-App meldet das Telefon als HA-Ereignisse, person ist der Homes-Login: ein berührter NFC-Tag ist tag_scanned {tag_id, person}, Laden ist homes_laden {person, zustand: an|aus, ladeart: kabellos|kabel|usb|\"\"}. „Wenn ich den Tag ‚Bürotür‘ berühre“ ist trigger: tag mit der tag_id aus tags; gilt es nur für eine Person, trigger: event, event_type: tag_scanned, event_data {tag_id, person}. „Wenn mein Telefon auf den Stand kommt“ ist trigger: event, event_type: homes_laden, event_data {person, zustand: an, ladeart: kabellos}; Uhrzeit, Wochentag, wer zu Hause ist, sind HAs eigene conditions."
+
+// confirm runs the change a code holds (#48, homes ADR 0004 §3).
+func (c *client) confirm(ctx context.Context, code string) (string, error) {
+	p, ok := c.take(code)
+	if !ok {
+		return "", fmt.Errorf("kein vorgemerkter Vorgang mit diesem Code (oder älter als zehn Minuten)")
+	}
+	return c.run(ctx, p)
+}
+
+// run makes the change p in Home Assistant.
+func (c *client) run(ctx context.Context, p pendingChange) (string, error) {
+	path := "/api/config/automation/config/" + url.PathEscape(p.ID)
+	switch p.Kind {
+	case "write", "restore":
+		if err := c.ok(ctx, "POST", path, p.Config); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%s: %s (%s) — automation.%s", map[string]string{"write": "geschrieben", "restore": "wiederhergestellt"}[p.Kind], p.Alias, p.ID, p.ID), nil
+	case "delete":
+		if err := c.trash(p.ID, p.Config); err != nil {
+			return "", fmt.Errorf("aufheben vor dem Löschen: %w", err)
+		}
+		if err := c.ok(ctx, "DELETE", path, nil); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("gelöscht: %s (%s); automation_wiederherstellen %s holt sie zurück", p.Alias, p.ID, p.ID), nil
+	case "switch":
+		svc := map[bool]string{true: "turn_on", false: "turn_off"}[p.On]
+		if err := c.ok(ctx, "POST", "/api/services/automation/"+svc, map[string]any{"entity_id": "automation." + p.ID}); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("automation.%s: %s", p.ID, svc), nil
+	}
+	return "", fmt.Errorf("unbekannter Vorgang")
+}
+
+// restore brings a deleted automation back: at once on the Bote's path,
+// for its code on the Werkstatt's.
+func (c *client) restore(ctx context.Context, id string) (string, error) {
+	if !idRe.MatchString(id) {
+		return "", fmt.Errorf("id %q: nur a-z, 0-9, _", id)
+	}
+	if c.cfg.Data == "" {
+		return "", fmt.Errorf("nichts Aufgehobenes für %s: kein Datenverzeichnis", id)
+	}
+	y, err := os.ReadFile(filepath.Join(c.cfg.Data, "geloescht", id+".yaml"))
+	if err != nil {
+		return "", fmt.Errorf("nichts Aufgehobenes für %s", id)
+	}
+	var cfg map[string]any
+	if err := yaml.Unmarshal(y, &cfg); err != nil {
+		return "", err
+	}
+	alias, _ := cfg["alias"].(string)
+	p := pendingChange{Kind: "restore", ID: id, Alias: alias, Config: cfg}
+	if !c.cfg.Laib {
+		return c.run(ctx, p)
+	}
+	return c.draft(p, fmt.Sprintf("Vorgemerkt, noch nicht wiederhergestellt: %s (%s).", alias, id)), nil
+}
+
+// switchAutomation switches an automation on or off: at once on the Bote's
+// path, for its code on the Werkstatt's.
+func (c *client) switchAutomation(ctx context.Context, id string, on bool) (string, error) {
+	if !idRe.MatchString(id) {
+		return "", fmt.Errorf("id %q: nur a-z, 0-9, _", id)
+	}
+	p := pendingChange{Kind: "switch", ID: id, On: on}
+	if !c.cfg.Laib {
+		return c.run(ctx, p)
+	}
+	return c.draft(p, fmt.Sprintf("Vorgemerkt, noch nicht geschaltet: automation.%s %s.", id, map[bool]string{true: "einschalten", false: "ausschalten"}[on])), nil
+}
+
+// tags is HA's tag registry by name (tag/list): an entry names its id
+// "id", "tag_id" is read too should HA say it that way.
+func (c *client) tags(ctx context.Context) (string, error) {
+	var raw []struct {
+		ID    string `json:"id"`
+		TagID string `json:"tag_id"`
+		Name  string `json:"name"`
+	}
+	if err := c.command(ctx, map[string]any{"type": "tag/list"}, &raw); err != nil {
+		return "", err
+	}
+	var lines []string
+	for _, t := range raw {
+		id := t.ID
+		if id == "" {
+			id = t.TagID
+		}
+		lines = append(lines, fmt.Sprintf("%s · %s", id, cmp.Or(t.Name, "(ohne Namen)")))
+	}
+	sort.Strings(lines)
+	if len(lines) == 0 {
+		return "keine Tags in Home Assistant; benannt werden sie in der Homes-App (Mehr → Auslöser)", nil
+	}
+	return strings.Join(lines, "\n"), nil
 }
 
 func orDash(s string) string {

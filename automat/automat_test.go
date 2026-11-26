@@ -73,7 +73,7 @@ func TestToolsRoundTrip(t *testing.T) {
 	defer ha.Close()
 	h := Server(Config{HAURL: ha.URL, Token: "tok", Data: t.TempDir()}, "test").Handler()
 
-	if res := call(t, h, "tools/list", nil); len(res["result"].(map[string]any)["tools"].([]any)) != 8 {
+	if res := call(t, h, "tools/list", nil); len(res["result"].(map[string]any)["tools"].([]any)) != 10 {
 		t.Fatalf("tools: %v", res)
 	}
 	out, isErr := text(call(t, h, "tools/call", map[string]any{"name": "entitaeten", "arguments": map[string]any{"domain": "light"}}))

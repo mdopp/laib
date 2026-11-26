@@ -4,6 +4,7 @@
 // (HAUSHALT_KEY); a proposal goes back to laib at LAIB_MCP_URL with
 // LAIB_TOKEN, the haushalt hand's; laib tell reaches bote-notify at
 // BOTE_NOTIFY_URL with BOTE_NOTIFY_TOKEN, both rendered only with a Bote (#676);
+// laib automat the Bote's Automat at BOTE_AUTOMAT_URL with BOTE_AUTOMAT_TOKEN (homes ADR 0004 §3);
 // laib wish files its issue with GITHUB_INTAKE_TOKEN, rendered only with box.yml
 // intake (#797), at GITHUB_API_URL (default api.github.com).
 package main
@@ -30,7 +31,8 @@ func main() {
 	addr := cmp.Or(os.Getenv("HAUSHALT_LISTEN"), "127.0.0.1:5902")
 	laib := haushalt.MCP{URL: os.Getenv("LAIB_MCP_URL"), Token: os.Getenv("LAIB_TOKEN")}
 	log.Printf("laib-haushalt: %s, laib at %s", addr, laib.URL)
-	srv := &http.Server{Addr: addr, Handler: haushalt.Handler(key, laib, haushalt.Bote{URL: os.Getenv("BOTE_NOTIFY_URL"), Token: os.Getenv("BOTE_NOTIFY_TOKEN")},
+	srv := &http.Server{Addr: addr, Handler: haushalt.Handler(key, laib, haushalt.Bote{URL: os.Getenv("BOTE_NOTIFY_URL"), Token: os.Getenv("BOTE_NOTIFY_TOKEN"),
+		Automat: os.Getenv("BOTE_AUTOMAT_URL"), AutomatToken: os.Getenv("BOTE_AUTOMAT_TOKEN")},
 		haushalt.GitHub{API: os.Getenv("GITHUB_API_URL"), Token: os.Getenv("GITHUB_INTAKE_TOKEN")}), ReadHeaderTimeout: 5 * time.Second}
 	// a planned stop is no failure (#956): stop accepting, give what runs 5 s, exit 0
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

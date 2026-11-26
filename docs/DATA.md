@@ -638,7 +638,19 @@ No `private:` (templates/bote/laib.yml).
   exposes is in the Homes section), `BOTE_HA_TOKEN` (HA user `bote`, no
   administrator), `BOTE_AUTOMAT_HA_TOKEN` (an HA administrator, the
   Automat only), `BOTE_LAIB_TOKEN` (the hand `bote`: propose, note,
-  escalate), `USAGE_METRICS_TOKEN`.
+  escalate), `USAGE_METRICS_TOKEN`. `BOTE_AUTOMAT_TOKEN` is the
+  Automat's own bearer on its second port (8646, the host's loopback),
+  generated on add; laib-haushalt holds it for `laib automat` (homes ADR
+  0004 §3). It opens the Automat's tools, never HA itself: the HA token
+  stays in the Automat's container, and every change still waits for the
+  Automat's code, which laib-haushalt sends to the owner (`notify.person`)
+  through bote-notify and never hands the agent (#1284).
+- **The Werkstatt** (homes ADR 0004 §3): the claude and pi hands reach the
+  Automat through Laib (`laib_automat`, served by laib-haushalt with
+  `BOTE_AUTOMAT_TOKEN`), never with a token of their own; no new key into
+  HA. What they read is row 29 below; what they change waits for the
+  code, which goes to the owner on their chat channel and never to the
+  agent, and the journal names each confirmed change and its hand.
 - **Crossings:** „ablegen“ files a sent document into Paperless as its
   sender's (`Bote/von-<login>/`, Dokumente hands it to them; a stranger's
   under their chat name is Dokumente's until its sorting decides, gap 6); a message for a person (`rest_command.mitteilung`, „sag Mama
@@ -811,6 +823,7 @@ design and not listed again.
 | 26 | Which owner's keys are missing that something on the box waits for: the key's name, its service, the template's label, why and help text, and its form's link — never a value, never whether an optional key is set. Every hand with `aufgabe` reads it in `laib_aufgabe list` (homes#362); Homes shows it only to admins in „Deine Aufgaben“ | secrets.age's key names (set or not) → the admins' Homes view | laib cmd/laib/aufgabe.go `missingKeys`, internal/diag/keys.go `MissingKeys`; homes „Deine Aufgaben“ |
 | 27 | A person's archive hands its tasks to Homes with their text: how many questions, suggestions and cleanup findings wait, the next question („Wie steht <Name> zu <Name>?“) and the first finding's title, whether a key is missing. **Owner-decided 2026-11-15** (archiv ADR 0001 point 4: the text names people and so lies outside the vault). Worked out only while the vault is open, by the program „Aufgaben für Homes“ (reads Beziehungen, Kontakte, Notizen; the person can withhold it at each opening); Homes keeps the last ones in `plugins.json` and shows them only to that person; removing the archive removes them | the person's archive → Homes (service, its data folder) → that person; root on the box can read the file | archiv apps/archiv/homes.go `/homes/v1`, programme.go; homes internal/plugin, internal/pages/plugins.go (homes#375) |
 | 28 | The name an invited guest of the poll chose to type (optional; an anonymous vote otherwise) is shown as „Abgestimmt haben: …“; the votes only summed, never beside a name | an invited guest → the other invited guests who have voted | mdopp/abstimmung apps/abstimmung/vote.go (`teilnehmer`), web.go (`ergebnis`) |
+| 29 | HA's entities and their states (a person's `person.*` home or away among them), its automations as YAML and its tags' names, through the Bote's Automat, to the Werkstatt's hands claude and pi (`laib_automat`, homes ADR 0004 §3); an automation that triggers on a person's `tag_scanned` or `homes_laden` names that person's login. Reading answers at once; a change waits for the Automat's code, which goes to the owner (`notify.person`) on their chat channel — a short line with the automation's name and id — and which the owner says in the conversation; the agent never sees it. The Automat's HA user is an administrator, so the Werkstatt reads what an HA admin sees of the house; the Werkstatt holds neither HA's token nor the Automat's | the house, each person's presence in HA → the Werkstatt (claude, pi) | laib haushalt/automat.go; automat/automat.go; templates/bote §5 |
 
 Not crossings, checked: location goes to the person's own Reitti with
 their own token (homes internal/napi/standort.go); phone backups go to

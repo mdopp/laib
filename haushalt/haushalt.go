@@ -2,7 +2,7 @@
 // household verbs that read what the door hands over, leave an order for a
 // service, file a proposal, tell one person something or file a wish —
 // scan, net geraete, tell, zuhause, person signal (#677), wish (#797),
-// and module (#1036), and since #1234 person invite and pending, calendar and
+// module (#1036) and automat (homes ADR 0004 §3), and since #1234 person invite and pending, calendar and
 // aufgabe, whose one write the kernel's part does on the door's Auftrag; an
 // image's changelog is laib-updater's (ADR 0035). It runs in its own
 // container (ADR 0027): the kernel checks hand, tier and verb, then hands
@@ -40,6 +40,7 @@ type Call struct {
 	TZ      string       `json:"tz,omitempty"`      // box.yml timezone (#1234)
 	Auftrag string       `json:"auftrag,omitempty"` // the way to the verb's kernel part, as the caller (#1234)
 	Stdin   string       `json:"stdin,omitempty"`   // laib calendar subscribe's address, one line (#1234)
+	Person  string       `json:"person,omitempty"`  // box.yml notify.person: whom laib automat sends its code to (laib#1284)
 	Scan    *ScanService `json:"scan,omitempty"`
 	Zuhause *Zuhause     `json:"zuhause,omitempty"` // box.yml zuhause, for laib zuhause (#677)
 	Intake  *Intake      `json:"intake,omitempty"`  // box.yml intake, for laib wish (#797)
@@ -79,7 +80,7 @@ type Env struct {
 	Journal io.Writer
 }
 
-// Run is one verb: scan …, net geraete …, tell …, zuhause …, person_* …, calendar …, aufgabe …, wish … or module ….
+// Run is one verb: scan …, net geraete …, tell …, zuhause …, person_* …, calendar …, aufgabe …, wish …, module … or automat ….
 func Run(ctx context.Context, env *Env, args []string) int {
 	switch {
 	case len(args) > 0 && args[0] == "scan":
@@ -104,8 +105,10 @@ func Run(ctx context.Context, env *Env, args []string) int {
 		return Wish(ctx, env, args[1:])
 	case len(args) > 0 && args[0] == "module":
 		return cmdModule(ctx, env, args[1:])
+	case len(args) > 0 && args[0] == "automat":
+		return cmdAutomat(ctx, env, args[1:])
 	}
-	return env.fail(errors.New("usage: scan … | net geraete … | tell … | zuhause … | person_signal|person_invite|person_pending … | calendar … | aufgabe … | wish … | module … (the kernel serves them as laib scan, laib net geraete, laib tell, laib zuhause, laib person …, laib calendar, laib aufgabe, laib wish, laib module)"))
+	return env.fail(errors.New("usage: scan … | net geraete … | tell … | zuhause … | person_signal|person_invite|person_pending … | calendar … | aufgabe … | wish … | module … | automat … (the kernel serves them as laib scan, laib net geraete, laib tell, laib zuhause, laib person …, laib calendar, laib aufgabe, laib wish, laib module, laib automat)"))
 }
 
 // Handler serves the door: POST /call with the door's key, GET /health.

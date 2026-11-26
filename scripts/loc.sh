@@ -120,7 +120,9 @@ budget stick 1980 stick         # the laptop's install-stick builder, 1,468
 # nobody meant is judged, answered with a tone and counted (frage/gate.go); frage at 413 before, about
 # 95 lines asked, the request counts as the owner's yes.
 budget frage 540 frage          # "was ist …", 261
-budget automat 660 automat      # the Bote's HA automations, 421
+# automat 693: owner approved 2026-11-26, homes ADR 0004 §3 and laib#1284: the tag registry over HA's
+# WebSocket, the phone's triggers, the Werkstatt's listener whose codes go to the person; 443 → 692
+budget automat 693 automat      # the Bote's HA automations, 421
 budget directory 530 directory  # the Bote's directory (ADR 0030; the persona engine's cap was 990), 421
 budget mcpserver 220 mcpserver  # the Bote's tools' MCP server, 111
 # disk 1,110: the Kern-Diät #1047 (2026-11-14): laib auslastung's values (laib-disk load) moved here
@@ -146,7 +148,10 @@ budget notify 660 notify        # laib-notify: the watchdog ping and the owner's
 # haushalt 1,725: the owner's ADR 0035 („Mach das“, 2026-11-15, #1234): laib calendar, person invite and
 # pending and aufgabe move here from the kernel, their input checks, words and lists; the cap raised
 # by the 506 lines that came in
-budget haushalt 1725 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677); wish (#797); a module's wish and its stand (#1038); module aus (#1036); calendar, person invite and pending, aufgabe (#1234)
+# haushalt 1,869: owner approved 2026-11-26, homes ADR 0004 §3 („Go. Passt alles“) and laib#1284: laib
+# automat, the Werkstatt's way to Home Assistant's automations through the Bote's Automat, its code sent
+# to the owner through bote-notify; 1,724 → 1,868, the cap raised by the lines that came in, no more
+budget haushalt 1869 haushalt    # laib-haushalt: scan and net geraete, 480; tell (#676); zuhause, person signal (#677); wish (#797); a module's wish and its stand (#1038); module aus (#1036); calendar, person invite and pending, aufgabe (#1234); automat (homes ADR 0004 §3)
 # lease 1,300: set by the owner, mdopp, 2026-10-26, on #677 ("a+b"): the lease leaves the kernel
 # as its own program (the llama template's policy proxy and GPU lease, ADR 0011, 0027), reversing
 # 2026-10-17's "lease stays" (ADR 0005); 1,076 lines in the kernel, 1,154 with its own MCP client
