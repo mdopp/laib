@@ -231,8 +231,33 @@ no app.
    and write automations, so the Automat has a token of its own,
    `BOTE_AUTOMAT_HA_TOKEN` (an administrator's, minted with the others,
    #349), in its container only; Hermes never holds it. Tools: entitaeten,
-   automationen, automation_lesen, automation_schreiben,
-   automation_loeschen, automation_schalten.
+   tags (HA's NFC tags by name), automationen, automation_lesen,
+   automation_schreiben, automation_loeschen, automation_wiederherstellen,
+   automation_schalten, automation_bestaetigen. Every change — write,
+   delete, restore, switch (the last two since homes ADR 0004 §3) — waits
+   for the four-digit code its answer names and runs only on
+   automation_bestaetigen with it; reading needs none.
+
+   The phone as a trigger (homes ADR 0004 §1): the Homes app's reports
+   reach HA as events, `person` the Homes login — a touched NFC tag as
+   HA's own `tag_scanned` `{tag_id, person}`, the charger as `homes_laden`
+   `{person, zustand: an|aus, ladeart: kabellos|kabel|usb|""}`. The
+   Automat's instructions and tools say so, so „wenn ich den Tag
+   ‚Bürotür‘ berühre“ becomes `trigger: tag` on that id from `tags` (an
+   event trigger on `tag_scanned` with `event_data` `{tag_id, person}` for
+   one person), and „wenn mein Telefon auf den Stand kommt“ an event
+   trigger on `homes_laden` with `{person, zustand: an, ladeart:
+   kabellos}`. Tags are named in the Homes app, in HA's tag registry.
+
+   The Werkstatt (homes ADR 0004 §3) sets up and changes automations by
+   language through Laib: `laib automat` (`laib_automat` over MCP, for the
+   claude and pi hands) is served by laib-haushalt, which calls the
+   Automat on its second listener, `AUTOMAT_LAIB_LISTEN` (port 8646,
+   published on the host's loopback only), with the bearer
+   `BOTE_AUTOMAT_TOKEN` (generated on add). Hermes keeps 8643 inside the
+   pod without one. The Werkstatt holds no HA token and no Automat token;
+   the code is the same, said by the owner in the conversation, and the
+   journal names each confirmed change and its caller.
 
 6. Messages to people (ADR 0022 §3, #177): declare the household in
    box.yml `people` (`mama: ["signal:+49…", "telegram:<chat id>"]`,

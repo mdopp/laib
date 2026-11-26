@@ -1,7 +1,7 @@
 # scripts/ratchet.py gocognit: functions over 30, the number is the score
 # written by `scripts/ratchet.py --update`; lowered in the PR that fixes one, raised only with --accept
 # total 50
-83 automat/automat.go: automat.Server
+54 automat/automat.go: automat.Server
 64 cmd/laib/operator.go: main.cmdOperator
 38 cmd/laib/pause.go: main.cmdPause
 53 cmd/laib/secret.go: main.cmdSecret

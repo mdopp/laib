@@ -7,3 +7,6 @@ PublishPort=8642:8642
 # bote-notify on loopback: Home Assistant, laib-notify and laib-haushalt (host network) and the host's
 # units post to it there; nothing in a pod needs it since Gesundheit went (2026-11-07, #894 undone)
 PublishPort=127.0.0.1:8645:8645
+# the Automat's bearer port on loopback: laib-haushalt (host network) reaches it there for laib automat,
+# the Werkstatt's way to HA's automations (homes ADR 0004 §3); Hermes keeps 8643 inside the pod
+PublishPort=127.0.0.1:8646:8646
