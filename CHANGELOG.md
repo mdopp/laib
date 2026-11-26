@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.36.0](https://github.com/mdopp/laib/compare/v2.35.2...v2.36.0) (2026-11-26)
+
+
+### Features
+
+* **haushalt:** laib automat, the Werkstatt's way to Home Assistant's automations (homes ADR 0004 §3) ([#1284](https://github.com/mdopp/laib/issues/1284)) ([57d7c00](https://github.com/mdopp/laib/commit/57d7c00be6a5d9a0a66ca597b945b9613be63c9a))
+
 ## [2.35.2](https://github.com/mdopp/laib/compare/v2.35.1...v2.35.2) (2026-11-21)
 
 
