@@ -509,6 +509,10 @@ writes `KALENDER_ABOS`.
 
 No `private:` (templates/homes/laib.yml). Homes is the family's pages
 and the app's API (`/napi/`); references below are to mdopp/homes.
+Without a login, besides `/napi/` (device tokens), only
+`/.well-known/assetlinks.json` answers. It holds the app's package name and
+its public signing certificate (`HOMES_APP_SHA256`, homes ADR 0004 §5) and
+no person's data.
 
 - **Accounts:** none of its own. A page request is a person through
   Authelia's `Remote-User`, `Remote-Name`, `Remote-Email`,

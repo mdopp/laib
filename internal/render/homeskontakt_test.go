@@ -52,8 +52,8 @@ func TestHomesKontaktIsItsOwnHostWithoutLoginAndHomesStaysBehindAuthelia(t *test
 	if !strings.Contains(access, "domain: kontakt.x.home\n      policy: bypass") {
 		t.Errorf("Authelia has no bypass for kontakt.x.home:\n%s", access)
 	}
-	if n := strings.Count(access, "domain: "+homes+".x.home\n      policy: bypass\n"); n != 1 {
-		t.Errorf("Homes' host has %d paths without login, want 1 (/napi/):\n%s", n, access)
+	if n := strings.Count(access, "domain: "+homes+".x.home\n      policy: bypass\n"); n != 2 {
+		t.Errorf("Homes' host has %d paths without login, want 2 (/napi/ and assetlinks.json, homes ADR 0004 §5):\n%s", n, access)
 	}
 	if p := os.Getenv("LAIB_CADDYFILE_OUT"); p != "" { // checked by a real caddy with the rate limit, by hand
 		os.WriteFile(p, []byte(caddy), 0o600)

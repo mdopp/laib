@@ -116,7 +116,7 @@ identitaeten:
 
 netz:
   - weg: Von außen
-    schutz: nur über Caddy, nur freigegebene Namen (eine Karte je öffentlicher Adresse), TLS; Familien-Apps hinter Authelia mit zweitem Faktor, Gast-Apps mit eigener Sperre (Einladungswort, Prüfung „antwortet 403 ohne“)
+    schutz: nur über Caddy, nur freigegebene Namen (eine Karte je öffentlicher Adresse), TLS; Familien-Apps hinter Authelia mit zweitem Faktor, Gast-Apps mit eigener Sperre (Einladungswort, Prüfung „antwortet 403 ohne“); an einer Familien-Adresse ohne Anmeldung nur, was keine Familiendaten trägt, die App-Schnittstelle mit Gerätetoken (/napi/) und eine einzelne Datei, Homes' assetlinks.json (Paketname und öffentliches Zertifikat der App, damit ein Tag die App öffnet; homes ADR 0004 §5)
     stand: {status: läuft}
   - weg: Im Heimnetz
     schutz: Dienste hinter Caddy; direkte Ports nur, wo ein Gerät sie braucht (Tabelle „Direkte Ports“), sonst von nftables auf den Host begrenzt

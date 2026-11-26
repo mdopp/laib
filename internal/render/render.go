@@ -739,14 +739,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 				b.WriteString("\t@lan remote_ip private_ranges\n\thandle @lan {\n")
 				indent = "\t\t"
 			}
-			if len(r.Bypass) > 0 {
-				// the bypass paths go straight to the service; everything else below is behind Authelia
-				var ms []string
-				for _, p := range r.Bypass {
-					ms = append(ms, "path "+strings.TrimSuffix(p, "/")+"/*")
-				}
-				fmt.Fprintf(&b, "%s@bypass %s\n%shandle @bypass {\n%s\treverse_proxy 127.0.0.1:%d\n%s}\n", indent, strings.Join(ms, " "), indent, indent, r.Port, indent)
-			}
+			b.WriteString(bypassPaths(r, indent))
 			// an agent reaches a person's instance at /p/<person>/, past
 			// Authelia (its bypass rule) and without the instance's key: the
 			// instance checks the key it is sent (#986); only where its
@@ -799,7 +792,7 @@ func caddyfile(st *state.State, secrets map[string]string) string {
 type accessRule struct {
 	Domain, Policy string
 	Subjects       []string // groups
-	Resource       string   // a bypass of one path prefix
+	Resource       string   // a bypass's path, as Authelia's regular expression
 	Networks       []string // the rule holds only for these client networks (laib#1131)
 }
 
@@ -814,7 +807,11 @@ func accessRules(st *state.State) []accessRule {
 			}
 			done[r.Host] = true
 			for _, p := range agentBypass(st, r) {
-				rules = append(rules, accessRule{Domain: fqdn(st, r.Host), Policy: "bypass", Resource: strings.TrimSuffix(p, "/") + "/"})
+				res := "^" + p + ".*$" // a prefix; one file is that path alone, with or without a query
+				if !strings.HasSuffix(p, "/") {
+					res = "^" + regexp.QuoteMeta(p) + `(\?.*)?$`
+				}
+				rules = append(rules, accessRule{Domain: fqdn(st, r.Host), Policy: "bypass", Resource: res})
 			}
 			rule := accessRule{Domain: fqdn(st, r.Host), Policy: policyOf(r)}
 			if rule.Policy != "bypass" {
@@ -855,6 +852,21 @@ func publicPaths(r state.Route) string {
 	return fmt.Sprintf("\t@public path %s\n\thandle @public {\n\t\treverse_proxy 127.0.0.1:%d\n\t}\n", strings.Join(ms, " "), r.Port)
 }
 
+// bypassPaths: the bypass prefixes straight to the service; one file (no trailing /, homes ADR
+// 0004 §5) is Authelia's bypass alone, served below with the proxy header and no Remote-User.
+func bypassPaths(r state.Route, indent string) string {
+	var ms []string
+	for _, p := range r.Bypass {
+		if strings.HasSuffix(p, "/") {
+			ms = append(ms, "path "+p+"*")
+		}
+	}
+	if len(ms) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s@bypass %s\n%shandle @bypass {\n%s\treverse_proxy 127.0.0.1:%d\n%s}\n", indent, strings.Join(ms, " "), indent, indent, r.Port, indent)
+}
+
 // agentBypass is the route's bypass and, for a host the persons' instances
 // share, the path of each one whose person switched it on (#986, plan 12).
 func agentBypass(st *state.State, r state.Route) []string {
@@ -873,7 +885,7 @@ func autheliaAccess(st *state.State) string {
 	for _, r := range accessRules(st) {
 		fmt.Fprintf(&b, "    - domain: %s\n      policy: %s\n", r.Domain, r.Policy)
 		if r.Resource != "" {
-			fmt.Fprintf(&b, "      resources: [\"^%s.*$\"]\n", r.Resource)
+			fmt.Fprintf(&b, "      resources: [%q]\n", r.Resource)
 		}
 		if len(r.Networks) > 0 {
 			fmt.Fprintf(&b, "      networks: [\"%s\"]\n", strings.Join(r.Networks, `", "`))

@@ -10,8 +10,18 @@ Kontakt prüfen lassen (owner 2026-11-07, mdopp/homes `kontaktantwort`) is
 the one page of Homes without a login, and it has a host and a port of its
 own: the route `kontakt.<domain>` (`auth: none`, public) proxies to port
 8652, where Homes (`HOMES_KONTAKT_LISTEN`) registers nothing but that page,
-`/<token>`. Homes' own host (`www.<domain>`) keeps its one bypass, `/napi/`,
-and nothing else. Caddy limits the new host to 30 requests per address in 10 minutes
+`/<token>`. Homes' own host (`www.<domain>`) keeps two bypasses and nothing
+else: `/napi/` (the app's API, device tokens) and the one file
+`/.well-known/assetlinks.json` (homes ADR 0004 §5). Android fetches that
+file anonymously to verify the Homes app's link, so a tag's address
+`https://www.<domain>/tag/<id>` opens the app. Authelia lets that exact
+path through (with a query, nothing longer). Caddy serves it on the
+authenticated handler, so Homes still gets its proxy secret and no
+`Remote-User`. The file names only the app's package and its signing
+certificate, `HOMES_APP_SHA256` (values `APP_SHA256`, the release
+certificate of mdopp/homes-android v4.1.14 by default; public, not a
+secret). `/tag/<id>`, the page for a phone without the app, stays behind
+the login. Caddy limits the new host to 30 requests per address in 10 minutes
 (caddy-ratelimit, pinned in `caddy/Containerfile`) and a 32 KB body, 6 MB
 only for a multipart POST, the answer with the contact's own photo (owner
 2026-11-08, homes#304); Homes

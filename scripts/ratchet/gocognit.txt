@@ -34,7 +34,7 @@
 37 internal/registry/template.go: registry.TemplateCmd
 32 internal/render/net.go: render.Net
 33 internal/render/render.go: render.Render
-67 internal/render/render.go: render.caddyfile
+60 internal/render/render.go: render.caddyfile
 77 internal/review/review.go: review.(*Result).contract
 46 internal/review/review.go: review.(*Result).units
 67 internal/review/review.go: review.dirs

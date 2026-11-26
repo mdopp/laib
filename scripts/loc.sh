@@ -28,6 +28,9 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 22,702: owner approved 2026-11-26, homes ADR 0004 §5: a bypass of one file, Homes'
+# /.well-known/assetlinks.json without a login (Authelia's exact rule, Caddy's bypass split out of
+# caddyfile into bypassPaths); 22,689 → 22,701, raised by the lines that came in, no more.
 # 22,690: the owner's #1236 (2026-11-15, ADR 0035 „Laib ist etwas, das ohne Homes funktionieren
 # sollte“): a box without Homes is maintained from Laib's own Status page — the admins' tasks with
 # Erledigt and Zurückstellen and a way of their own (weg laib), the last whole diag's findings, the
@@ -86,7 +89,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 22690 cmd internal
+budget kernel 22702 cmd internal
 budget operator 3300 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,
