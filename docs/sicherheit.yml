@@ -195,6 +195,7 @@ schichtregeln:
       - schlagen vor, wenden nur im Rahmen ihrer Stufe an
       - "private Dienste: Einblick-Karte, eine Stunde, je Dienst"
       - "Tresor: nie"
+      - "Automationen in Home Assistant (claude, pi): nur über laib automat zum Automaten des Boten, ohne eigenen Schlüssel; jede Änderung erst mit dem Code, den der Besitzer im Gespräch nennt (homes ADR 0004 §3). Der Code steht in der Antwort des Werkzeugs: er hält das Modell an, sperrt es nicht; das Journal nennt jede bestätigte Änderung und die Hand"
       - "geplant: Auftrag mit Rahmen statt Einblick plus Budget (#1237)"
 
 wasPassiert:
@@ -207,7 +208,7 @@ wasPassiert:
   - fall: eine Registry oder ein Changelog ist manipuliert
     folge: der Updater liefert höchstens falsche Angaben; der Kern fragt nie selbst im Netz und prüft Prüfsumme und Signatur vor dem Vorschlag und noch einmal vor dem Einspielen selbst (#1233)
   - fall: laib-haushalt wird übernommen
-    folge: es schlägt vor wie bisher; einen Kern-Teil erreicht es nur mit dem Auftrag eines echten Aufrufs, also höchstens, was dieser Aufrufer in diesem Aufruf durfte (ein Admin-Konto nur, wenn ein Mensch es anlegt); eine Kalender-Adresse sieht es, während sie abonniert wird (#1234)
+    folge: es schlägt vor wie bisher; einen Kern-Teil erreicht es nur mit dem Auftrag eines echten Aufrufs, also höchstens, was dieser Aufrufer in diesem Aufruf durfte (ein Admin-Konto nur, wenn ein Mensch es anlegt); eine Kalender-Adresse sieht es, während sie abonniert wird (#1234); mit dem Schlüssel des Automaten kann es Automationen in Home Assistant anlegen, ändern und schalten (den Code liest es in der Antwort), aber nicht mit Home Assistants eigenem Schlüssel (homes ADR 0004 §3)
   - fall: ein Agent irrt sich
     folge: er kann nur vorschlagen oder im Budget anwenden; jede Änderung hat einen Snapshot und läuft zurück, wenn sie rot wird
   - fall: jemand stiehlt die Box

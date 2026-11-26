@@ -43,6 +43,16 @@ No podman: images are built by the repo's CI and published to ghcr.
 - **Laib itself** (kernel, built-in templates): the laib repo's
   `CLAUDE.md`, then `docs/DESIGN.md`, `docs/STATE.md`, `docs/adr/`.
 - **What the box runs now:** `laib status`, `laib context`, `laib template list`.
+- **A Home Assistant automation the owner describes** („wenn ich mein
+  Telefon auf den Stand lege …“): `laib automat` (MCP `laib_automat`;
+  homes ADR 0004 §3), the Bote's Automat through Laib; the Werkstatt holds
+  no HA token. Read freely (`entitaeten`, `tags`, `automationen`,
+  `lesen`); a change (`schreiben`, `loeschen`, `wiederherstellen`,
+  `einschalten`, `ausschalten`) answers with a four-digit code: say the
+  automation in plain German, show the code, and call `bestaetigen` only
+  with the code the owner typed in this conversation, never on your own.
+  The phone's triggers are in the tool's description (`tag_scanned`,
+  `homes_laden`).
 - **How the network looks** (names, who logs in where, ports, what reaches
   what): `laib net`, and answer with the flowchart of `laib net --mermaid`.
   It is computed from the rendered config; never reconstruct it from
