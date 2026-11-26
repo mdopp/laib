@@ -702,6 +702,17 @@ No `private:` (templates/home-assistant/laib.yml).
   `laib-namen`, already an administrator for the aliases; config flows are
   admin-only), so HA's entry log names `laib-namen`. No new key between
   services: HA's own helper reads druck's printer list from the host.
+- **The phone as a trigger** (owner 2026-11-26, homes ADR 0004): the
+  Homes app reports an NFC tag it touched and when it was laid on or
+  taken off its charger (and how: wireless, cable, USB); Homes fires
+  that on HA's bus with `HOMES_HA_TOKEN` (the user `homes`, already an
+  administrator: `POST /api/events` and `tag/create` are admin-only) as
+  `tag_scanned` `{tag_id, person}` and `homes_laden` `{person, zustand,
+  ladeart}`, `person` the paired device's uid. No new key between
+  services; no position, no phone name. Who sees it: every automation
+  that triggers on it, and HA's logbook and event list, which HA's
+  administrators read. The charger report is off by default, per phone
+  in the app. Tag names live in HA's tag registry; Homes keeps nothing.
 - **Separation:** one house; every user sees the devices and the
   household's calendars (copied by `kalender`). Who switched what goes
   into HA's logbook under the consumer's user, never a person's
