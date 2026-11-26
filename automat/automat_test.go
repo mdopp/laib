@@ -73,7 +73,7 @@ func TestToolsRoundTrip(t *testing.T) {
 	defer ha.Close()
 	h := Server(Config{HAURL: ha.URL, Token: "tok", Data: t.TempDir()}, "test").Handler()
 
-	if res := call(t, h, "tools/list", nil); len(res["result"].(map[string]any)["tools"].([]any)) != 9 {
+	if res := call(t, h, "tools/list", nil); len(res["result"].(map[string]any)["tools"].([]any)) != 10 {
 		t.Fatalf("tools: %v", res)
 	}
 	out, isErr := text(call(t, h, "tools/call", map[string]any{"name": "entitaeten", "arguments": map[string]any{"domain": "light"}}))
@@ -116,8 +116,7 @@ func TestToolsRoundTrip(t *testing.T) {
 	if out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": codeIn(out)}})); isErr || store["flur_licht_aus"] != nil {
 		t.Fatalf("confirmed delete: %q %v", out, store)
 	}
-	out, _ = text(call(t, h, "tools/call", map[string]any{"name": "automation_schalten", "arguments": map[string]any{"id": "flur_aus", "an": false}}))
-	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": codeIn(out)}}))
+	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_schalten", "arguments": map[string]any{"id": "flur_aus", "an": false}}))
 	if isErr || !strings.Contains(out, "turn_off") {
 		t.Fatalf("schalten: %q", out)
 	}
@@ -175,10 +174,6 @@ func TestWritesAndDeletesNeedConfirmation(t *testing.T) {
 		t.Fatalf("the confirmed delete did not happen: %q", out)
 	}
 	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_wiederherstellen", "arguments": map[string]any{"id": "flur_licht_aus"}}))
-	if isErr || store["flur_licht_aus"] != nil {
-		t.Fatalf("wiederherstellen executed without confirmation (homes ADR 0004 §3): %q %v", out, store)
-	}
-	out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": codeIn(out)}}))
 	if isErr || store["flur_licht_aus"] == nil || store["flur_licht_aus"]["alias"] != "Flur Licht aus" {
 		t.Fatalf("restore after delete: %q %v", out, store)
 	}

@@ -128,9 +128,12 @@ func TestThePhonesTriggersAreInTheDescriptions(t *testing.T) {
 	}
 }
 
-// homes ADR 0004 §3: switching waits for its code like every other change.
-func TestSchaltenWaitsForItsCode(t *testing.T) {
-	ha, _ := fakeHA(t)
+// laib#1284: on the Bote's path switching and restoring happen at once, as
+// before; on the Werkstatt's (Config.Laib) every change waits, and its draft
+// is JSON {text, code}: the code is a field for laib-haushalt, never in the
+// text the agent gets.
+func TestTheWerkstattsPathDraftsEveryChangeWithTheCodeApart(t *testing.T) {
+	ha, store := fakeHA(t)
 	defer ha.Close()
 	var switched []string
 	inner := ha.Config.Handler
@@ -140,12 +143,35 @@ func TestSchaltenWaitsForItsCode(t *testing.T) {
 		}
 		inner.ServeHTTP(w, r)
 	})
-	h := Server(Config{HAURL: ha.URL, Token: "tok"}, "test").Handler()
-	out, isErr := text(call(t, h, "tools/call", map[string]any{"name": "automation_schalten", "arguments": map[string]any{"id": "flur_aus", "an": true}}))
-	if isErr || len(switched) != 0 || codeIn(out) == "" || !strings.Contains(out, "einschalten") {
-		t.Fatalf("schalten switched before its code: %q %v", out, switched)
+	bote := Server(Config{HAURL: ha.URL, Token: "tok"}, "test").Handler()
+	if out, isErr := text(call(t, bote, "tools/call", map[string]any{"name": "automation_schalten", "arguments": map[string]any{"id": "flur_aus", "an": false}})); isErr || len(switched) != 1 || codeIn(out) != "" {
+		t.Fatalf("the Bote's switch is at once, without a code, as before: %q %v", out, switched)
 	}
-	if out, isErr = text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": codeIn(out)}})); isErr || len(switched) != 1 || switched[0] != "/api/services/automation/turn_on" {
+	h := Server(Config{HAURL: ha.URL, Token: "tok", Data: t.TempDir(), Laib: true}, "test").Handler()
+	draft := func(tool string, args map[string]any) (string, string) {
+		t.Helper()
+		out, isErr := text(call(t, h, "tools/call", map[string]any{"name": tool, "arguments": args}))
+		var d struct{ Text, Code string }
+		if isErr || json.Unmarshal([]byte(out), &d) != nil || len(d.Code) != 4 || strings.Contains(d.Text, d.Code) {
+			t.Fatalf("%s: no draft with the code apart: %q %v", tool, out, isErr)
+		}
+		return d.Text, d.Code
+	}
+	txt, code := draft("automation_schalten", map[string]any{"id": "flur_aus", "an": true})
+	if len(switched) != 1 || !strings.Contains(txt, "einschalten") {
+		t.Fatalf("switched before its code: %q %v", txt, switched)
+	}
+	if out, isErr := text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": code}})); isErr || len(switched) != 2 || switched[1] != "/api/services/automation/turn_on" {
 		t.Fatalf("confirmed switch: %q %v", out, switched)
+	}
+	y := "alias: Flur Licht aus\ntriggers:\n  - trigger: time\n    at: \"23:00:00\"\nactions:\n  - action: light.turn_off\n"
+	_, code = draft("automation_schreiben", map[string]any{"yaml": y})
+	text(call(t, h, "tools/call", map[string]any{"name": "automation_verwerfen", "arguments": map[string]any{"code": code}}))
+	if out, isErr := text(call(t, h, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": code}})); !isErr || store["flur_licht_aus"] != nil {
+		t.Fatalf("a dropped draft still ran: %q %v", out, store)
+	}
+	_, code = draft("automation_schreiben", map[string]any{"yaml": y})
+	if out, isErr := text(call(t, bote, "tools/call", map[string]any{"name": "automation_bestaetigen", "arguments": map[string]any{"code": code}})); !isErr || store["flur_licht_aus"] != nil {
+		t.Fatalf("the Bote's path confirmed a Werkstatt code: %q", out)
 	}
 }

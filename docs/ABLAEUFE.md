@@ -341,7 +341,8 @@ Und auf der Box-Seite zählt dieses Aufwachen als „ohne Befehl“; was gesagt 
 
 ### L-63 Der Owner richtet Automationen in der Werkstatt mit Sprache ein
 Wenn der Owner in der Werkstatt sagt „Wenn ich mein Telefon nach 23 Uhr auf den Stand lege, soll das Bürolicht ausgehen“,
-Dann zeigt ihm der Agent die Automation in Worten und einen vierstelligen Code; geändert wird Home Assistant erst, wenn der Owner den Code selbst nennt.
+Dann zeigt ihm der Agent die Automation in Worten, und der Owner bekommt einen vierstelligen Code auf Signal; geändert wird Home Assistant erst, wenn er den Code in der Werkstatt nennt. Der Agent sieht den Code nie.
+Und lässt sich der Code nicht schicken, wird nichts vorgemerkt, und der Agent sagt, warum.
 Und Lesen (welche Automationen, welche Tags) braucht keinen Code; Schreiben, Löschen, Wiederherstellen und Schalten immer.
 Und die Werkstatt hat dafür keinen eigenen Schlüssel zu Home Assistant: sie geht über Laib zum Automaten des Boten, und das Journal nennt jede bestätigte Änderung.
 

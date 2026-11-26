@@ -233,10 +233,10 @@ no app.
    #349), in its container only; Hermes never holds it. Tools: entitaeten,
    tags (HA's NFC tags by name), automationen, automation_lesen,
    automation_schreiben, automation_loeschen, automation_wiederherstellen,
-   automation_schalten, automation_bestaetigen. Every change — write,
-   delete, restore, switch (the last two since homes ADR 0004 §3) — waits
-   for the four-digit code its answer names and runs only on
-   automation_bestaetigen with it; reading needs none.
+   automation_schalten, automation_bestaetigen, automation_verwerfen. On
+   Signal a write and a delete wait for the four-digit code its answer
+   names and run only on automation_bestaetigen with it; switching and
+   restoring happen at once, as always; reading needs none.
 
    The phone as a trigger (homes ADR 0004 §1): the Homes app's reports
    reach HA as events, `person` the Homes login — a touched NFC tag as
@@ -255,9 +255,15 @@ no app.
    Automat on its second listener, `AUTOMAT_LAIB_LISTEN` (port 8646,
    published on the host's loopback only), with the bearer
    `BOTE_AUTOMAT_TOKEN` (generated on add). Hermes keeps 8643 inside the
-   pod without one. The Werkstatt holds no HA token and no Automat token;
-   the code is the same, said by the owner in the conversation, and the
-   journal names each confirmed change and its caller.
+   pod without one. The Werkstatt holds no HA token and no Automat token.
+   On this listener every change waits for a code, switching and
+   restoring too, and the code is never in the answer: the Automat hands
+   it to laib-haushalt apart, laib-haushalt sends it to the owner
+   (box.yml `notify.person`) through bote-notify, and the agent only
+   hears „Ich habe dir den Code auf Signal geschickt“. The owner says it
+   in the conversation; if it cannot be sent, the draft is dropped
+   (`automation_verwerfen`). The journal names each confirmed change and
+   its caller (laib#1284).
 
 6. Messages to people (ADR 0022 §3, #177): declare the household in
    box.yml `people` (`mama: ["signal:+49…", "telegram:<chat id>"]`,

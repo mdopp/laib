@@ -25,10 +25,11 @@ var automatTools = map[string]string{"entitaeten": "entitaeten", "tags": "tags",
 // cmdAutomat: `laib automat <aktion> [--id i] [--yaml y | stdin] [--domain d]
 // [--suche s] [--code c]` (homes ADR 0004 §3): Home Assistant's automations
 // for the Werkstatt, through the Bote's Automat, which keeps its HA token;
-// the Werkstatt holds none. Reading answers at once; every change answers
-// with the Automat's four-digit code and happens only on bestaetigen with
-// it, which the person says in the conversation — the agent never confirms
-// on its own. The journal names each confirmed change and who confirmed it.
+// the Werkstatt holds none. Reading answers at once; every change is drafted
+// with a four-digit code that goes to box.yml notify.person through
+// bote-notify and never into the answer, so the agent cannot know it
+// (laib#1284); it happens only on bestaetigen with the code the person
+// says. The journal names each confirmed change and who confirmed it.
 func cmdAutomat(ctx context.Context, env *Env, args []string) int {
 	usage := errors.New("usage: laib automat entitaeten [--domain d] [--suche s] | tags | automationen | lesen|loeschen|wiederherstellen|einschalten|ausschalten --id <id> | schreiben [--id <id>] --yaml <yaml> (or on stdin) | bestaetigen --code <vier Ziffern>")
 	if len(args) == 0 || automatTools[args[0]] == "" {
@@ -56,6 +57,10 @@ func cmdAutomat(ctx context.Context, env *Env, args []string) int {
 	if act == "einschalten" || act == "ausschalten" {
 		a["an"] = act == "einschalten"
 	}
+	change := !slices.Contains([]string{"entitaeten", "tags", "automationen", "lesen", "bestaetigen"}, act)
+	if change && (env.Person == "" || env.Bote.URL == "" || env.Bote.Token == "") {
+		return env.refused("Nichts vorgemerkt: ich kann dir den Code nicht schicken, in box.yml notify.person steht niemand mit einem Kanal des Boten.")
+	}
 	text, isErr, err := env.Bote.automat(ctx, automatTools[act], a)
 	switch {
 	case err != nil:
@@ -64,11 +69,35 @@ func cmdAutomat(ctx context.Context, env *Env, args []string) int {
 		return env.refused(text)
 	case act == "bestaetigen":
 		env.journal("bote", "", "automat: "+strings.SplitN(text, "\n", 2)[0])
-	case strings.HasPrefix(text, "Vorgemerkt"):
-		text += "\nDen Code nennt die Person selbst im Gespräch; bestaetigen nie von dir aus."
+	case change:
+		return env.sendCode(ctx, text)
 	}
 	fmt.Fprintln(env.Out, text)
 	return exitOK
+}
+
+// sendCode: a change's draft is {text, code} (automat.Config.Laib). The
+// code goes to the person on their channel, never into the answer; if it
+// cannot go, the draft is dropped (laib#1284).
+func (e *Env) sendCode(ctx context.Context, draft string) int {
+	var d struct{ Text, Code string }
+	if json.Unmarshal([]byte(draft), &d) != nil || d.Code == "" {
+		return e.refused("Nichts vorgemerkt: der Automat antwortet nicht in der Form, in der der Code bei dir statt hier ankommt.")
+	}
+	msg := fmt.Sprintf("Code %s für die Werkstatt: %s Nenn ihn dort, wenn es so sein soll; er gilt zehn Minuten.", d.Code, strings.SplitN(d.Text, "\n", 2)[0])
+	kanal, status, err := e.Bote.send(ctx, e.Person, msg)
+	if err != nil || status != http.StatusOK {
+		e.Bote.automat(ctx, "automation_verwerfen", map[string]any{"code": d.Code})
+		return e.refused(fmt.Sprintf("Nichts vorgemerkt: der Code ließ sich %s nicht schicken (Bote: %s).", e.Person, cmp.Or(http.StatusText(status), "antwortet nicht")))
+	}
+	e.journal("bote", "", "automat: Code an "+e.Person+" über "+kanal)
+	fmt.Fprintf(e.Out, "%s\nIch habe dir den Code auf %s geschickt. Sag ihn mir, dann speichere ich.\n", d.Text, kanalName(kanal))
+	return exitOK
+}
+
+// kanalName is bote-notify's channel as a person says it.
+func kanalName(k string) string {
+	return cmp.Or(map[string]string{"signal": "Signal", "telegram": "Telegram", "matrix": "Matrix", "discord": "Discord"}[k], k, "deinem Kanal")
 }
 
 // automat calls one of the Automat's MCP tools with its bearer and

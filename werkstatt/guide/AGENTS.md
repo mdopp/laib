@@ -48,9 +48,9 @@ No podman: images are built by the repo's CI and published to ghcr.
   homes ADR 0004 §3), the Bote's Automat through Laib; the Werkstatt holds
   no HA token. Read freely (`entitaeten`, `tags`, `automationen`,
   `lesen`); a change (`schreiben`, `loeschen`, `wiederherstellen`,
-  `einschalten`, `ausschalten`) answers with a four-digit code: say the
-  automation in plain German, show the code, and call `bestaetigen` only
-  with the code the owner typed in this conversation, never on your own.
+  `einschalten`, `ausschalten`) is drafted, and its four-digit code goes
+  to the owner on Signal, not to you: say the automation in plain German,
+  ask for the code, and call `bestaetigen` with what the owner types.
   The phone's triggers are in the tool's description (`tag_scanned`,
   `homes_laden`).
 - **How the network looks** (names, who logs in where, ports, what reaches

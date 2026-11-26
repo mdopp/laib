@@ -2,7 +2,7 @@
 // (#26): list, read, write, delete, switch — over HA's REST API, served as
 // MCP on loopback inside the bote pod; with AUTOMAT_LAIB_LISTEN also for
 // laib-haushalt, Laib's way for the Werkstatt (homes ADR 0004 §3), behind
-// the bearer AUTOMAT_TOKEN.
+// the bearer AUTOMAT_TOKEN, in Werkstatt mode (automat.Config.Laib).
 package main
 
 import (
@@ -32,8 +32,11 @@ func main() {
 	log.Printf("automat: listening on %s, home assistant %s", addr, cfg.HAURL)
 	hs := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	if laib := os.Getenv("AUTOMAT_LAIB_LISTEN"); laib != "" {
-		// the same tools and the same codes, published on the host's loopback: only with the bearer
-		bearer := *srv
+		// the Werkstatt's (laib#1284): every change waits for a code that goes to the person, never in
+		// the answer; published on the host's loopback, only with the bearer; its codes are its own
+		lcfg := cfg
+		lcfg.Laib = true
+		bearer := automat.Server(lcfg, Version)
 		if bearer.Token = os.Getenv("AUTOMAT_TOKEN"); bearer.Token == "" {
 			log.Fatal("automat: AUTOMAT_LAIB_LISTEN needs AUTOMAT_TOKEN")
 		}

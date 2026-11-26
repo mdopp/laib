@@ -40,6 +40,7 @@ type Call struct {
 	TZ      string       `json:"tz,omitempty"`      // box.yml timezone (#1234)
 	Auftrag string       `json:"auftrag,omitempty"` // the way to the verb's kernel part, as the caller (#1234)
 	Stdin   string       `json:"stdin,omitempty"`   // laib calendar subscribe's address, one line (#1234)
+	Person  string       `json:"person,omitempty"`  // box.yml notify.person: whom laib automat sends its code to (laib#1284)
 	Scan    *ScanService `json:"scan,omitempty"`
 	Zuhause *Zuhause     `json:"zuhause,omitempty"` // box.yml zuhause, for laib zuhause (#677)
 	Intake  *Intake      `json:"intake,omitempty"`  // box.yml intake, for laib wish (#797)

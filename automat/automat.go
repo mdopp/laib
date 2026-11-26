@@ -32,6 +32,11 @@ type Config struct {
 	HAURL string // http://host.containers.internal:8123
 	Token string // long-lived access token
 	Data  string // where deleted automations are kept for restore (#48)
+	// Laib: the Werkstatt's listener (homes ADR 0004 §3, laib#1284). Every
+	// change waits for a code, restore and switch too, and a draft answers
+	// JSON {text, code}: laib-haushalt sends the code to the person and
+	// hands the agent only the text, so the model never sees it.
+	Laib bool
 }
 
 type client struct {
@@ -43,8 +48,9 @@ type client struct {
 }
 
 // pendingChange is a change waiting for its code (#48): the model shows
-// it, the person confirms, only then does Home Assistant change. Since
-// homes ADR 0004 §3 every change waits: write, delete, restore and switch.
+// it, the person confirms, only then does Home Assistant change. On the
+// Bote's path write and delete wait; on the Werkstatt's (Config.Laib) every
+// change does, restore and switch too (homes ADR 0004 §3).
 type pendingChange struct {
 	Kind    string // write | delete | restore | switch
 	ID      string
@@ -191,7 +197,7 @@ func Server(cfg Config, version string) *mcpserver.Server {
 	}
 	return &mcpserver.Server{
 		Name: "automat", Version: version,
-		Instructions: "Automationen in Home Assistant lesen, anlegen, ändern, schalten, löschen. Schreiben, Löschen, Wiederherstellen und Schalten passieren nie sofort: die Antwort nennt einen vierstelligen Code; zeige der Person, was passieren würde, und rufe automation_bestaetigen erst, wenn sie den Code selbst genannt hat — nie von dir aus. Die id ist ein Slug (flur_licht_aus). Jede geschriebene Automation trägt 'laib:' in der Beschreibung. " + PhoneTriggers,
+		Instructions: "Automationen in Home Assistant lesen, anlegen, ändern, schalten, löschen. Schreiben und Löschen passieren nie sofort: die Antwort nennt einen vierstelligen Code; zeige der Person, was passieren würde, und rufe automation_bestaetigen erst, wenn sie den Code selbst genannt hat — nie von dir aus. Die id ist ein Slug (flur_licht_aus). Jede geschriebene Automation trägt 'laib:' in der Beschreibung. " + PhoneTriggers,
 		Tools: []mcpserver.Tool{
 			{Name: "entitaeten", Description: "Entitäten von Home Assistant: id, Name, Zustand. Filter: domain (light, switch, media_player, binary_sensor, person …) und/oder suche (Teil des Namens oder der id).",
 				Schema: obj(map[string]any{"domain": map[string]any{"type": "string"}, "suche": map[string]any{"type": "string"}}),
@@ -294,9 +300,8 @@ func Server(cfg Config, version string) *mcpserver.Server {
 						cfg["description"] = strings.TrimSpace("laib: über den Boten angelegt. " + desc)
 					}
 					cfg["id"] = id
-					code := c.keep(pendingChange{Kind: "write", ID: id, Alias: alias, Config: cfg})
 					y, _ := yaml.Marshal(cfg)
-					return fmt.Sprintf("Vorgemerkt, noch nicht geschrieben: %s (%s). Das wird angelegt:\n%s\nZum Ausführen den Code %s bestätigen (automation_bestaetigen). Gilt zehn Minuten.", alias, id, string(y), code), nil
+					return c.draft(pendingChange{Kind: "write", ID: id, Alias: alias, Config: cfg}, fmt.Sprintf("Vorgemerkt, noch nicht geschrieben: %s (%s). Das wird angelegt:\n%s", alias, id, string(y))), nil
 				}},
 			{Name: "automation_loeschen", Description: "Automation löschen (id). Wird erst mit dem Code ausgeführt, den diese Antwort nennt; die alte Automation bleibt zum Wiederherstellen aufgehoben.",
 				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}}, "id"),
@@ -315,26 +320,43 @@ func Server(cfg Config, version string) *mcpserver.Server {
 					var cfg map[string]any
 					json.Unmarshal(b, &cfg)
 					alias, _ := cfg["alias"].(string)
-					conf := c.keep(pendingChange{Kind: "delete", ID: id, Alias: alias, Config: cfg})
-					return fmt.Sprintf("Vorgemerkt, noch nicht gelöscht: %s (%s). Zum Löschen den Code %s bestätigen (automation_bestaetigen); automation_wiederherstellen %s holt sie danach zurück.", alias, id, conf, id), nil
+					return c.draft(pendingChange{Kind: "delete", ID: id, Alias: alias, Config: cfg}, fmt.Sprintf("Vorgemerkt, noch nicht gelöscht: %s (%s); automation_wiederherstellen %s holt sie danach zurück.", alias, id, id)), nil
 				}},
-			{Name: "automation_bestaetigen", Description: "Führt eine vorgemerkte Änderung aus: der vierstellige Code aus der Antwort von automation_schreiben, automation_loeschen, automation_wiederherstellen oder automation_schalten, wie die Person ihn genannt hat. Nie mit einem Code aufrufen, den die Person nicht selbst gesagt hat.",
+			{Name: "automation_bestaetigen", Description: "Führt eine vorgemerkte Änderung aus: der vierstellige Code aus der Antwort von automation_schreiben oder automation_loeschen, wie die Person ihn genannt hat. Nie mit einem Code aufrufen, den die Person nicht selbst gesagt hat.",
 				Schema: obj(map[string]any{"code": map[string]any{"type": "string"}}, "code"),
 				Call:   func(ctx context.Context, a map[string]any) (string, error) { return c.confirm(ctx, str(a, "code")) }},
-			{Name: "automation_wiederherstellen", Description: "Holt eine gelöschte Automation zurück (id). Wird erst mit dem Code ausgeführt, den diese Antwort nennt.",
+			{Name: "automation_wiederherstellen", Description: "Holt eine gelöschte Automation zurück (id).",
 				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}}, "id"),
-				Call:   func(ctx context.Context, a map[string]any) (string, error) { return c.restore(str(a, "id")) }},
-			{Name: "automation_schalten", Description: "Automation an- oder ausschalten (entity_id automation.<id>, an: true/false). Wird erst mit dem Code ausgeführt, den diese Antwort nennt.",
+				Call:   func(ctx context.Context, a map[string]any) (string, error) { return c.restore(ctx, str(a, "id")) }},
+			{Name: "automation_schalten", Description: "Automation an- oder ausschalten (entity_id automation.<id>, an: true/false).",
 				Schema: obj(map[string]any{"id": map[string]any{"type": "string"}, "an": map[string]any{"type": "boolean"}}, "id", "an"),
 				Call: func(ctx context.Context, a map[string]any) (string, error) {
 					on, _ := a["an"].(bool)
-					return c.switchLater(str(a, "id"), on)
+					return c.switchAutomation(ctx, str(a, "id"), on)
 				}},
 			{Name: "tags", Description: "Die NFC-Tags aus Home Assistants Tag-Liste: id · Name (benannt in der Homes-App). " + PhoneTriggers,
 				Schema: obj(map[string]any{}),
 				Call:   func(ctx context.Context, a map[string]any) (string, error) { return c.tags(ctx) }},
+			{Name: "automation_verwerfen", Description: "Verwirft eine vorgemerkte Änderung (code), ohne sie auszuführen.",
+				Schema: obj(map[string]any{"code": map[string]any{"type": "string"}}, "code"),
+				Call: func(ctx context.Context, a map[string]any) (string, error) {
+					c.take(str(a, "code"))
+					return "verworfen", nil
+				}},
 		},
 	}
+}
+
+// draft keeps p for its code. On the Bote's path the answer names the
+// code; on the Werkstatt's it is JSON {text, code} for laib-haushalt, which
+// sends the code to the person and never hands it to the agent.
+func (c *client) draft(p pendingChange, text string) string {
+	code := c.keep(p)
+	if c.cfg.Laib {
+		b, _ := json.Marshal(map[string]string{"text": text, "code": code})
+		return string(b)
+	}
+	return fmt.Sprintf("%s\nZum Ausführen den Code %s bestätigen (automation_bestaetigen). Gilt zehn Minuten.", text, code)
 }
 
 // PhoneTriggers is how the Homes app's reports reach HA (homes ADR 0004
@@ -347,6 +369,11 @@ func (c *client) confirm(ctx context.Context, code string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("kein vorgemerkter Vorgang mit diesem Code (oder älter als zehn Minuten)")
 	}
+	return c.run(ctx, p)
+}
+
+// run makes the change p in Home Assistant.
+func (c *client) run(ctx context.Context, p pendingChange) (string, error) {
 	path := "/api/config/automation/config/" + url.PathEscape(p.ID)
 	switch p.Kind {
 	case "write", "restore":
@@ -372,8 +399,9 @@ func (c *client) confirm(ctx context.Context, code string) (string, error) {
 	return "", fmt.Errorf("unbekannter Vorgang")
 }
 
-// restore keeps a deleted automation's saved config for its code.
-func (c *client) restore(id string) (string, error) {
+// restore brings a deleted automation back: at once on the Bote's path,
+// for its code on the Werkstatt's.
+func (c *client) restore(ctx context.Context, id string) (string, error) {
 	if !idRe.MatchString(id) {
 		return "", fmt.Errorf("id %q: nur a-z, 0-9, _", id)
 	}
@@ -389,18 +417,24 @@ func (c *client) restore(id string) (string, error) {
 		return "", err
 	}
 	alias, _ := cfg["alias"].(string)
-	code := c.keep(pendingChange{Kind: "restore", ID: id, Alias: alias, Config: cfg})
-	return fmt.Sprintf("Vorgemerkt, noch nicht wiederhergestellt: %s (%s). Zum Ausführen den Code %s bestätigen (automation_bestaetigen). Gilt zehn Minuten.", alias, id, code), nil
+	p := pendingChange{Kind: "restore", ID: id, Alias: alias, Config: cfg}
+	if !c.cfg.Laib {
+		return c.run(ctx, p)
+	}
+	return c.draft(p, fmt.Sprintf("Vorgemerkt, noch nicht wiederhergestellt: %s (%s).", alias, id)), nil
 }
 
-// switchLater keeps switching an automation on or off for its code.
-func (c *client) switchLater(id string, on bool) (string, error) {
+// switchAutomation switches an automation on or off: at once on the Bote's
+// path, for its code on the Werkstatt's.
+func (c *client) switchAutomation(ctx context.Context, id string, on bool) (string, error) {
 	if !idRe.MatchString(id) {
 		return "", fmt.Errorf("id %q: nur a-z, 0-9, _", id)
 	}
-	word := map[bool]string{true: "einschalten", false: "ausschalten"}[on]
-	code := c.keep(pendingChange{Kind: "switch", ID: id, On: on})
-	return fmt.Sprintf("Vorgemerkt, noch nicht geschaltet: automation.%s %s. Zum Ausführen den Code %s bestätigen (automation_bestaetigen). Gilt zehn Minuten.", id, word, code), nil
+	p := pendingChange{Kind: "switch", ID: id, On: on}
+	if !c.cfg.Laib {
+		return c.run(ctx, p)
+	}
+	return c.draft(p, fmt.Sprintf("Vorgemerkt, noch nicht geschaltet: automation.%s %s.", id, map[bool]string{true: "einschalten", false: "ausschalten"}[on])), nil
 }
 
 // tags is HA's tag registry by name (tag/list): an entry names its id

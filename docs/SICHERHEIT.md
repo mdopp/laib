@@ -258,7 +258,7 @@ Nur die Namen, aus `secrets:` jeder `laib.yml`; die Werte liegen nur in `secrets
 - schlagen vor, wenden nur im Rahmen ihrer Stufe an
 - private Dienste: Einblick-Karte, eine Stunde, je Dienst
 - Tresor: nie
-- Automationen in Home Assistant (claude, pi): nur über laib automat zum Automaten des Boten, ohne eigenen Schlüssel; jede Änderung erst mit dem Code, den der Besitzer im Gespräch nennt (homes ADR 0004 §3). Der Code steht in der Antwort des Werkzeugs: er hält das Modell an, sperrt es nicht; das Journal nennt jede bestätigte Änderung und die Hand
+- Automationen in Home Assistant (claude, pi): nur über laib automat zum Automaten des Boten, ohne eigenen Schlüssel; jede Änderung erst mit dem Code, den der Besitzer im Gespräch nennt (homes ADR 0004 §3). Der Code geht über den Boten an den Besitzer (notify.person), nie in die Antwort: das Modell sieht ihn nicht und kann sich nicht selbst bestätigen; geht er nicht hinaus, wird nichts vorgemerkt (#1284). Das Journal nennt jede bestätigte Änderung und die Hand
 - geplant: Auftrag mit Rahmen statt Einblick plus Budget (#1237)
 
 ### Ausnahmen: Host-Netz und Label aus (#1166)
@@ -356,7 +356,7 @@ Je Vorlage: `archiv` 4, `bote` 5, `frage` 1, `homes` 13, `kalender` 1, `scan` 7.
 | Homes wird übernommen | der Angreifer hat Homes' Dienstkonten (meist lesend) und Homes' Hand (vorschlagen, nicht freigeben); keine Tresore, kein Host (nach |
 | ein Archiv-Programm hat einen Fehler | nur seine Bereiche, nur solange die Person den Tresor offen hat; Nachrichten bleiben für den Stammbaum unerreichbar |
 | eine Registry oder ein Changelog ist manipuliert | der Updater liefert höchstens falsche Angaben; der Kern fragt nie selbst im Netz und prüft Prüfsumme und Signatur vor dem Vorschlag und noch einmal vor dem Einspielen selbst (#1233) |
-| laib-haushalt wird übernommen | es schlägt vor wie bisher; einen Kern-Teil erreicht es nur mit dem Auftrag eines echten Aufrufs, also höchstens, was dieser Aufrufer in diesem Aufruf durfte (ein Admin-Konto nur, wenn ein Mensch es anlegt); eine Kalender-Adresse sieht es, während sie abonniert wird (#1234); mit dem Schlüssel des Automaten kann es Automationen in Home Assistant anlegen, ändern und schalten (den Code liest es in der Antwort), aber nicht mit Home Assistants eigenem Schlüssel (homes ADR 0004 §3) |
+| laib-haushalt wird übernommen | es schlägt vor wie bisher; einen Kern-Teil erreicht es nur mit dem Auftrag eines echten Aufrufs, also höchstens, was dieser Aufrufer in diesem Aufruf durfte (ein Admin-Konto nur, wenn ein Mensch es anlegt); eine Kalender-Adresse sieht es, während sie abonniert wird (#1234); mit dem Schlüssel des Automaten kann es Automationen in Home Assistant anlegen, ändern und schalten (den Code bekommt es vom Automaten, bevor es ihn dem Besitzer schickt), aber nicht mit Home Assistants eigenem Schlüssel (homes ADR 0004 §3) |
 | ein Agent irrt sich | er kann nur vorschlagen oder im Budget anwenden; jede Änderung hat einen Snapshot und läuft zurück, wenn sie rot wird |
 | jemand stiehlt die Box | Tresore bleiben verschlüsselt; die übrigen Daten liegen unverschlüsselt auf der Platte (Lücke, |
 
