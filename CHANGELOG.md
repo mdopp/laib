@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.37.0](https://github.com/mdopp/laib/compare/v2.36.0...v2.37.0) (2026-11-27)
+
+
+### Features
+
+* **template:** homes lets Android fetch assetlinks.json without a login (homes ADR 0004 §5) ([#1288](https://github.com/mdopp/laib/issues/1288)) ([eb77a5d](https://github.com/mdopp/laib/commit/eb77a5d3fd9b485d3d60048e58b1102e5097dfe9))
+
 ## [2.36.0](https://github.com/mdopp/laib/compare/v2.35.2...v2.36.0) (2026-11-26)
 
 
