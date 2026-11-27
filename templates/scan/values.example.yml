@@ -24,3 +24,7 @@ HAUSHALT_URL: http://127.0.0.1:8650/mcp/haushalt  # Homes' Haushalt, from the ho
 HAUSHALT_TOKEN: !secret HOMES_HAUSHALT_TOKEN
 HAUSHALT_NAMEN: ""                                # #737: the household's people without a Paperless login, "Vorname Nachname", comma-separated
 DOKUMENTE_WEBHOOK_TOKEN: !secret DOKUMENTE_WEBHOOK_TOKEN   # Paperless' workflow sends it; empty: the hourly run only
+# the scanner as a device in Home Assistant (homes ADR 0004 §6): scan-mqtt.py in a stock Python image, the standard library only
+MQTT_IMAGE: docker.io/library/python:3.13-alpine
+MQTT_HOST: host.containers.internal               # Mosquitto's 1883, published beyond loopback
+SCAN_MQTT_PASSWORD: !secret SCAN_MQTT_PASSWORD    # the broker login scan, minted by mosquitto's post-deploy; empty: no device in HA

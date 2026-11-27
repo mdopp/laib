@@ -7,33 +7,49 @@
 # computed here; a line that still matches the password is kept, so an apply
 # that changed nothing changes nothing. The password reaches python through
 # the environment, never argv (#214). SIGHUP to the broker (PID 1) reloads.
+#
+# Two logins: MQTT_USER (Home Assistant and the house's devices) and `scan`,
+# the scan service's bridge to Home Assistant (homes ADR 0004 §6). Its
+# password is minted here, as Home Assistant mints Homes's token (#349): a
+# new one is handed back as SCAN_MQTT_PASSWORD, and the scan service, which
+# declares it, is applied again with it. It exists whether or not scan is
+# installed, like HA's tokens; nobody but secrets.age holds it then.
 set -euo pipefail
 C="$LAIB_DATA_DIR/mosquitto/config"
 (umask 077; python3 - "$C/passwd" <<'PY'
-import base64, hashlib, os, sys
-path, user, pw = sys.argv[1], os.environ["MQTT_USER"], os.environ["LAIB_SECRET_MQTT_PASSWORD"]
+import base64, hashlib, os, secrets, sys
+path = sys.argv[1]
+scan = os.environ.get("LAIB_SECRET_SCAN_MQTT_PASSWORD", "")
+if not scan:
+    scan = secrets.token_urlsafe(32)
+    print("laib-secret: SCAN_MQTT_PASSWORD=" + scan)   # stored in secrets.age, never printed again
+want = {os.environ["MQTT_USER"]: os.environ["LAIB_SECRET_MQTT_PASSWORD"], "scan": scan}
 
-def matches(h):
+def matches(h, pw):
     p = h.split("$")
     if len(p) != 5 or p[1] != "7":
         return False
-    salt, want = base64.b64decode(p[3]), base64.b64decode(p[4])
-    return hashlib.pbkdf2_hmac("sha512", pw.encode(), salt, int(p[2]), len(want)) == want
+    salt, hashed = base64.b64decode(p[3]), base64.b64decode(p[4])
+    return hashlib.pbkdf2_hmac("sha512", pw.encode(), salt, int(p[2]), len(hashed)) == hashed
+
+def line(user, pw):
+    salt = os.urandom(12)
+    h = hashlib.pbkdf2_hmac("sha512", pw.encode(), salt, 101, 64)
+    return f"{user}:$7$101${base64.b64encode(salt).decode()}${base64.b64encode(h).decode()}"
 
 try:
     old = open(path).read().splitlines()
 except FileNotFoundError:
     old = []
-mine = [l for l in old if l.partition(":")[0] == user]
-if len(mine) == 1 and matches(mine[0].partition(":")[2]) and all(l.partition(":")[2].startswith("$7$") for l in old):
+hashes = [l for l in old if l.partition(":")[2].startswith("$7$")]   # any line that is no hash goes (it would stop the broker)
+users = {u: [l for l in hashes if l.partition(":")[0] == u] for u in want}
+if len(hashes) == len(old) and all(len(m) == 1 and matches(m[0].partition(":")[2], want[u]) for u, m in users.items()):
     sys.exit(0)
-salt = os.urandom(12)
-h = hashlib.pbkdf2_hmac("sha512", pw.encode(), salt, 101, 64)
-line = f"{user}:$7$101${base64.b64encode(salt).decode()}${base64.b64encode(h).decode()}"
-# other users' hashes stay; any line that is no hash goes (it would stop the broker)
-keep = [l for l in old if l.partition(":")[0] != user and l.partition(":")[2].startswith("$7$")]
+# other users' hashes stay; each of ours is kept while it matches, else made again
+keep = [l for l in hashes if l.partition(":")[0] not in want]
+mine = [m[0] if len(m) == 1 and matches(m[0].partition(":")[2], want[u]) else line(u, want[u]) for u, m in users.items()]
 with open(path + ".tmp", "w") as f:
-    f.write("".join(l + "\n" for l in keep + [line]))
+    f.write("".join(l + "\n" for l in keep + mine))
 os.replace(path + ".tmp", path)
 PY
 )
@@ -42,4 +58,4 @@ chmod 600 "$C/passwd"
 # (#524, pre-start)
 chown 1883:1883 "$C/passwd"
 echo "laib-exec: systemd-mosquitto kill -HUP 1"
-echo "mosquitto passwd holds the hash for $MQTT_USER; the broker reloads it"
+echo "mosquitto passwd holds the hashes for $MQTT_USER and scan; the broker reloads it"

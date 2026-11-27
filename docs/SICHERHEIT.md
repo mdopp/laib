@@ -202,12 +202,12 @@ Nur die Namen, aus `secrets:` jeder `laib.yml`; die Werte liegen nur in `secrets
 | `kalender` | — | `KALENDER_ABOS` (kann fehlen), `KALENDER_RADICALE_PASSWORD` |
 | `llama` | `MODEL_API_KEY` | `LLAMA_LAIB_TOKEN` (Token der Hand `lease`) |
 | `media` | `JELLYFIN_ADMIN_PASSWORD` | `JELLYFIN_LDAP_PASSWORD`, `ABS_MA_TOKEN` (kann fehlen), `HA_MUSIC_ASSISTANT_TOKEN` (kann fehlen), `HOMES_JELLYFIN_TOKEN` (kann fehlen), `HOMES_JELLYFIN_KEY` (kann fehlen), `JELLYFIN_HA_PASSWORD` (trägt der Besitzer ein, kann fehlen) |
-| `mosquitto` | `MQTT_PASSWORD` | — |
+| `mosquitto` | `MQTT_PASSWORD` | `SCAN_MQTT_PASSWORD` (kann fehlen) |
 | `music-assistant` | `MA_ADMIN_PASSWORD`, `JELLYFIN_MA_PASSWORD` | `JELLYFIN_ADMIN_PASSWORD` (kann fehlen), `ABS_MA_TOKEN` (kann fehlen), `HA_MUSIC_ASSISTANT_TOKEN` (kann fehlen) |
 | `paperless` | `PAPERLESS_DB_PASSWORD`, `PAPERLESS_SECRET_KEY`, `PAPERLESS_ADMIN_PASSWORD`, `PAPERLESS_DOKUMENTE_PASSWORD`, `PAPERLESS_HOMES_PASSWORD`, `DOKUMENTE_WEBHOOK_TOKEN` | `PAPERLESS_TOKEN` (kann fehlen), `HOMES_PAPERLESS_TOKEN` (kann fehlen), `PAPERLESS_MAIL_PASSWORD` (trägt der Besitzer ein, kann fehlen), `BOTE_NOTIFY_TOKEN` (kann fehlen) |
 | `radicale` | — | `RADICALE_LDAP_PASSWORD` |
 | `reitti` | `REITTI_DB_PASSWORD` | — |
-| `scan` | — | `BOTE_NOTIFY_TOKEN` (kann fehlen), `PAPERLESS_TOKEN` (kann fehlen), `DOKUMENTE_WEBHOOK_TOKEN` (kann fehlen), `HOMES_HAUSHALT_TOKEN` (kann fehlen) |
+| `scan` | — | `BOTE_NOTIFY_TOKEN` (kann fehlen), `PAPERLESS_TOKEN` (kann fehlen), `DOKUMENTE_WEBHOOK_TOKEN` (kann fehlen), `HOMES_HAUSHALT_TOKEN` (kann fehlen), `SCAN_MQTT_PASSWORD` (kann fehlen) |
 | `stimme` | — | `STIMME_HA_TOKEN` (kann fehlen) |
 | `usage-metrics` | `USAGE_METRICS_TOKEN` | — |
 | `vaultwarden` | `VAULTWARDEN_ADMIN_TOKEN` | `VAULTWARDEN_LDAP_PASSWORD` |
@@ -357,6 +357,7 @@ Je Vorlage: `archiv` 4, `bote` 5, `frage` 1, `homes` 13, `kalender` 1, `scan` 7.
 | ein Archiv-Programm hat einen Fehler | nur seine Bereiche, nur solange die Person den Tresor offen hat; Nachrichten bleiben für den Stammbaum unerreichbar |
 | eine Registry oder ein Changelog ist manipuliert | der Updater liefert höchstens falsche Angaben; der Kern fragt nie selbst im Netz und prüft Prüfsumme und Signatur vor dem Vorschlag und noch einmal vor dem Einspielen selbst (#1233) |
 | laib-haushalt wird übernommen | es schlägt vor wie bisher; einen Kern-Teil erreicht es nur mit dem Auftrag eines echten Aufrufs, also höchstens, was dieser Aufrufer in diesem Aufruf durfte (ein Admin-Konto nur, wenn ein Mensch es anlegt); eine Kalender-Adresse sieht es, während sie abonniert wird (#1234); mit dem Schlüssel des Automaten kann es Automationen in Home Assistant anlegen, ändern und schalten (den Code bekommt es vom Automaten, bevor es ihn dem Besitzer schickt), aber nicht mit Home Assistants eigenem Schlüssel (homes ADR 0004 §3) |
+| der Scanner in Home Assistant (scan-mqtt) wird übernommen | er meldet sich bei Mosquitto mit seiner eigenen Anmeldung `scan` an (Mosquitto erzeugt das Passwort, homes ADR 0004 §6); weil Mosquitto keine Regeln je Anmeldung hat, kann er jedes Thema lesen und senden, auch das der Geräte (Lücke, |
 | ein Agent irrt sich | er kann nur vorschlagen oder im Budget anwenden; jede Änderung hat einen Snapshot und läuft zurück, wenn sie rot wird |
 | jemand stiehlt die Box | Tresore bleiben verschlüsselt; die übrigen Daten liegen unverschlüsselt auf der Platte (Lücke, |
 
@@ -384,6 +385,11 @@ Je Vorlage: `archiv` 4, `bote` 5, `frage` 1, `homes` 13, `kalender` 1, `scan` 7.
 **WhatsApp-Medien bei Wiederherstellung** · **Lücke** ([#1250](https://github.com/mdopp/laib/issues/1250))
 
 - laufen aus dem offenen Tresor im Klartext durch Homes aufs neue Handy
+
+**Mosquitto ohne Regeln je Anmeldung** · **Lücke** ([#1286](https://github.com/mdopp/laib/issues/1286))
+
+- jede Anmeldung (Home Assistant und die Geräte, der Scanner `scan`) darf jedes Thema lesen und senden
+- geplant: eine ACL, `scan` nur homeassistant/+/laib-scan/# und laib/scan/#
 
 **Agenten mit Daueraufträgen** · offen ([#1237](https://github.com/mdopp/laib/issues/1237))
 

@@ -42,6 +42,7 @@ class Box:
         # the hooks image runs as root over the broker's uids; here chown is recorded
         (self.bin / "chown").write_text(f"#!/bin/sh\necho \"$@\" >> {self.root / 'chown.log'}\n")
         (self.bin / "chown").chmod(0o755)
+        self.handed = {}        # what a hook handed back (laib-secret:), stored in secrets.age and in the next hook's env
         self.broker = None      # the users the running broker knows: user → hash
         self.execs = []         # every argv laib handed to podman exec
         self.events = []
@@ -54,11 +55,15 @@ class Box:
             return ""
         env = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", LAIB_SERVICE="mosquitto", LAIB_PHASE=phase,
                    LAIB_DATA_DIR=str(self.data), LAIB_DOMAIN="vm.test", IMAGE="docker.io/library/eclipse-mosquitto:2",
-                   MQTT_USER=USER, MQTT_PW=PW, LAIB_SECRET_MQTT_PASSWORD=PW)
+                   MQTT_USER=USER, MQTT_PW=PW, LAIB_SECRET_MQTT_PASSWORD=PW,
+                   LAIB_SECRET_SCAN_MQTT_PASSWORD=self.handed.get("SCAN_MQTT_PASSWORD", ""))
         p = subprocess.run(["bash", str(path)], env=env, cwd=HERE, capture_output=True, text=True, timeout=60)
         if p.returncode != 0:
             raise AssertionError(f"{phase} exited {p.returncode} in the hooks image:\n{p.stdout}{p.stderr}")
         for line in p.stdout.splitlines():
+            if line.startswith("laib-secret: "):
+                k, _, v = line[len("laib-secret: "):].partition("=")
+                self.handed[k] = v
             if line.startswith("laib-exec: "):
                 self.laib_exec(line[len("laib-exec: "):].split())
         return p.stdout
@@ -138,6 +143,31 @@ class Hooks(unittest.TestCase):
         self.box.apply(first=False)   # nothing changed: post-deploy only
         self.assert_broker_takes_the_password()
         self.assertEqual((self.box.cfg / "passwd").read_text(), before, "a hash that still matches is rewritten")
+
+    def test_the_scan_bridge_gets_a_login_of_its_own_minted_once(self):
+        # homes ADR 0004 §6: scan-mqtt logs in as `scan`; its password is minted here and handed back
+        out = self.box.apply(first=True)
+        scan = self.box.handed.get("SCAN_MQTT_PASSWORD", "")
+        self.assertGreaterEqual(len(scan), 32, out)
+        self.assertTrue(verifies(self.box.broker.get("scan", ""), scan), self.box.broker)
+        self.assert_broker_takes_the_password()
+        self.assertEqual(out.count("laib-secret:"), 1)
+        before = (self.box.cfg / "passwd").read_text()
+        again = self.box.apply(first=False)
+        self.assertNotIn("laib-secret:", again, "a second apply minted another password")
+        self.assertEqual((self.box.cfg / "passwd").read_text(), before)
+        self.assertNotIn(scan, before)
+
+    def test_another_users_hash_stays_and_a_stale_scan_hash_is_made_again(self):
+        self.box.apply(first=True)
+        passwd = self.box.cfg / "passwd"
+        other = "tuer:$7$101$" + base64.b64encode(b"x" * 12).decode() + "$" + base64.b64encode(b"y" * 64).decode()
+        lines = [l for l in passwd.read_text().splitlines() if not l.startswith("scan:")]
+        passwd.write_text("\n".join(lines + [other, "scan:$7$101$AAAA$BBBB"]) + "\n")
+        self.box.apply(first=False)
+        self.assertIn(other, passwd.read_text().splitlines())
+        self.assertTrue(verifies(self.box.broker["scan"], self.box.handed["SCAN_MQTT_PASSWORD"]))
+        self.assert_broker_takes_the_password()
 
     def test_a_restart_at_any_moment_finds_only_hashes(self):
         # #432: the broker may (re)start between the hook and its laib-exec lines

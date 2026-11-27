@@ -674,7 +674,23 @@ stack's original pages for `SCAN_KEEP_DAYS` in `${DATA_DIR}/scan`
 (`backup: false`) and the contract record in `${DATA_DIR}/dokumente`.
 Keys: `PAPERLESS_TOKEN` (`dokumente`, sees every document — see
 paperless), `HOMES_HAUSHALT_TOKEN` (notice reminders and the address
-book), `BOTE_NOTIFY_TOKEN`.
+book), `BOTE_NOTIFY_TOKEN`, `SCAN_MQTT_PASSWORD` (below).
+
+- **The scanner in Home Assistant** (homes ADR 0004 §6, owner
+  2026-11-26): `scan-mqtt` announces a device „Scanner“ on Mosquitto by
+  MQTT discovery, with one button, „Scannen – Haushalt“, and a state
+  sensor. A press writes the order `laib scan start` writes for the
+  household (no `fuer`, no person). No button per person (owner
+  2026-11-27, laib#1287; flow 30, gap 7): „nur für mich“ starts only
+  where the person is known, in Homes and at a tag. What HA gets: the
+  state with page and sheet numbers — never the status file's sentence (a
+  finished stack's names documents) nor who started a stack, and no
+  login. The key is a broker login of its own, `scan`, minted by
+  mosquitto's post-deploy into `SCAN_MQTT_PASSWORD`; Mosquitto has no ACL
+  (#1286), so this login, like Home Assistant's and the devices'
+  `MQTT_USER`, could read and publish every topic on the broker (the
+  devices' too). A press is not in Laib's journal; the scan service's log
+  says `auftrag start von home-assistant`.
 
 ### druck
 
@@ -735,6 +751,10 @@ No `private:` (templates/home-assistant/laib.yml).
   No new key between services; no position. The charger report is off
   by default, per phone in the app. Tag names live in HA's tag registry;
   Homes keeps nothing of them.
+- **The scanner as a device** (homes ADR 0004 §6): its household button and state
+  come by MQTT discovery from the scan service (scan section, flow 30),
+  not through an HA token; HA's MQTT integration reads them from
+  Mosquitto as it reads the devices'.
 - **Separation:** one house; every user sees the devices and the
   household's calendars (copied by `kalender`). Who switched what goes
   into HA's logbook under the consumer's user, never a person's
@@ -834,6 +854,7 @@ design and not listed again.
 | 27 | A person's archive hands its tasks to Homes with their text: how many questions, suggestions and cleanup findings wait, the next question („Wie steht <Name> zu <Name>?“) and the first finding's title, whether a key is missing. **Owner-decided 2026-11-15** (archiv ADR 0001 point 4: the text names people and so lies outside the vault). Worked out only while the vault is open, by the program „Aufgaben für Homes“ (reads Beziehungen, Kontakte, Notizen; the person can withhold it at each opening); Homes keeps the last ones in `plugins.json` and shows them only to that person; removing the archive removes them | the person's archive → Homes (service, its data folder) → that person; root on the box can read the file | archiv apps/archiv/homes.go `/homes/v1`, programme.go; homes internal/plugin, internal/pages/plugins.go (homes#375) |
 | 28 | The name an invited guest of the poll chose to type (optional; an anonymous vote otherwise) is shown as „Abgestimmt haben: …“; the votes only summed, never beside a name | an invited guest → the other invited guests who have voted | mdopp/abstimmung apps/abstimmung/vote.go (`teilnehmer`), web.go (`ergebnis`) |
 | 29 | HA's entities and their states (a person's `person.*` home or away among them), its automations as YAML and its tags' names, through the Bote's Automat, to the Werkstatt's hands claude and pi (`laib_automat`, homes ADR 0004 §3); an automation that triggers on a person's `tag_scanned` or `homes_laden` names that person's login. Reading answers at once; a change waits for the Automat's code, which goes to the owner (`notify.person`) on their chat channel — a short line with the automation's name and id — and which the owner says in the conversation; the agent never sees it. The Automat's HA user is an administrator, so the Werkstatt reads what an HA admin sees of the house; the Werkstatt holds neither HA's token nor the Automat's | the house, each person's presence in HA → the Werkstatt (claude, pi) | laib haushalt/automat.go; automat/automat.go; templates/bote §5 |
+| 30 | **Not built (owner 2026-11-27, laib#1287): no scan button per person in Home Assistant.** HA has no permission per entity and an MQTT press carries no user, so a button „Scannen – <Name>“ would let any HA user file papers into another person's Paperless and send that person the closing message with the titles. HA gets only „Scannen – Haushalt“: whoever presses starts a household stack, as Homes' „Für den Haushalt“; the state names no one. A box that ran the first build loses its person buttons on the bridge's next connect | whoever presses in HA → the household's stack (no crossing between persons) | templates/scan/scan-mqtt.py `gewollt`, `auftrag` |
 
 Not crossings, checked: location goes to the person's own Reitti with
 their own token (homes internal/napi/standort.go); phone backups go to
@@ -893,6 +914,14 @@ listed again.
    logged in to Paperless gets their uploads only after their first login
    (until then Dokumente's, seen by no one); documents from before stay as
    they were (no migration).
+
+7. **Closed: a person's scan button would be everyone's in Home
+   Assistant** (flow 30). HA has no permission per entity, so every HA
+   user could have pressed another's „Scannen – <Name>“ and filed papers
+   into their Paperless. Owner 2026-11-27 (laib#1287): HA gets only the
+   household's button; „nur für mich“ stays where the starter is known —
+   Homes' Scannen („Für mich“) and a tag at the scanner, which acts for the
+   person who touched it (homes ADR 0004 §4, §8).
 
 Nothing found lets one family member read another's Immich, Reitti,
 Vaultwarden, archive, own Radicale books or Jellyfin/ABS history through

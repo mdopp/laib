@@ -160,6 +160,77 @@ page's verdict, the documents), `log.txt`, `stapel.json`. Not backed up;
 gone after `SCAN_KEEP_DAYS`. `laib scan redo --stapel <stapel>` splits and
 files it again (Paperless refuses a document it holds already).
 
+## The scanner in Home Assistant (homes ADR 0004 §6)
+
+The scanner is an ordinary device in Home Assistant, for automations,
+voice and dashboards: `scan-mqtt.container` runs `scan-mqtt.py` (the
+standard library in a stock Python image) beside Dokumente and announces
+it by **MQTT discovery** on the box's Mosquitto. Home Assistant's MQTT
+integration (set up by hand once, discovery on, prefix `homeassistant`)
+picks it up by itself.
+
+| Entity | `unique_id` | What |
+|---|---|---|
+| button „Scannen – Haushalt“ | `laib-scan-haushalt` | `laib scan start`: the stack is the household's |
+| sensor „Zustand“ (`enum`) | `laib-scan-zustand` | `bereit`, `scannt`, `wartet`, `fertig`, `fehler` |
+
+Both on one device „Scanner“ (`identifiers: [laib-scan]`). Home Assistant
+names the entities after the device and the entity, so they come up as
+`button.scanner_scannen_haushalt` and `sensor.scanner_zustand` unless
+someone renames them; Homes finds them by `unique_id`.
+
+**No button per person** (the owner on laib#1287, 2026-11-27). HA has no
+permission per entity and an MQTT press carries no user, so every HA user
+could press another person's button and file their papers into that
+person's Paperless. „Für mich“ stays where the person is known: Homes'
+Scannen („Für mich“, `laib scan start --person … --fuer person`) and a tag
+at the scanner, which acts for the person who touched it (homes ADR 0004
+§4, §8). A box that ran the first build loses its person buttons on the
+bridge's next connect (below).
+
+- **A press** (`laib/scan/befehl`, payload `haushalt`) writes the order
+  `laib scan start` writes for the household (haushalt/scan.go): one JSON
+  file in `auftrag/`, written whole and renamed, no `fuer`, no person,
+  `"von": "home-assistant"`. The scan service decides as for every order (a
+  stack still waiting for its rest, no scanner: refused), and its messages
+  go to `SCAN_NOTIFY`, else `notify.person`. Any other payload (a person's
+  `person:<login>` from the first build included), a retained one (it would
+  start a stack on every reconnect) and a second press within 3 s start
+  nothing. Laib's journal does not see a press (it is no `laib` call); the
+  scan service's log and HA's logbook do.
+- **The state** (`laib/scan/zustand`, retained, JSON): the status file's
+  `zustand` mapped — `scannt`, `trennt` and `legt-ab` are `scannt`,
+  `wartet-auf-rest` is `wartet` — the raw one as `roh`, and `seite` /
+  `blatt`. Never `detail` (a finished stack's sentence names documents) nor
+  who started the stack: every HA user sees an entity's attributes. A state
+  the bridge does not know is HA's „unbekannt“.
+- **Availability** (`laib/scan/verfuegbar`): `online` while the bridge is
+  connected and a scanner is set up; the connection's will and a stop
+  publish `offline`, retained, so HA shows „nicht verfügbar“ and keeps
+  the device. A restart never removes it (its device id, which an
+  automation may name, would change).
+- **Removed cleanly.** Every config is retained, and cleared (an empty
+  retained message, which makes HA remove the entity, and the device with
+  its last one) when it is no longer wanted: both when the status says
+  `scanner: false` (`SCANNER` emptied). On every connect the bridge also
+  clears whatever an earlier run left under its node (the first build's
+  person buttons). A status file that cannot be read changes nothing.
+  **Not covered: removing the scan service itself.** Laib runs no hook on
+  a removal, so the device stays in HA as „nicht verfügbar“ until someone
+  presses „Löschen“ on its device page in HA (which clears the retained
+  configs) — or `SCANNER` is emptied before the service goes.
+- **The login.** Mosquitto's post-deploy keeps a second broker user,
+  `scan`, and mints its password into `SCAN_MQTT_PASSWORD` (handed back,
+  so scan applies again with it), as Home Assistant mints Homes's token.
+  Without Mosquitto it is empty and the bridge says so in its log and
+  idles. The broker has no ACL: like every MQTT login on the box, `scan`
+  could publish to any topic (docs/DATA.md, #1286).
+- **Who may press:** every Home Assistant user; the stack is the
+  household's, as from Homes' „Für den Haushalt“.
+- Not on the host network: Mosquitto's 1883 is published beyond loopback,
+  so the unit reaches it at `host.containers.internal` (`MQTT_HOST`). It
+  mounts only the scan service's folder (the status file, `auftrag/`).
+
 ## Values
 
 | Value | Default | |
@@ -174,12 +245,15 @@ files it again (Paperless refuses a document it holds already).
 | `SCAN_NOTIFY` | empty | a person from box.yml `people`; empty: `notify.person` |
 | `SCAN_KEEP_DAYS` | 14 | |
 | `MODEL_NAME` | qwen3.6-35b-a3b | the household model |
+| `MQTT_IMAGE` | python:3.13-alpine | scan-mqtt's image (the standard library only) |
+| `MQTT_HOST` | host.containers.internal | Mosquitto, from scan-mqtt's container |
 
 No secret of its own: bote-notify's bearer (`BOTE_NOTIFY_TOKEN`, generated by
 `laib add bote`), the model key (`MODEL_KEY`), Paperless' token
 (`PAPERLESS_TOKEN`, minted by paperless' post-deploy), the hook's token
-(`DOKUMENTE_WEBHOOK_TOKEN`, generated by paperless) and Homes's Haushalt
-bearer (`HOMES_HAUSHALT_TOKEN`) arrive in the environment as podman secrets,
+(`DOKUMENTE_WEBHOOK_TOKEN`, generated by paperless), Homes's Haushalt
+bearer (`HOMES_HAUSHALT_TOKEN`) and scan-mqtt's broker login
+(`SCAN_MQTT_PASSWORD`, minted by mosquitto's post-deploy) arrive in the environment as podman secrets,
 never on argv.
 
 ## Setting it up
@@ -260,3 +334,5 @@ does in detail is Dokumente's README (`vertraege/`).
 2. A stack of ~20 sheets on the WF-3540, one stop rescued with `weiter` →
    FERTIG. At least 90 % of the documents split right, no blank page in
    Paperless.
+3. „Scannen – Haushalt“ pressed in Home Assistant → a stack scanned and
+   the FERTIG message; the sensor „Zustand“ goes bereit → scannt → fertig.
