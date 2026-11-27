@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.38.0](https://github.com/mdopp/laib/compare/v2.37.0...v2.38.0) (2026-11-27)
+
+
+### Features
+
+* **template:** the scanner as a device in Home Assistant by MQTT discovery (homes ADR 0004 §6) ([#1287](https://github.com/mdopp/laib/issues/1287)) ([60928ac](https://github.com/mdopp/laib/commit/60928acf8c0b95c44b1bc1c28a9a98a25bee7df4))
+
 ## [2.37.0](https://github.com/mdopp/laib/compare/v2.36.0...v2.37.0) (2026-11-27)
 
 
