@@ -496,7 +496,8 @@ the apply red. A line `laib-secret: NAME=value` on stdout stores a credential
 the hook created (an API token, a generated admin password) into
 `secrets.age`, so it is never printed again and survives a reinstall. The
 name may be another service's (Home Assistant mints Homes's and the Bote's
-tokens, #349): every service that declares a handed-back secret is planned
+tokens, #349; Mosquitto the scan bridge's broker login `SCAN_MQTT_PASSWORD`,
+homes ADR 0004 §6): every service that declares a handed-back secret is planned
 again in the same apply and applied when its rendered output changed, so it
 starts with the new value; a consumer that reads the secret only in a hook
 should also render it into a unit, or it waits for its next change.

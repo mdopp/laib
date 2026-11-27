@@ -209,6 +209,8 @@ wasPassiert:
     folge: der Updater liefert höchstens falsche Angaben; der Kern fragt nie selbst im Netz und prüft Prüfsumme und Signatur vor dem Vorschlag und noch einmal vor dem Einspielen selbst (#1233)
   - fall: laib-haushalt wird übernommen
     folge: es schlägt vor wie bisher; einen Kern-Teil erreicht es nur mit dem Auftrag eines echten Aufrufs, also höchstens, was dieser Aufrufer in diesem Aufruf durfte (ein Admin-Konto nur, wenn ein Mensch es anlegt); eine Kalender-Adresse sieht es, während sie abonniert wird (#1234); mit dem Schlüssel des Automaten kann es Automationen in Home Assistant anlegen, ändern und schalten (den Code bekommt es vom Automaten, bevor es ihn dem Besitzer schickt), aber nicht mit Home Assistants eigenem Schlüssel (homes ADR 0004 §3)
+  - fall: der Scanner in Home Assistant (scan-mqtt) wird übernommen
+    folge: er meldet sich bei Mosquitto mit seiner eigenen Anmeldung `scan` an (Mosquitto erzeugt das Passwort, homes ADR 0004 §6); weil Mosquitto keine Regeln je Anmeldung hat, kann er jedes Thema lesen und senden, auch das der Geräte (Lücke, #1286); er kann Scan-Aufträge schreiben (Home Assistant bekommt nur den Knopf für den Haushalt, keinen je Person: laib#1287), aber nichts aus Paperless lesen; Home Assistants Schlüssel hat er nicht
   - fall: ein Agent irrt sich
     folge: er kann nur vorschlagen oder im Budget anwenden; jede Änderung hat einen Snapshot und läuft zurück, wenn sie rot wird
   - fall: jemand stiehlt die Box
@@ -238,6 +240,11 @@ offen:
     stand: {status: Lücke, issues: ["1250"]}
     punkte:
       - laufen aus dem offenen Tresor im Klartext durch Homes aufs neue Handy
+  - titel: Mosquitto ohne Regeln je Anmeldung
+    stand: {status: Lücke, issues: ["1286"]}
+    punkte:
+      - jede Anmeldung (Home Assistant und die Geräte, der Scanner `scan`) darf jedes Thema lesen und senden
+      - "geplant: eine ACL, `scan` nur homeassistant/+/laib-scan/# und laib/scan/#"
   - titel: Agenten mit Daueraufträgen
     stand: {status: offen, issues: ["1237"]}
     punkte:

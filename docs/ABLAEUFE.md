@@ -352,6 +352,13 @@ Dann öffnet Android direkt die App, ohne Browser und ohne Anmeldung, weil die B
 Und ohne App führt der Tag in den Browser, auf die Seite des Tags, erst nach der Anmeldung.
 Und ohne Anmeldung gibt die Box dafür nur diese eine Datei heraus, sonst nichts von Homes.
 
+### L-65 Der Scanner ist ein Gerät in Home Assistant
+Wenn auf der Box ein Scanner eingerichtet ist und Mosquitto läuft,
+Dann zeigt Home Assistant von selbst ein Gerät „Scanner“ mit dem Knopf „Scannen – Haushalt“ und seinem Zustand (bereit, scannt, wartet, fertig, fehler).
+Und ein Druck auf den Knopf startet den Stapel wie „Für den Haushalt“ in Homes; „Für mich“ gibt es in Home Assistant nicht, weil dort jeder jeden Knopf drücken kann: das geht in Homes und mit dem Tag am Scanner.
+Und verschwindet der Scanner aus der Box, verschwindet das Gerät auch aus Home Assistant; ein Neustart lässt das Gerät, wie es ist.
+Und Home Assistant sieht nie, wem ein Stapel gehört oder was darin steht.
+
 ## Drucken
 
 ### L-46 Jedes Gerät im Heimnetz findet den Drucker ohne App; von außen ist er nicht erreichbar

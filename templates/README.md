@@ -70,7 +70,7 @@ home-assistant's post-deploy mints like Homes's and the Bote's (#349),
 | radicale | — | Kalender und Kontakte over CalDAV/CardDAV, LLDAP logins, the household's store (ADR 0017) |
 | kalender | — | calendars from outside (a Google calendar's secret iCal address, a public ICS) mirrored one way every 15 min into the person's read-only Radicale collection `google-<name>` / `abo-<name>`, as the service account `kalender`, plus copies for Home Assistant's own account (#495); entered in Homes, kept by `laib calendar`; a timer, no daemon; findings in diag |
 | vaultwarden | — | Passwörter with SSO through Authelia's OIDC client |
-| mosquitto | — | MQTT broker; password file by the hook; 1883 open to the LAN for devices |
+| mosquitto | — | MQTT broker; password file by the hook (Home Assistant's and the devices' login, and `scan`'s, whose password it mints, homes ADR 0004 §6); 1883 open to the LAN for devices |
 | esphome | — | ESPHome dashboard and OTA, host network for discovery |
 | beets | — | music tagging over the file share's music folder, admins only |
 | home-assistant | — | Home Assistant, Z-Wave JS UI and the Matter server on the host network; the house and the voice brain (ADR 0015) |
@@ -79,7 +79,7 @@ home-assistant's post-deploy mints like Homes's and the Bote's (#349),
 | file-share | — | Syncthing, Samba and File Browser over the shared data folder on the host network; Samba has one account per LLDAP user in family or admins (read with the read-only `file-share` account), each password set by the person in Homes, the shared `SHARE_USER` as fallback (#296) |
 | stimme | — | Whisper, Piper, openWakeWord and the wake-word trainer as Wyoming units for Assist |
 | druck | — | Drucken: CUPS finds every printer in the home network (DNS-SD) and at the box's USB, gives each the driver CUPS matches (driverless first, else escpr, hpcups, Gutenprint) and shares the ones that cannot reach every device by themselves as „… (über die Box)“ with IPP Everywhere / AirPrint; host network for DNS-SD, 631 on the LAN, administration only inside the container (README.md) |
-| scan | — | paper stacks into Paperless (#568): a file in the share's `scan-eingang` or a SANE network scanner's run; pages turned, read, blanks dropped, the household model marks where documents start; one closing message per stack through bote-notify; ordered with `laib scan` |
+| scan | — | paper stacks into Paperless (#568): a file in the share's `scan-eingang` or a SANE network scanner's run; pages turned, read, blanks dropped, the household model marks where documents start; one closing message per stack through bote-notify; ordered with `laib scan`; the scanner as a device in Home Assistant by MQTT discovery (`scan-mqtt`, homes ADR 0004 §6) |
 | paperless | — | Paperless-ngx with Postgres and Redis; logins through Authelia's OIDC, the apps with tokens; consume folder on the file share; a mail inbox from `PAPERLESS_MAIL_*` (README.md) |
 | reitti | — | Zeitleiste (Reitti): where each person was, from the Google Timeline export and Takeout; OIDC through Authelia, local login off, accounts on the first login; PostGIS, Redis and the tile cache in the pod; no geocoder and Panoramax off, so no location leaves the box (README.md) |
 | usage-metrics | — | aggregate, anonymous usage counters (mdopp/usage-metrics); no route, in-box callers only on 8094 with the generated `USAGE_METRICS_TOKEN` |

@@ -5,13 +5,17 @@ template: {registry: builtin, name: mosquitto, version: 1}
 provides: [mqtt]
 upstream: [https://github.com/eclipse/mosquitto, https://mosquitto.org/documentation/]   # where the Operator's web search looks first (#544)
 # MQTT broker for devices and Home Assistant. mosquitto.conf from pre-start,
-# the password file from post-deploy, hashed in the broker (#221).
+# the password file from post-deploy, hashed in the broker (#221): MQTT_USER
+# for Home Assistant and the devices, `scan` for the scan service's bridge.
 # 1883 is open to the LAN on purpose: devices on Wi-Fi publish into it.
 routes: []
 secrets:
   - name: MQTT_PASSWORD
     login: {user: "${MQTT_USER}", note: "MQTT, Port 1883: die Geräte melden sich damit an"}   # a human's login: the recovery sheet lists it, --vaultwarden exports it (#441)
     devices: true                   # the door lock and the sensors hold it: never a rotate repair; after a rotation diag offers laib secret zurueck (#665)
+  - name: SCAN_MQTT_PASSWORD        # minted by post-deploy (homes ADR 0004 §6): the broker login `scan`, the scan service's bridge to Home Assistant's MQTT discovery; handed back, so scan applies again with it
+    external: true
+    optional: true
 data:
   - path: ${DATA_DIR}/mosquitto/config
   - path: ${DATA_DIR}/mosquitto/data

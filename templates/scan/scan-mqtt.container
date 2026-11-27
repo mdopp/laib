@@ -1,0 +1,30 @@
+# The scanner as a device in Home Assistant (homes ADR 0004 §6): scan-mqtt.py in a stock Python
+# image announces it by MQTT discovery on the box's Mosquitto and turns a press into the order
+# `laib scan start` writes. Its own small container beside Dokumente's, not in it: Dokumente is
+# its own repo and image (ADR 0028), and this is the box's part of it, as the scanner's USB and the
+# folders are. Not on the host network: Mosquitto's 1883 is published beyond loopback, so
+# host.containers.internal reaches it.
+[Unit]
+Description=Scannen: der Scanner als Gerät in Home Assistant (MQTT, homes ADR 0004 §6)
+After=scan.service
+
+[Container]
+Image=${MQTT_IMAGE}
+Exec=python3 /app/scan-mqtt.py
+Volume=./scan-mqtt.py:/app/scan-mqtt.py:ro,z
+Environment=TZ=${TZ}
+Environment=MQTT_HOST=${MQTT_HOST}
+Environment=MQTT_PORT=1883
+Environment=MQTT_USER=scan
+# minted by mosquitto's post-deploy; empty without Mosquitto: the bridge says so and idles
+Environment=MQTT_PASSWORD=${SCAN_MQTT_PASSWORD}
+# the status file it reads and the orders folder it writes: the scan service's own folder
+Volume=${DATA_DIR}/scan:/data:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target
