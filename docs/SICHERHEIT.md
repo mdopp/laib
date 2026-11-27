@@ -97,7 +97,7 @@ Was die Box selbst anwendet (`autonomy:`, `auto`) und was ein Mensch freigibt (`
 
 | Weg | Schutz | Stand |
 |---|---|---|
-| Von außen | nur über Caddy, nur freigegebene Namen (eine Karte je öffentlicher Adresse), TLS; Familien-Apps hinter Authelia mit zweitem Faktor, Gast-Apps mit eigener Sperre (Einladungswort, Prüfung „antwortet 403 ohne“) | läuft |
+| Von außen | nur über Caddy, nur freigegebene Namen (eine Karte je öffentlicher Adresse), TLS; Familien-Apps hinter Authelia mit zweitem Faktor, Gast-Apps mit eigener Sperre (Einladungswort, Prüfung „antwortet 403 ohne“); an einer Familien-Adresse ohne Anmeldung nur, was keine Familiendaten trägt, die App-Schnittstelle mit Gerätetoken (/napi/) und eine einzelne Datei, Homes' assetlinks.json (Paketname und öffentliches Zertifikat der App, damit ein Tag die App öffnet; homes ADR 0004 §5) | läuft |
 | Im Heimnetz | Dienste hinter Caddy; direkte Ports nur, wo ein Gerät sie braucht (Tabelle „Direkte Ports“), sonst von nftables auf den Host begrenzt | läuft |
 | Laibs Tür (MCP) | nur vom Host und den eigenen Containern, nie aus dem WLAN; jedes Verb prüft Hand und Stufe; jede Antwort ohne Geheimnisse | läuft |
 | Box-Seite | nur im Heimnetz, Admins, zweiter Faktor; hier allein werden Freigaben und Schlüssel angenommen | läuft |
@@ -120,7 +120,7 @@ Jede Route jeder Vorlage, aus `templates/*/laib.yml`. „Heimnetz“ heißt zu H
 | files.&lt;domain&gt; | `file-share` | 1 | Heimnetz; öffentlich: `/share/`, `/api/public/`, `/static/` | Authelia, ein Faktor | — |
 | home.&lt;domain&gt; | `home-assistant` | 1 | Heimnetz | eigene Anmeldung (OIDC über Authelia) | — |
 | zwave.&lt;domain&gt; | `home-assistant` | 1 | Heimnetz | Authelia, zwei Faktoren | nur Gruppe `admins` |
-| www.&lt;domain&gt; | `homes` | 2 | von außen | Authelia, ein Faktor, von außen zwei | ohne Authelia: `/napi/` |
+| www.&lt;domain&gt; | `homes` | 2 | von außen | Authelia, ein Faktor, von außen zwei | ohne Authelia: `/napi/`, `/.well-known/assetlinks.json` |
 | &lt;domain&gt; | `homes` | 2 | von außen | keine | — |
 | kontakt.&lt;domain&gt; | `homes` | 2 | von außen | keine | — |
 | fotos.&lt;domain&gt; | `immich-public-proxy` | 1 | von außen | eigene Anmeldung (geprüft an `/api/server/ping`) | — |

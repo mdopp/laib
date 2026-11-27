@@ -346,6 +346,12 @@ Und lässt sich der Code nicht schicken, wird nichts vorgemerkt, und der Agent s
 Und Lesen (welche Automationen, welche Tags) braucht keinen Code; Schreiben, Löschen, Wiederherstellen und Schalten immer.
 Und die Werkstatt hat dafür keinen eigenen Schlüssel zu Home Assistant: sie geht über Laib zum Automaten des Boten, und das Journal nennt jede bestätigte Änderung.
 
+### L-64 Ein Tag mit der Adresse der Box öffnet die Homes-App
+Wenn jemand mit der Homes-App einen Tag berührt, auf dem `https://www.<domain>/tag/…` steht,
+Dann öffnet Android direkt die App, ohne Browser und ohne Anmeldung, weil die Box Android ohne Anmeldung bestätigt, dass die Adresse zur App gehört.
+Und ohne App führt der Tag in den Browser, auf die Seite des Tags, erst nach der Anmeldung.
+Und ohne Anmeldung gibt die Box dafür nur diese eine Datei heraus, sonst nichts von Homes.
+
 ## Drucken
 
 ### L-46 Jedes Gerät im Heimnetz findet den Drucker ohne App; von außen ist er nicht erreichbar

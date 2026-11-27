@@ -101,6 +101,8 @@ Environment=TZ=${TZ}
 Environment=HOMES_DATA=/data
 # Homes' own address: laib.yml's first route (TestHomesPublicURLIsItsRoute holds the two together)
 Environment=HOMES_PUBLIC_URL=https://www.${DOMAIN}
+# the Homes app's signing certificate for /.well-known/assetlinks.json: a tag's address opens the app (homes ADR 0004 §5)
+Environment=HOMES_APP_SHA256=${APP_SHA256}
 # Kontakt prüfen lassen (owner 2026-11-07): the page without a login, on its own listener and host
 Environment=HOMES_KONTAKT_LISTEN=0.0.0.0:8652
 Environment=HOMES_KONTAKT_URL=https://kontakt.${DOMAIN}

@@ -36,7 +36,11 @@ routes:
     exposure: public               # the phone reaches /napi/ from outside; the pages are behind Authelia
     auth: one_factor               # at home (LAN, WireGuard) the password or a passkey
     outside: two_factor            # from outside the second factor, a passkey first (owner decision I, laib#1131): a phished password is not enough
-    bypass: [/napi/]
+    # /napi/: the app's API, device tokens. /.well-known/assetlinks.json: the one file Android fetches without
+    # a login to verify the app's link for a tag's address (homes ADR 0004 §5): Authelia lets that path alone
+    # through, Caddy still sends the proxy secret and no Remote-User. /tag/<id>, the page for a phone without
+    # the app, stays behind the login.
+    bypass: [/napi/, /.well-known/assetlinks.json]
     proxySecret: HOMES_PROXY_SECRET # Caddy sends it as X-Homes-Proxy on the authenticated handler only (ADR 0012 §3)
   # The domain itself (owner 2026-11-08): a visitor without an account sees a short public page, what the box is,
   # „Anmelden“ to www.<domain> and „Zugang anfragen“, a request a person reads (never a registration). It is served by

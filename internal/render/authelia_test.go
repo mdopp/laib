@@ -116,7 +116,14 @@ func TestAutheliaPolicyOnTheRealBinary(t *testing.T) {
 		for _, r := range st.Services[name].Contract.Routes {
 			n++
 			for _, p := range r.Bypass {
-				check(r.Host, strings.TrimSuffix(p, "/")+"/x", "", "bypass")
+				if strings.HasSuffix(p, "/") {
+					check(r.Host, p+"x", "", "bypass")
+					continue
+				}
+				// one file (homes ADR 0004 §5): that path alone, a query allowed, nothing longer
+				check(r.Host, p, "", "bypass")
+				check(r.Host, p+"?v=1", "", "bypass")
+				check(r.Host, p+"/x", "", cmp.Or(r.Outside, r.Auth))
 			}
 			if r.Auth == "none" {
 				check(r.Host, "/", "", "bypass")

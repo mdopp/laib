@@ -509,6 +509,10 @@ writes `KALENDER_ABOS`.
 
 No `private:` (templates/homes/laib.yml). Homes is the family's pages
 and the app's API (`/napi/`); references below are to mdopp/homes.
+Without a login, besides `/napi/` (device tokens), only
+`/.well-known/assetlinks.json` answers. It holds the app's package name and
+its public signing certificate (`HOMES_APP_SHA256`, homes ADR 0004 §5) and
+no person's data.
 
 - **Accounts:** none of its own. A page request is a person through
   Authelia's `Remote-User`, `Remote-Name`, `Remote-Email`,
@@ -714,17 +718,23 @@ No `private:` (templates/home-assistant/laib.yml).
   `laib-namen`, already an administrator for the aliases; config flows are
   admin-only), so HA's entry log names `laib-namen`. No new key between
   services: HA's own helper reads druck's printer list from the host.
-- **The phone as a trigger** (owner 2026-11-26, homes ADR 0004): the
-  Homes app reports an NFC tag it touched and when it was laid on or
-  taken off its charger (and how: wireless, cable, USB); Homes fires
-  that on HA's bus with `HOMES_HA_TOKEN` (the user `homes`, already an
-  administrator: `POST /api/events` and `tag/create` are admin-only) as
-  `tag_scanned` `{tag_id, person}` and `homes_laden` `{person, zustand,
-  ladeart}`, `person` the paired device's uid. No new key between
-  services; no position, no phone name. Who sees it: every automation
-  that triggers on it, and HA's logbook and event list, which HA's
-  administrators read. The charger report is off by default, per phone
-  in the app. Tag names live in HA's tag registry; Homes keeps nothing.
+- **The phone as a trigger** (owner 2026-11-26, homes ADR 0004 §1, §7):
+  the Homes app reports an NFC tag it touched and when it was laid on or
+  taken off its charger (and how: wireless, cable, USB), with
+  `HOMES_HA_TOKEN` (the user `homes`, already an administrator). Homes
+  registers each paired phone that reports as a device of Home
+  Assistant's `mobile_app` integration, under HA's user `homes`, named
+  after the person and the phone („Michaels Pixel 9“). The phone's charge
+  state (sensors „Lädt“ and „Ladeart“) and its tag scans („zuletzt
+  gescannt“ with the device) are kept in HA's history, visible to HA's
+  administrators. The registration's webhook id is a secret Homes keeps
+  in `HOMES_DATA/telefone.json`. Unpairing the phone removes the device
+  from HA. The event `homes_laden` `{person, zustand, ladeart}` still
+  fires alongside the sensors until nothing uses it; a tag also fires
+  HA's `tag_scanned` `{tag_id, person}`, `person` the paired device's uid.
+  No new key between services; no position. The charger report is off
+  by default, per phone in the app. Tag names live in HA's tag registry;
+  Homes keeps nothing of them.
 - **Separation:** one house; every user sees the devices and the
   household's calendars (copied by `kalender`). Who switched what goes
   into HA's logbook under the consumer's user, never a person's

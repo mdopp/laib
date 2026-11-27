@@ -26,6 +26,7 @@ PAPERLESS_PUBLIC_URL: https://paperless.${DOMAIN}      # where a found document 
 PAPERLESS_LAN_ONLY: "true"                             # paperless' route is internal (haus#68): "In Paperless öffnen" says "nur zu Hause im WLAN"
 IMMICH_URL: http://host.containers.internal:2283       # Immich (homes 2026-11-05): its named people and their faces for the contacts
 IMMICH_KEY: !secret HOMES_IMMICH_KEY                    # the owner's Immich API key (person.read, person.create, person.update, person.merge, user.read, asset.upload, face.read, asset.delete; person.statistics for photo counts), set by the owner; empty: „Fotos“ searches by name, no faces
+APP_SHA256: "C3:6A:41:03:80:AB:C9:9D:D5:6E:DF:14:5F:34:FF:A6:DA:7F:4A:15:B0:98:A3:7F:FD:AB:D7:02:FD:68:A6:2D"   # the SHA-256 of the Homes app's release signing certificate (mdopp/homes-android v4.1.14), public: Homes names it in /.well-known/assetlinks.json so a tag's https address opens the app (homes ADR 0004 §5); a new signing key, a new value here
 IMMICH_PUBLIC_URL: https://photos.${DOMAIN}            # where a contact's „Fotos“ opens Immich
 DOCUMENTS_MAIL: ""                                     # the Dokumente page's "Per E-Mail ablegen" (haus#68): paperless' PAPERLESS_MAIL_FILTER_TO, e.g. dokumente@example.org; empty: no button
 BOTE_URL: http://host.containers.internal:8642/v1     # the Bote's API (#215): Hermes in the bote pod, for the Sprechen field

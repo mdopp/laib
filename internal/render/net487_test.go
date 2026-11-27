@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -58,7 +57,7 @@ func TestTheNetworkMapIsWhatAutheliaAndNftablesGet(t *testing.T) {
 		}
 		for _, r := range doc.AccessControl.Rules {
 			if len(r.Resources) > 0 {
-				bypass[r.Domain] = append(bypass[r.Domain], strings.TrimSuffix(strings.TrimSuffix(strings.TrimPrefix(r.Resources[0], "^"), ".*$"), "/"))
+				bypass[r.Domain] = append(bypass[r.Domain], r.Resources[0])
 				continue
 			}
 			var groups []string
@@ -92,12 +91,13 @@ func TestTheNetworkMapIsWhatAutheliaAndNftablesGet(t *testing.T) {
 			if nn.Policy != r.policy || nn.Subject != r.subject || nn.Outside != outside[nn.Name] {
 				t.Errorf("%s: map says %s %q, Authelia gets %s %q (from outside %q)", nn.Name, nn.Factor(), nn.Subject, r.policy, r.subject, outside[nn.Name])
 			}
-			var want []string
-			for _, p := range nn.Bypass {
-				want = append(want, strings.TrimSuffix(p, "/"))
+			// each path the map names is the one Authelia's rule in its place lets through (a prefix or one file, homes ADR 0004 §5)
+			ok = len(nn.Bypass) == len(bypass[nn.Name])
+			for i, p := range nn.Bypass {
+				ok = ok && regexp.MustCompile(bypass[nn.Name][i]).MatchString(p)
 			}
-			if !slices.Equal(want, bypass[nn.Name]) {
-				t.Errorf("%s: map bypasses %v, Authelia %v", nn.Name, want, bypass[nn.Name])
+			if !ok {
+				t.Errorf("%s: map bypasses %v, Authelia %v", nn.Name, nn.Bypass, bypass[nn.Name])
 			}
 			admin = admin || nn.Name == fqdn(st, st.Box.Laib.Host)
 		}
