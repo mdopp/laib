@@ -23,12 +23,12 @@ RED = {"t": "2026-11-14T09:55:20.964781015Z", "actor": "human:mdopp", "verb": "a
        "detail": "home-assistant: post-deploy exit status 1\nhome-assistant: update.install update.meross_lan_update v6.0.1: HTTP 500\nhome-assistant: its home is box.yml zuhause"}
 BACK = {"t": "2026-11-14T09:57:01.9Z", "actor": "human:mdopp", "verb": "apply", "result": "green", "reason": "rollback " + RUN}
 CARDS = [
-    {"id": 542, "status": "approved", "outcome": "rolled-back", "batch": RUN, "reason": "Neue Versionen: beets, frage", "restore": 547, "forward": 548,
+    {"id": 542, "status": "approved", "outcome": "rolled-back", "batch": RUN, "reason": "Neue Versionen: beets, frage", "wahl": [{"vorschlag": 547}, {"vorschlag": 548}],
      "files": ["services/beets/values.yml", "services/frage/values.yml"], "notes": {"beets/IMAGE": "Ein Fehler beim Import ist behoben."},
      "intent": {"set": {"services/beets/values.yml:IMAGE": "docker.io/linuxserver/beets:latest@sha256:ee3c", "services/frage/values.yml:SEARX_IMAGE": "docker.io/searxng/searxng:latest@sha256:048e"}}},
-    {"id": 543, "status": "approved", "outcome": "rolled-back", "batch": RUN, "reason": "home-assistant: Erweiterungen installieren: Meross LAN v6.0.1", "restore": 547, "forward": 548,
+    {"id": 543, "status": "approved", "outcome": "rolled-back", "batch": RUN, "reason": "home-assistant: Erweiterungen installieren: Meross LAN v6.0.1", "wahl": [{"vorschlag": 547}, {"vorschlag": 548}],
      "files": ["services/home-assistant/values.yml"], "intent": {"set": {"services/home-assistant/values.yml:HA_INSTALL": "update.meross_lan_update=v6.0.1"}}},
-    {"id": 546, "status": "approved", "outcome": "rolled-back", "batch": RUN, "reason": "Homes: Unter Geräte steht beim Raum des Druckers, ob er erreichbar ist.", "restore": 547, "forward": 548,
+    {"id": 546, "status": "approved", "outcome": "rolled-back", "batch": RUN, "reason": "Homes: Unter Geräte steht beim Raum des Druckers, ob er erreichbar ist.", "wahl": [{"vorschlag": 547}, {"vorschlag": 548}],
      "files": ["services/homes/values.yml"], "intent": {"set": {"services/homes/values.yml:HOMES_IMAGE": "ghcr.io/mdopp/homes:latest@sha256:a979"}}},
     {"id": 547, "status": "open", "actor": "laib", "reason": "Das Update von Home Assistant lief nicht."},
     {"id": 548, "status": "open", "actor": "laib", "reason": "Das Update von Home Assistant lief nicht. Statt die Sicherung zurückzuspielen …"},
@@ -113,9 +113,9 @@ class Durchgang(unittest.TestCase):
                  {"t": "2026-11-14T09:58:20Z", "verb": "apply", "result": "green", "reason": f"Freigabe #546 allein, aus dem Lauf {RUN}"},
                  {"t": "2026-11-14T09:58:21Z", "verb": "rollback", "result": "info", "actor": "laib",
                   "detail": f"Lauf {RUN} war rot; jede Freigabe allein angewendet: angewendet #542, #546 zurückgenommen #543"}]
-        cards = [dict(CARDS[0], outcome="", restore=None, forward=None), dict(CARDS[1], refiled=560, forward=None,
+        cards = [dict(CARDS[0], outcome="", wahl=None), dict(CARDS[1], refiled=560, wahl=[{"vorschlag": 547}],
                  because="wartet auf Box-Aufgabe #31 „Marktplatz-Hinweis bestätigen“; ist sie erledigt, wendet Laib die Änderung von selbst an (Vorschlag #560)"),
-                 dict(CARDS[2], outcome="", restore=None, forward=None), CARDS[3]]
+                 dict(CARDS[2], outcome="", wahl=None), CARDS[3]]
         s = Fake(journal=alone, cards=cards)
         self.assertEqual(run.run(s)["outcome"], "green")
         self.assertIn("- #542: Neue Versionen: beets, frage (Dienste: beets, frage; allein angewendet)", s.asked[0])

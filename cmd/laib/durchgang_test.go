@@ -25,9 +25,9 @@ func TestTheCauseOfARedRunGoesOntoItsCards(t *testing.T) {
 	run := "#1, #2 (f548fec..7fc9485)"
 	os.MkdirAll(dir, 0o755)
 	for _, p := range []*proposal.Proposal{
-		{ID: 1, Actor: "ops", Reason: "Neue Versionen: beets", Status: "approved", Outcome: "rolled-back", Batch: run, Restore: 3, Decided: now, Settled: now,
+		{ID: 1, Actor: "ops", Reason: "Neue Versionen: beets", Status: "approved", Outcome: "rolled-back", Batch: run, Wahl: []proposal.Weg{{Vorschlag: 3}}, Decided: now, Settled: now,
 			Because: "weil home-assistant danach nicht richtig lief – mit #2 im selben Durchgang", Files: []string{"services/beets/values.yml"}},
-		{ID: 2, Actor: "ops", Reason: "home-assistant: Erweiterungen installieren", Status: "approved", Outcome: "rolled-back", Batch: run, Restore: 3, Decided: now, Settled: now,
+		{ID: 2, Actor: "ops", Reason: "home-assistant: Erweiterungen installieren", Status: "approved", Outcome: "rolled-back", Batch: run, Wahl: []proposal.Weg{{Vorschlag: 3}}, Decided: now, Settled: now,
 			Because: "weil home-assistant danach nicht richtig lief – mit #1 im selben Durchgang", Files: []string{"services/home-assistant/values.yml"}},
 		{ID: 3, Actor: "laib", Reason: "Das Update von Home Assistant lief nicht.", Status: "open", Class: "human", Created: now, Files: []string{"repairs/x.md"}},
 		{ID: 4, Actor: "claude", Reason: "Homes: neues Bild", Status: "open", Class: "human", Created: now, Files: []string{"services/whoami/values.yml"}},

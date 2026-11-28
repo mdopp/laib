@@ -79,6 +79,18 @@ Wenn ein Durchgang mit mehreren Freigaben rot endet und Laib ihn zurückgenommen
 Dann liest der Operator Journal und Log und schreibt die Ursache in einem Satz auf die Karten des Durchgangs und ihre Folgekarten: „Der Operator hat nachgesehen: …“.
 Und was mit dem Fehler nichts zu tun hatte, schlägt er einzeln neu vor, so wie es war; freigeben muss es wieder ein Mensch.
 
+### L-67 Wo sich mehrere Wege ausschließen, liegt eine Karte da, auf der man einen wählt
+Wenn der Operator ein Problem sieht, bei dem sich zwei oder mehr Wege ausschließen,
+Dann liegt eine Karte in der Inbox: was los ist, die Ursache oder „nicht gemessen“, jeder Weg mit dem, was daraus folgt, und welchen der Operator empfiehlt.
+Und jeder Weg ist ein Tipp; „noch einmal gründlicher nachsehen“ und „als Box-Aufgabe weitergeben“ sind Wege wie die anderen, die Wege haben keine eigenen Karten daneben.
+Und die Karte hat kein eigenes „Freigeben“, nur „Ablehnen“.
+
+### L-68 Wer einen Weg wählt, schließt die anderen
+Wenn jemand auf der Karte einen Weg antippt, in der Inbox, am Shell oder per Signal,
+Dann sind die anderen Wege abgelehnt („anderer Weg gewählt“) und die Karte ist erledigt.
+Und lehnt jemand die Karte ab, sind alle Wege abgelehnt.
+Und „noch einmal gründlicher nachsehen“ schickt das Problem an den Operator zurück, „als Box-Aufgabe weitergeben“ legt eine Aufgabe für die Admins an; auf der Box ändert sich dabei nichts.
+
 ### L-51 Was nur der Owner tun kann, wird eine Box-Aufgabe
 Wenn die Ursache eines roten Durchgangs etwas ist, das nur der Owner erledigen kann,
 Dann steht dafür eine Box-Aufgabe bei den Admins, mit der Ursache als Grund.

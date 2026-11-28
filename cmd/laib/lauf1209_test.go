@@ -81,7 +81,7 @@ func TestOneRedAmongThreeKeepsTheGreenOnesAndOffersOnlyForTheRed(t *testing.T) {
 	unlock()
 	get := func(id int) *proposal.Proposal { p, _ := proposal.Get(cli.InboxDir(env), id); return p }
 	for _, p := range []*proposal.Proposal{get(w1.ID), get(w3.ID)} {
-		if p.Outcome == "rolled-back" || p.Restore != 0 || p.Forward != 0 || p.Because != "" {
+		if p.Outcome == "rolled-back" || len(p.Wahl) != 0 || p.Because != "" {
 			t.Fatalf("the green #%d went back or got follow-ups: %+v", p.ID, p)
 		}
 		if _, err := os.Stat(filepath.Join(env.Paths.Quadlet, "w"+strconv.Itoa(p.ID))); err != nil {
@@ -89,7 +89,7 @@ func TestOneRedAmongThreeKeepsTheGreenOnesAndOffersOnlyForTheRed(t *testing.T) {
 		}
 	}
 	v := get(vault.ID)
-	if v.Outcome != "rolled-back" || v.Restore == 0 || v.Forward == 0 {
+	if v.Outcome != "rolled-back" || len(v.Wahl) != 2 {
 		t.Fatalf("the red one has no follow-ups: %+v", v)
 	}
 	if b, _ := os.ReadFile(filepath.Join(env.Paths.Quadlet, "vault", "vault.container")); strings.Contains(string(b), pin) {
@@ -115,7 +115,7 @@ func TestOneRedAmongThreeKeepsTheGreenOnesAndOffersOnlyForTheRed(t *testing.T) {
 			t.Errorf("follow-up #%d names more than the red one: %s", q.ID, text)
 		}
 	}
-	if diff := proposal.Diff(ctx, env.Paths.State, get(v.Forward)); strings.Count(diff, "laib rollback ") != 1 {
+	if diff := proposal.Diff(ctx, env.Paths.State, get(v.Wahl[1].Vorschlag)); strings.Count(diff, "laib rollback ") != 1 {
 		t.Errorf("the forward puts on more than the red one's change: %s", diff)
 	}
 }
