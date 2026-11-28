@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.39.0](https://github.com/mdopp/laib/compare/v2.38.1...v2.39.0) (2026-11-28)
+
+
+### Features
+
+* **inbox:** the Operator puts a choice on one card (ADR 0036) ([#1280](https://github.com/mdopp/laib/issues/1280)) ([5df60e7](https://github.com/mdopp/laib/commit/5df60e7d088acddf20d393fec8f2a0eb39fabdcb))
+
 ## [2.38.1](https://github.com/mdopp/laib/compare/v2.38.0...v2.38.1) (2026-11-28)
 
 
