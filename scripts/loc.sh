@@ -28,8 +28,9 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
-# 23,223: ADR 0037 on top of main's 23,017 (rebased 2026-11-28), owner approved 2026-11-28 („1+2 ja
-# jetzt“): the kernel at 23,016 on main, 23,222 with it, the cap one above.
+# 23,229: ADR 0037 on top of main's 23,017 (rebased 2026-11-28), owner approved 2026-11-28 („1+2 ja
+# jetzt“): the kernel at 23,016 on main, 23,228 with it (6 of them the Inbox's upHere, split out of
+# placed so its complexity stays under the ratchet), the cap one above.
 # 22,908: the owner's ADR 0037 (2026-11-28, „Warum wollen wir die Routine-Dinge nicht automatisch
 # freigeben?“ … „Der Rest klingt gut!“, the feature approved with its cap): a routine new image applies
 # itself — the kernel's gate that only new digests of running services pass (laib updates' newest,
@@ -112,7 +113,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # operator 3,303: ADR 0036: a choice card sent back with „nachdenken“ gets three times the steps on the same model (3 lines), the
 # card's proposals count as the ones a session filed (2 lines); 3,299 before, 3,302 with it, the cap one
 # above; owner approved 2026-11-28 („1+2 ja jetzt“)
-budget kernel 23223 cmd internal
+budget kernel 23229 cmd internal
 budget operator 3303 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,

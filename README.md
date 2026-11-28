@@ -244,7 +244,7 @@ Keeps the box alive, safe and reachable. Ring 0a is the trust kernel, ring 0b La
 
 #### Ring 0a · the trust kernel
 
-The part the house trusts: it must work when everything else is broken. **23,222 / 23,223, at 95 % or more** lines (`cmd/`, `internal/`).
+The part the house trusts: it must work when everything else is broken. **23,228 / 23,229, at 95 % or more** lines (`cmd/`, `internal/`).
 
 | Part | What it does | Code | Lines |
 |---|---|---|---:|
@@ -256,7 +256,7 @@ The part the house trusts: it must work when everything else is broken. **23,222
 | Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,931 |
 | Backup | the nightly restic backup, restore, the recovery sheet | [`backup`](internal/backup/) | 885 |
 | Self-update | Laib itself, the services' images and templates, with the previous one back on red | [`self.go`](cmd/laib/self.go), [`updates.go`](cmd/laib/updates.go), [`registry`](internal/registry/) | 1,115 |
-| Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 2,102 |
+| Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 2,108 |
 | MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,319 |
 | The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,387 |
 

@@ -146,8 +146,8 @@ from here.
 - An upstream that moves its tag daily restarts the soak with every digest:
   such an image waits until it holds still for three days.
 - The kernel grew by the gate, the switch, the first-seen date, `ready` and
-  `laib updates`' lines (22,701 → 22,907; on top of ADR 0036 23,016 → 23,222,
-  cap 23,223, the owner's yes for
+  `laib updates`' lines (22,701 → 22,907; on top of ADR 0036 23,016 → 23,228,
+  cap 23,229, the owner's yes for
   the feature); laib-updater by the issue count; the skills `versionen` and
   `morgenbericht` by the judgment and the morning lines.
 - `docs/ABLAEUFE.md` L-70 to L-76; ADR 0034's „The owner's choice: (c)“

@@ -99,7 +99,7 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 			text, at = "Wunsch "+w.Status+strings.TrimSuffix(": "+w.Grund, ": "), maxTime(at, w.Am)
 		}
 		recent := failed || time.Since(p.Decided) < 15*time.Minute
-		here := p.Status == "open" || time.Since(p.Decided) < 15*time.Minute || p.Routine != "" && time.Since(p.Decided) < 24*time.Hour // the morning report's „Zurücknehmen“ (ADR 0037)
+		here := upHere(p)
 		if !(running || failed || p.Status == "approved" || p.Status == "rejected" && recent) {
 			continue
 		}
@@ -415,4 +415,10 @@ func ApproveAll(env *cli.Env) http.HandlerFunc {
 		}()
 		http.Redirect(w, r, "/inbox", http.StatusSeeOther)
 	}
+}
+
+// upHere: a card stays in its place while open, for 15 minutes once decided, and a routine one
+// for a day: the morning report's „Zurücknehmen“ (ADR 0037).
+func upHere(p *proposal.Proposal) bool {
+	return p.Status == "open" || time.Since(p.Decided) < 15*time.Minute || p.Routine != "" && time.Since(p.Decided) < 24*time.Hour
 }
