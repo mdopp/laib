@@ -1,0 +1,2 @@
+# Rendered by laib: one OIDC client per service that declares oidc.
+# no service declares oidc yet: Authelia gets no OIDC block (it refuses an empty one)

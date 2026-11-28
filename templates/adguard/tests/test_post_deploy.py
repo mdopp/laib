@@ -38,7 +38,7 @@ OURS = re.compile(r"^\|\|(\d+)\.172\.in-addr\.arpa\^\$dnstype=PTR,dnsrewrite=NXD
 
 def fresh(rules=(), **dns):
     AG.clear()
-    AG.update(rewrites=[], posts=[], rules=list(rules), rule_posts=[], ql_puts=[],
+    AG.update(rewrites=[], deletes=[], posts=[], rules=list(rules), rule_posts=[], ql_puts=[],
               ql={"enabled": True, "interval": 90 * DAY, "anonymize_client_ip": False, "ignored": [], "ignored_enabled": False},
               dns={"upstream_dns": ["https://dns.quad9.net/dns-query"], "local_ptr_upstreams": [],
                                           "use_private_ptr_resolvers": True, **dns})
@@ -87,7 +87,17 @@ class FakeAdGuard(BaseHTTPRequestHandler):
             return self.reply(401)
         b = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         if self.path == "/control/rewrite/add":
+            a = b.get("answer", "")
+            # AdGuard's normalize: an IP, a name (CNAME), or the exceptions "A" / "AAAA"
+            if not a or not (a in ("A", "AAAA") or re.fullmatch(r"[0-9a-fA-F.:]+|[a-z0-9.-]+", a)):
+                return self.reply(400)
             AG["rewrites"].append(b)
+            return self.reply(200)
+        if self.path == "/control/rewrite/delete":
+            if b not in AG["rewrites"]:
+                return self.reply(400)
+            AG["rewrites"].remove(b)
+            AG["deletes"].append(b)
             return self.reply(200)
         if self.path == "/control/dns_config":
             AG["posts"].append(b)
@@ -131,6 +141,26 @@ class PostDeploy(unittest.TestCase):
         self.assertEqual(AG["rewrites"], [{"domain": "*.vm.test", "answer": "192.168.178.2"}])
         self.run_hook()
         self.assertEqual(len(AG["posts"]), 1, "an unchanged list was written again")
+
+    def test_guest_names_keep_the_public_answer_inside_the_house(self):
+        # field failure 2026-11-28: kontakt.<domain> answered the LAN address at home, and Chrome refused a guest's
+        # link to it (ERR_LOCAL_NETWORK_PERMISSION_MISSING). The renderer now excepts a guest name with "A" and
+        # "AAAA" (AdGuard keeps the upstream answer for it) and drops the apex's LAN entry when the apex is one.
+        fresh()
+        AG["rewrites"] = [{"domain": "*.vm.test", "answer": "192.168.178.2"}, {"domain": "vm.test", "answer": "192.168.178.2"},
+                          {"domain": "printer.lan", "answer": "192.168.178.9"}]
+        want = [{"domain": "*.vm.test", "answer": "192.168.178.2"},
+                {"domain": "kontakt.vm.test", "answer": "A"}, {"domain": "kontakt.vm.test", "answer": "AAAA"},
+                {"domain": "vm.test", "answer": "A"}, {"domain": "vm.test", "answer": "AAAA"}]
+        (self.render / "adguard" / "rewrites.json").write_text(json.dumps(want))
+        self.run_hook()
+        key = lambda r: (r["domain"], r["answer"])
+        self.assertEqual(sorted(AG["rewrites"], key=key), sorted(want + [{"domain": "printer.lan", "answer": "192.168.178.9"}], key=key),
+                         "the guest names are not excepted, or the owner's own rewrite went")
+        self.assertEqual(AG["deletes"], [{"domain": "vm.test", "answer": "192.168.178.2"}], "the apex still answers the LAN address")
+        n = len(AG["rewrites"])
+        self.run_hook()
+        self.assertEqual((len(AG["rewrites"]), len(AG["deletes"])), (n, 1), "rewrites in step were written again")
 
     def test_without_rendered_rewrites_the_router_is_still_set(self):
         fresh()

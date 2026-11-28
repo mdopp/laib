@@ -1,0 +1,5 @@
+# Rendered by laib: the values of adguard (#364); a secret by its name only.
+ADMIN_PW=!secret ADGUARD_ADMIN_PASSWORD
+ADMIN_USER=admin
+IMAGE=docker.io/adguard/adguardhome:latest
+UPSTREAMS=https://dns.quad9.net/dns-query https://dns.google/dns-query

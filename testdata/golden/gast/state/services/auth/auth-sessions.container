@@ -1,0 +1,16 @@
+[Unit]
+Description=Valkey — Authelia's sessions, on disk, so a restart logs nobody out (#369)
+
+[Container]
+Image=${SESSIONS_IMAGE}
+Pod=auth.pod
+# loopback of the pod only: Authelia is the one client; append-only file plus
+# snapshots in /data, read back on start
+Exec=valkey-server --bind 127.0.0.1 --port 6379 --dir /data --appendonly yes --save "60 1"
+Volume=${DATA_DIR}/auth/sessions:/data:z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

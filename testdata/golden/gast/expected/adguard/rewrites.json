@@ -1,0 +1,22 @@
+[
+  {
+    "domain": "*.example.home",
+    "answer": "192.168.1.10"
+  },
+  {
+    "domain": "kontakt.example.home",
+    "answer": "A"
+  },
+  {
+    "domain": "kontakt.example.home",
+    "answer": "AAAA"
+  },
+  {
+    "domain": "example.home",
+    "answer": "A"
+  },
+  {
+    "domain": "example.home",
+    "answer": "AAAA"
+  }
+]

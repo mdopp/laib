@@ -49,7 +49,8 @@ for _ in range(45):
 if current is None:
     print("AdGuard API did not answer; rewrites not synced (re-run laib apply adguard)", file=sys.stderr); sys.exit(1)
 
-# rewrites: *.domain and the apex → this box (rendered by laib), synced via the API
+# rewrites: *.domain and the apex → this box (rendered by laib), synced via the API; a guest name's answer
+# is "A" / "AAAA": AdGuard keeps the upstream (public) answer for it over the wildcard (field failure 2026-11-28)
 rewrites_path = os.path.join(E.get("LAIB_RENDER_DIR", "/mnt/data/laib/render"), "adguard", "rewrites.json")
 try:
     wanted = json.load(open(rewrites_path))
@@ -60,7 +61,7 @@ if wanted is not None:
     have = {(r["domain"], r["answer"]) for r in current}
     want = {(r["domain"], r["answer"]) for r in wanted}
     for d, a in want - have:
-        api("/rewrite/add", {"domain": d, "answer": a}); print("rewrite added:", d, "→", a)
+        api("/rewrite/add", {"domain": d, "answer": a}); print("rewrite added:", d, "→", a if a not in ("A", "AAAA") else f"{a} from upstream (a guest name)")
     for d, a in have - want:
         if d.endswith(E["LAIB_DOMAIN"]) or d == E["LAIB_DOMAIN"]:
             api("/rewrite/delete", {"domain": d, "answer": a}); print("rewrite removed:", d)

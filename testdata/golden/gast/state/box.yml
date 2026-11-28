@@ -1,0 +1,14 @@
+# Guest names (field failure 2026-11-28): a public route without a login
+# resolves inside the house as outside; the AdGuard rewrites except it.
+domain: example.home
+timezone: Europe/Berlin
+dataDir: /mnt/data/stacks
+lanIp: 192.168.1.10
+hostNetwork: [caddy, adguard]
+roles:
+  proxy: caddy
+  sso: auth
+  identity: auth
+  dns: adguard
+gpu:
+  present: false

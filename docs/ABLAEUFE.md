@@ -295,6 +295,11 @@ Wenn jemand von außen eine App der Familie aufruft,
 Dann kommt er nicht hin; nur www, die Anmeldung, Kontakt und Fotos stehen im Internet.
 Und wo ein Dienst von außen erreichbar ist, fragt er dort den zweiten Faktor.
 
+### L-66 Ein Gast-Link geht auch im WLAN zu Hause
+Wenn ein Gast im WLAN zu Hause einen Link für Gäste öffnet (Kontakt austauschen, geteilte Fotos),
+Dann findet sein Telefon die öffentliche Adresse der Box, wie unterwegs, und Chrome blockiert den Link nicht.
+Und stimmt das nicht, nennt laib diag den Namen und was AdGuard und das Internet antworten.
+
 ### L-43 Homes lädt eine Bewohnerin ein
 Wenn ein Admin in Homes jemanden einlädt,
 Dann bekommt Homes den Einladungslink zurück, auch ohne Mail.

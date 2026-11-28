@@ -661,6 +661,31 @@ portal (the sso service's first route, `auth.`): it never forward-auths, as
 a portal behind itself is a loop. LLDAP's LDAP port 3890 is no route and
 not behind Caddy (`internal/render/ldap2fa_test.go`).
 
+### Guest names resolve as outside (field failure 2026-11-28)
+
+A **guest name** is a route with `exposure: public` and `auth: none`, the
+sso service's portal aside (the family's logins need it at home):
+`kontakt.<domain>`, the domain itself (homes' teaser), `fotos.<domain>`
+(immich-public-proxy). A stranger opens it on their own phone, also on the
+household's Wi-Fi, from a link in a messenger or a web page; with the LAN
+address there, Chrome's Local Network Access refuses the navigation from a
+public context (`ERR_LOCAL_NETWORK_PERMISSION_MISSING`). So
+`render/adguard/rewrites.json` excepts each guest name from the wildcard:
+two exact rewrites with the answers `A` and `AAAA`, which AdGuard Home
+reads as "keep the upstream answer for this name" (an exact name wins over
+`*.<domain>`), and the apex's LAN entry goes when the apex is one. The
+house then gets the public address, as outside; the derivation is
+`render.GuestNames`, no name is written in the code. A box on
+`tls: internal` has no public answer and excepts none.
+
+This needs the router's NAT loopback: a phone in the LAN reaching the
+box's public address. The FRITZ!Box loops its own public address back to a
+port forward (Freigabe); another router may not. `laib net --mermaid` shows
+the guest names going from the LAN to the router; `laib diag` (probe
+`gast-dns`) asks the box's AdGuard and a public resolver for each guest
+name, says so when they differ, and dials the public address on 443 from
+the box, which takes the same loop a guest's phone at home takes.
+
 ### Secrets that are a human's login (#441)
 
 `login: {user, host, path?, note?}` on a contract secret marks it as a login

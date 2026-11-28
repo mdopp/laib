@@ -1,0 +1,10 @@
+# Rendered by laib: every ten minutes, and after boot.
+[Unit]
+Description=Laib converge timer
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=10m
+
+[Install]
+WantedBy=timers.target

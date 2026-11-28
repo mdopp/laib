@@ -1,0 +1,10 @@
+# Rendered by laib from box.yml updates and backup.schedule (#528).
+[Unit]
+Description=Laib images timer
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

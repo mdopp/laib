@@ -56,3 +56,24 @@ func TestTheNetworkMapFollowsTheRenderedRules(t *testing.T) {
 		}
 	}
 }
+
+// Field failure 2026-11-28: a guest name resolves inside the house as
+// outside, so the map shows it going from the LAN to the router, not to the
+// rewrite; the SSO's portal and an internal route are no guest names.
+// Ablauf L-66
+func TestGuestNamesGoThroughTheRouter(t *testing.T) {
+	st, err := state.Load("../../testdata/golden/gast/state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := strings.Join(GuestNames(st), " "); g != "kontakt.example.home example.home" {
+		t.Fatalf("guest names: %q", g)
+	}
+	if m := Net(st).Mermaid(st); !strings.Contains(m, "lan -->|Gast-Namen: kontakt.example.home, example.home| fritz") {
+		t.Fatalf("mermaid lacks the guest names:\n%s", m)
+	}
+	st.Box.TLS = "internal"
+	if g := GuestNames(st); g != nil {
+		t.Fatalf("a box on tls: internal has no public answer: %v", g)
+	}
+}
