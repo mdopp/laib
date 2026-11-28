@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.38.1](https://github.com/mdopp/laib/compare/v2.38.0...v2.38.1) (2026-11-28)
+
+
+### Bug Fixes
+
+* **render:** guest names resolve to the public answer inside the house too ([#1293](https://github.com/mdopp/laib/issues/1293)) ([61c2671](https://github.com/mdopp/laib/commit/61c267154cb21f510632112d2246703565a8cbcc))
+
 ## [2.38.0](https://github.com/mdopp/laib/compare/v2.37.0...v2.38.0) (2026-11-27)
 
 
