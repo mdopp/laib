@@ -50,12 +50,12 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 	var edit proposal.Edit
 	var anchor proposal.Anchor
 	var words, waits []string
-	usePatch := false
+	usePatch, word := false, ""
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--patch":
 			usePatch = true
-		case "--finding", "--evidence", "--undo", "--source", "--note", "--wartet": // the anchor (#544); a note, ADR 0034's summary; what it waits for (#1194)
+		case "--finding", "--evidence", "--undo", "--source", "--note", "--wartet", "--routine": // the anchor (#544); a note, ADR 0034's summary; what it waits for (#1194); ADR 0037
 			if i+1 >= len(args) {
 				return env.Fail(fmt.Errorf("%s wants a value", args[i]))
 			}
@@ -71,6 +71,8 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 				note(&anchor, v)
 			case "--wartet":
 				waits = append(waits, v)
+			case "--routine": // the Operator's versionen calls these new images normal
+				word = v
 			default:
 				anchor.Sources = append(anchor.Sources, v)
 			}
@@ -183,11 +185,8 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 	}
 	supersede(ctx, env, st, p)
 	cli.Record(env, st, journal.Entry{Actor: env.Actor, Verb: "propose", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d %s (%s%s)", p.ID, strings.Join(p.Files, " "), p.Class, reasonsSuffix(p))})
-	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" && env.Ceiling == "" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
-		// The dial says laib decides this class itself: approve as laib,
-		// apply, and roll back on a red verify. A warning (a second service
-		// for one purpose) and anything the judge named always go to a human.
-		return AutoApprove(ctx, env, p)
+	if auto, code := itself(ctx, env, st, p, word); auto {
+		return code
 	}
 	if env.JSON {
 		return cli.Emit(env, p)
@@ -204,6 +203,20 @@ func Propose(ctx context.Context, env *cli.Env, args []string) int {
 		fmt.Fprintln(env.W(), "HINWEIS:", w)
 	}
 	return cli.ExitOK
+}
+
+// itself: laib decides p on its own — a routine image (ADR 0037), or the
+// dial says laib decides this class: approve as laib, apply, and roll back
+// on a red verify. A warning (a second service for one purpose) and
+// anything the judge named always go to a human, but a routine's image.
+func itself(ctx context.Context, env *cli.Env, st *state.State, p *proposal.Proposal, word string) (bool, int) {
+	if word != "" {
+		return routine(ctx, env, st, p, word)
+	}
+	if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" && env.Ceiling == "" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
+		return true, AutoApprove(ctx, env, p)
+	}
+	return false, cli.ExitOK
 }
 
 // JudgeFor is the judge every proposal passes: the state must render, the
@@ -387,7 +400,7 @@ func AutoApprove(ctx context.Context, env *cli.Env, p *proposal.Proposal) int {
 	if st, err = cli.LoadState(env); err != nil {
 		return env.Fail(err)
 	}
-	cli.Record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s, Klasse %s per autonomy%s", p.ID, p.Actor, p.Class, recomputed(p))})
+	cli.Record(laibEnv, st, journal.Entry{Actor: "laib", Verb: "approve", Reason: p.Reason, Result: "info", Detail: fmt.Sprintf("#%d von %s, Klasse %s %s%s", p.ID, p.Actor, p.Class, how(p), recomputed(p))})
 	return Carry(ctx, laibEnv)
 }
 

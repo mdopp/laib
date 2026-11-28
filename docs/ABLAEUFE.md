@@ -127,9 +127,9 @@ Wenn ein freigegebener Vorschlag fertig gelaufen oder zurückgenommen ist,
 Dann wird die Chat-Zeile, die ihn angekündigt hat, entsprechend markiert.
 
 ### L-15 Ein neues Programm für einen Dienst mit Daten wartet auf einen Menschen
-Wenn ein neueres Image für einen Dienst mit Daten vorgeschlagen wird,
+Wenn ein neueres Image für einen Dienst mit Daten vorgeschlagen wird und es keine Routine ist (L-70),
 Dann muss ein Mensch es freigeben.
-Und vor dem Update sichert Laib die Daten des Dienstes.
+Und vor dem Update sichert Laib die Daten des Dienstes, auch bei einer Routine.
 
 ## Schlüssel
 
@@ -204,6 +204,39 @@ Wenn nachts ein neues Laib-Release da ist,
 Dann installiert die Box es nur, wenn seine Prüfsummen die Unterschrift von Laibs Release auf GitHub tragen.
 Und fehlt die Unterschrift oder stammt sie von jemand anderem, bleibt die Box auf ihrer Version, und `laib diag` sagt auf Deutsch, warum.
 Und ein Programm mit Versionsnummer kommt in genau der Fassung, die geprüft wurde; „Images festhalten“ hält auch diese fest.
+
+### L-70 Ein normales Update spielt sich nachts selbst ein
+Wenn nachts ein neues Image für einen laufenden Dienst da ist und das Modell und die Regeln es normal finden,
+Dann spielt Laib es selbst ein: vorher die Sicherung, wo Daten migrieren können, danach die Prüfung, bei Rot zurück.
+Und es kommt keine Karte, das Journal sagt „als Routine“.
+
+### L-71 Ein Update, bei dem man aufpassen muss, kommt als Karte mit dem Grund zuerst
+Wenn das Modell oder eine Regel „aufpassen“ sagt (große Version, Daten, die nicht zurückgehen, Wegfall, Bruch),
+Dann kommt die Karte „Neue Versionen: …“, und der Grund steht vor der Zusammenfassung.
+Und sagt der Änderungstext selbst „normal“, bleibt die Regel trotzdem.
+
+### L-72 Ein fremdes Update wartet drei Tage, ein eigenes und ein Sicherheitsupdate nicht
+Wenn ein neues Image eines fremden Projekts erscheint,
+Dann wartet es drei Tage (oder so viele, wie die Vorlage sagt), und Laib zählt solange die Meldungen dazu auf GitHub.
+Und häufen sich die Meldungen, kommt es als Karte mit den Links; ein Sicherheitsupdate und die eigenen Images warten nicht.
+
+### L-73 Der Owner schaltet das Selbst-Einspielen aus
+Wenn der Owner `laib updates --auto aus` sagt,
+Dann kommt dafür eine Karte, und nach seiner Freigabe kommt jedes neue Image wieder als Karte.
+
+### L-74 Am Morgen steht im Bericht, was sich eingespielt hat, mit dem Weg zurück
+Wenn sich nachts ein Update selbst eingespielt hat,
+Dann steht im Morgenbericht je Dienst eine Zeile „Heute Nacht eingespielt: immich v2.4.0 → v2.5.0 · Zurücknehmen: Inbox, Karte #31.“
+Und die Karte steht einen Tag lang an ihrem Platz in der Inbox mit „Zurücknehmen“; was Laib bei Rot zurückgenommen hat, steht auch da.
+
+### L-75 Was Rechte ändert, spielt sich nie selbst ein
+Wenn neben einem Image auch ein öffentlicher Pfad, ein Schlüssel, ein Skript auf der Box, ein Port, box.yml, policy.yml oder eine Vorlage geändert wird,
+Dann bleibt es eine Karte für den Owner und sagt „nicht von selbst eingespielt: …“.
+
+### L-76 `laib updates` zeigt, was sich einspielt, was wartet und was angehalten ist
+Wenn der Owner `laib updates` aufruft,
+Dann steht bei jedem neuen Image, ob es sich einspielt oder bis wann es wartet,
+Und darunter, was sich in sieben Tagen eingespielt hat und wie es ausging, und was für ihn angehalten ist, mit dem Grund.
 
 ### L-57 Der Kern liest keine Antworten aus dem Internet; ein Update wird vor dem Einspielen selbst geprüft
 Wenn nachts nach neuen Versionen gesucht wird,

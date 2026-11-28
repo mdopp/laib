@@ -241,11 +241,18 @@ the box into it. Guardrails carried over from ServiceBay ADR 0012: never
 regenerate a secret, diff-first and journaled, a budget of three runs per
 hour after which it stops and tells a human through the journal and the
 webhook. A service that needs more is flapping, and flapping is a finding,
-not a chore. Images change by proposal only (ADR 0034, the owner's
-choice c): every newer digest, an upstream's and our own, is one grouped
-card per night from the Operator's `versionen`, with a short summary of
-its changelog, and a person taps it; apply verifies and goes back on red
-(#609), a service with data snapshotted first. Our own images only with
+not a chore. Images change by proposal only (ADR 0034), and a routine
+one applies itself (ADR 0037, the owner's „Lass uns locker sein“): the
+Operator's nightly `versionen` judges every newer digest, an upstream's and
+our own — the script's rules, then the box's model, NORMAL or AUFPASSEN
+with a short summary of its changelog — lets a third party's wait three
+days while it counts the upstream's issues on it, and files a normal one as
+`--routine`, which laib approves and carries itself only when nothing but
+images of running services change; the rest, and every change of rights,
+is one card a person taps. Either way apply verifies and goes back on red
+(#609), a service with data snapshotted first, and the next morning's
+report names each with „Zurücknehmen“; box.yml `updates.auto: aus` makes
+every image a card again. Our own images only with
 their CI signature, checked by the kernel when proposed and again before
 the run; the registries and changelogs are laib-updater's (ADR 0035). podman auto-update stays masked; `laib-images.timer`
 pulls nothing and removes the images nothing needs; what the night before

@@ -1,17 +1,18 @@
-# ADR 0034, the owner's choice (c), 2026-11-09: „Frage ruhig bei allen“ —
-# every newer image digest, an upstream's and our own, waits for a human tap;
-# nothing pulls by itself. Its script (run.py) reads laib updates --notes and
-# files one grouped card per night, each image with a short summary of its
-# changelog by the box's model („Ich will eine grobe Zusammenfassung bei der
-# Frage sehen, was sich geändert hat“), and once the pins of the floating
-# values to what runs. modell: kurz — the script's asks only, no tools; a
-# busy model is an answer, the card comes anyway.
-description: Jede Nacht — neue Stände aller Images als ein Vorschlag, mit kurzer Zusammenfassung, was sich geändert hat.
+# ADR 0037, the owner 2026-11-28 („Lass uns locker sein“), amending ADR 0034:
+# a routine new image applies itself. Its script (run.py) reads laib updates
+# --notes, judges each new digest (rules first, then the box's model: NORMAL or
+# AUFPASSEN with one sentence, and a short summary of its changelog), lets a
+# third party's wait its soak while the upstream's issues are counted, and
+# files a normal one as --routine (laib applies it only when nothing but the
+# image changes), the rest as one card „Neue Versionen“ with the reason first,
+# and once the pins of the floating values. modell: kurz — the script's asks
+# only, no tools; a busy model leaves the image for the next night.
+description: Jede Nacht — neue Stände aller Images geprüft; Routine spielt sich selbst ein, der Rest kommt als ein Vorschlag mit dem Grund.
 trigger: {daily: "05:30"}
 tools: [updates, propose, note, inbox]
 run: run.py
 modell: kurz
 output: propose
-limits: {propose: 2}
+limits: {propose: 14}
 prompt: |
-  Das Skript schlägt die neuen Stände der Images vor; das Modell fasst nur die Änderungsnotizen zusammen, ohne Werkzeuge.
+  Das Skript prüft die neuen Stände der Images und schlägt sie vor; das Modell urteilt NORMAL oder AUFPASSEN und fasst die Änderungsnotizen zusammen, ohne Werkzeuge.

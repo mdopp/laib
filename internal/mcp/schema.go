@@ -73,6 +73,7 @@ var mcpParams = map[string][]mcpParam{
 		{name: "sources", typ: "array", desc: "die Adressen aus dem Netz, auf die sich der Vorschlag stützt; dann gibt ihn nur ein Mensch frei"},
 		{name: "sets", typ: "array", desc: "statt service/key/value mehrere Werte in einem Vorschlag: dienst/SCHLÜSSEL=wert"},
 		{name: "notes", typ: "array", desc: "zu einem neuen Image, was sich geändert hat, für die Karte: dienst/SCHLÜSSEL=ein bis drei Sätze"},
+		{name: "routine", typ: "string", enum: []string{"normal", "sicherheit"}, desc: "nur versionen: neue Images, die das Modell als normal einstuft; Laib spielt sie selbst ein, wenn sich nur Images ändern (ADR 0037)"},
 		{name: "wartet", typ: "array", desc: "worauf der Vorschlag wartet, bevor Laib ihn anwendet: vorschlag:<nr>, aufgabe:<nr>, version:<x.y.z>, schluessel:<NAME>; freigegeben wird er vorher, angewendet erst danach"},
 		{name: "hand", typ: "string", desc: "mit verb: die Hand in policy.yml, deren Verbliste ein Verb dazubekommt (#575); ein Mensch entscheidet"},
 		{name: "verb", typ: "string", desc: "mit hand: das Verb, z. B. scan"}},
@@ -268,7 +269,7 @@ func Argv(st *state.State, verb string, a map[string]any) ([]string, string, err
 		} else if val["hand"] != "" {
 			argv = append(argv, "--grant", val["hand"], val["verb"])
 		}
-		for _, k := range []string{"finding", "evidence", "undo"} {
+		for _, k := range []string{"finding", "evidence", "undo", "routine"} {
 			if val[k] != "" {
 				argv = append(argv, "--"+k, val[k])
 			}

@@ -123,7 +123,8 @@ func TestNotesDescribeANewDigest(t *testing.T) {
 	if u := got["adguard"]; u.OldVersion != "v0.107.55" || u.NewVersion != "v0.107.56" || u.Source != "https://github.com/AdguardTeam/AdGuardHome" || u.Notes != "## v0.107.56\nSecurity: CVE-2026-1" || u.Unsigned != "" {
 		t.Fatalf("%+v", u)
 	}
-	if !slices.Equal(asked, []string{"/repos/AdguardTeam/AdGuardHome/releases"}) {
+	// the soak's signal (ADR 0037): the release's date, for a third party only; it has none here
+	if !slices.Equal(asked, []string{"/repos/AdguardTeam/AdGuardHome/releases", "/repos/AdguardTeam/AdGuardHome/releases/tags/v0.107.56"}) {
 		t.Fatalf("GitHub was asked %q", asked)
 	}
 	if own, pin := got["homes"], got["homes2"]; !strings.Contains(own.Unsigned, "keine gültige Signatur") || !strings.Contains(own.Unsigned, "no matching signatures") || pin.Unsigned != "" || pin.Pin != "sha256:h2" {

@@ -25,12 +25,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
+          # ADR 0037 §8: pushed and opened with the owner's PR_BOT_TOKEN its PR runs the checks main
+          # requires; GITHUB_TOKEN's would start none. Without the secret as before.
+          token: ${{ secrets.PR_BOT_TOKEN || github.token }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - name: regenerate the architecture section and the overview pages, open or update their PR
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PR_BOT_TOKEN || github.token }}
         run: scripts/architektur-pr.sh
   sicherheit-punkte:
     runs-on: ubuntu-latest

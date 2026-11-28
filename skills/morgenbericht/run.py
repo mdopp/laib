@@ -13,6 +13,8 @@ of the month (data.sessions) give the day's tokens and model time; #861:
 and, once a month, which lessons they were offered and which findings came
 back. #975: and the log review's sentence of what became no wish, and why;
 #978: and which wishes were closed, erledigt or verworfen, and why.
+ADR 0037: first, what applied itself last night, one line per service with
+its way back („Zurücknehmen“ on its card), and what laib took back on red.
 """
 
 import json
@@ -141,6 +143,22 @@ def wishes_line(journal):
     return "Wünsche geschlossen: " + "; ".join(closed) + "." if closed else ""
 
 
+def routine_lines(inbox, now):
+    """ADR 0037: what applied itself last night, one line per service, with
+    the way back; and what laib took back on red."""
+    out = []
+    for p in inbox if isinstance(inbox, list) else []:
+        if not field(p, "routine") or now - when(field(p, "decided")) > timedelta(days=1):
+            continue
+        for c in field(p, "changes", []) or []:
+            was, new = field(c, "oldVersion") or "dem alten Stand", field(c, "newVersion") or "einem neuen Stand"
+            if field(p, "outcome") == "rolled-back":
+                out.append(f"Heute Nacht zurückgenommen: {field(c, 'service')} {new} lief nicht grün, es läuft wieder {was}.")
+            else:
+                out.append(f"Heute Nacht eingespielt: {field(c, 'service')} {was} → {new} · Zurücknehmen: Inbox, Karte #{field(p, 'id', 0)}.")
+    return " ".join(out)
+
+
 def hm(s, tz):
     """A journal time as the box's clock, or "?"."""
     d = when(s)
@@ -178,5 +196,6 @@ def run(s):
         lines.append(lessons_line(sessions, when(s.now)))
     status = s.call("laib_status").json() or {}
     journal = s.call("laib_journal", since="24h").json()
+    lines.insert(0, routine_lines(s.call("laib_inbox", all=True, limit="40").json(), when(s.now)))
     human = " ".join(x for x in lines + [aside(journal), wishes_line(journal)] if x)
     return laibskill.done(human=human, fallback=(fallback(status, journal, when(s.now)) + " " + human).strip(), state={"month": month})

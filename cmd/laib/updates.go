@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/mdopp/laib/internal/apply"
 	"github.com/mdopp/laib/internal/cli"
+	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
 	"github.com/mdopp/laib/internal/pages"
 	"github.com/mdopp/laib/internal/policy"
@@ -20,6 +23,13 @@ import (
 // waiting, at tier apply and under the night's guards: no backup running,
 // the lock free, laib green. The run checks them again itself.
 func cmdUpdates(ctx context.Context, env *cliEnv, args []string) int {
+	if i := slices.Index(args, "--auto"); i >= 0 { // ADR 0037: the switch is box.yml's, so a proposal a person approves
+		why := map[string]string{"an": "Updates spielen sich wieder selbst ein (ADR 0037)", "aus": "Updates spielen sich nicht mehr selbst ein: jedes neue Image wieder als Karte (ADR 0037)"}[strings.Join(args[i+1:], " ")]
+		if why == "" {
+			return env.Fail(errors.New("usage: laib updates --auto an|aus"))
+		}
+		return inbox.Propose(ctx, env, []string{"--path", "box.yml:updates.auto=" + args[i+1], why})
+	}
 	if !slices.Contains(args, "--now") {
 		return registry.Updates(ctx, env, args)
 	}

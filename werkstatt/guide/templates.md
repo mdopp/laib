@@ -76,7 +76,10 @@ after: [auth]                  # started and verified after these services
   across services `host.containers.internal:<port>` (the port must be
   published beyond loopback for that); never a hard-coded IP.
 - **Databases:** `quiesce: true` on the data path, no `AutoUpdate=registry`
-  on the unit; the image moves by proposal.
+  on the unit: laib snapshots it before a new image.
+- **New images** apply themselves when the box's model calls them normal
+  (ADR 0037): a third party's after three days; an upstream known to break
+  things in its first days gets `soak: <days>` in `laib.yml`.
 - **One per person** (`perPerson: true`, #986): installed with `laib add
   <template> --person <p>`, one instance each, all behind one name that
   hands each signed-in person their own. Name every unit file
