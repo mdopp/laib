@@ -282,6 +282,7 @@ func Probes(ctx context.Context, env *cli.Env, st *state.State, only string) []F
 			out = append(out, *f)
 		}
 	}
+	out = append(out, guestFindings(ctx, st, only)...)   // a guest's link at home (field failure 2026-11-28)
 	if tasks, err := aufgaben.Load(st.Dir); err == nil { // #667: what the owner deferred
 		out = cover(out, tasks, time.Now().Format(time.DateOnly))
 	}

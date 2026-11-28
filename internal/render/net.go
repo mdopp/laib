@@ -165,6 +165,9 @@ func (n NetMap) Mermaid(st *state.State) string {
 	var b strings.Builder
 	b.WriteString("flowchart LR\n  internet((Internet)) -->|80, 443| fritz[Fritz!Box]\n  fritz --> caddy[Caddy]\n")
 	fmt.Fprintf(&b, "  lan((LAN)) -->|*.%s| rewrite[\"AdGuard: → %s\"]\n  rewrite --> caddy\n", st.Box.Domain, cmp.Or(st.Box.LanIP, "?"))
+	if g := GuestNames(st); len(g) > 0 && st.Box.Roles.DNS != "" { // a guest name resolves as outside, through the router's NAT loopback (2026-11-28)
+		fmt.Fprintf(&b, "  lan -->|Gast-Namen: %s| fritz\n", strings.Join(g, ", "))
+	}
 	if st.Box.Roles.SSO != "" {
 		b.WriteString("  authelia{Authelia}\n")
 	}

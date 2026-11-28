@@ -27,6 +27,7 @@ var says = map[string]string{
 	"restore-test": "Ob sich die Sicherung zurückholen lässt, wurde länger nicht geprüft.",
 	"raid":         "Wie es den Festplatten geht, weiß die Box gerade nicht genau.",
 	"acme":         "Ein Zertifikat der Box kann sich vielleicht nicht erneuern.",
+	"gast-dns":     "Ein Link für Gäste öffnet sich im WLAN zu Hause vielleicht nicht.",
 	"boot":         "Für das nächste System-Update ist zu wenig Platz.",
 	"operator":     "Der Operator, der nachts nach der Box sieht, arbeitet nicht richtig.",
 	"secret":       "Geräte von %s kennen ein erneuertes Geheimnis noch nicht.",

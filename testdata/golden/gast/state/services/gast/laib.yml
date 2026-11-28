@@ -1,0 +1,21 @@
+name: gast
+provides: [demo]
+template: {registry: builtin, name: gast, version: 1}
+routes:
+  - host: kontakt
+    port: 8652
+    exposure: public       # a guest opens the link on their own phone, also on the household's Wi-Fi
+    auth: none             # the link's token is the capability
+  - host: "@"
+    port: 8652
+    exposure: public       # the public face; also excepted, so the apex's LAN rewrite goes
+    auth: none
+  - host: intern
+    port: 8653
+    exposure: internal     # no guest name: LAN only
+    auth: none
+health:
+  http: http://127.0.0.1:8652/
+ports:
+  - {port: 8652, lan: false}
+  - {port: 8653, lan: false}

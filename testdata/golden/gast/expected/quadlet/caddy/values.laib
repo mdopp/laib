@@ -1,0 +1,3 @@
+# Rendered by laib: the values of caddy (#364); a secret by its name only.
+DNS_TOKEN=!secret DNS_API_TOKEN
+IMAGE=ghcr.io/mdopp/laib-caddy:2

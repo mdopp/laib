@@ -28,6 +28,10 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 22,805: field failure 2026-11-28 (Gast-Link im Heimnetz von Chrome blockiert) — the raise to be
+# OK'd in the PR: the guest names (render.GuestNames) excepted from AdGuard's LAN rewrite, their line
+# in laib net, and diag's gast-dns probe (AdGuard against a public resolver, the NAT loopback); the
+# kernel at 22,701 before, 103 lines, the cap one above (the count stays under it).
 # 22,702: owner approved 2026-11-26, homes ADR 0004 §5: a bypass of one file, Homes'
 # /.well-known/assetlinks.json without a login (Authelia's exact rule, Caddy's bypass split out of
 # caddyfile into bypassPaths); 22,689 → 22,701, raised by the lines that came in, no more.
@@ -89,7 +93,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # v0.7.0 is trust-kernel work — the relay's verdicts, repairs, the
 # credentials handover; no honest cut left, see #443. (Before: 15,000,
 # owner, 2026-10-17, #309.) 
-budget kernel 22702 cmd internal
+budget kernel 22805 cmd internal
 budget operator 3300 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,

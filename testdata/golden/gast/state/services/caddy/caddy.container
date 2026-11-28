@@ -1,0 +1,17 @@
+[Unit]
+Description=Caddy (laib role: proxy)
+After=network-online.target
+
+[Container]
+Image=${IMAGE}
+Network=host
+Environment=LAIB_DNS_TOKEN=${DNS_TOKEN}
+Volume=/mnt/data/laib/render/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,z
+Volume=${DATA_DIR}/caddy/data:/data:z
+AutoUpdate=registry
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

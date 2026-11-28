@@ -933,12 +933,43 @@ func autheliaClients(st *state.State, secrets map[string]string) string {
 	return b.String()
 }
 
+// GuestNames are the names meant for guests on their own phones (field
+// failure 2026-11-28): a public route without a login (auth: none), the SSO's
+// portal aside, which the family's logins need at home. Inside the house they
+// resolve as outside: a link from a public page to the LAN address is what
+// Chrome's Local Network Access refuses. A box on tls: internal has no public
+// answer, so none.
+func GuestNames(st *state.State) []string {
+	var out []string
+	if st.Box.TLS == "internal" {
+		return nil
+	}
+	for _, name := range st.ServiceNames() {
+		for _, r := range st.Services[name].Contract.Routes {
+			if n := fqdn(st, r.Host); r.Exposure == "public" && r.Auth == "none" && !(name == st.Box.Roles.SSO && r.Host == portalHost(st)) && !slices.Contains(out, n) {
+				out = append(out, n)
+			}
+		}
+	}
+	return out
+}
+
+// adguardRewrites: *.<domain> and the apex to the box's LAN address, a guest
+// name excepted: AdGuard's answer "A" or "AAAA" on an exact name keeps the
+// upstream answer for it, over the wildcard.
 func adguardRewrites(st *state.State) string {
 	type rw struct {
 		Domain string `json:"domain"`
 		Answer string `json:"answer"`
 	}
-	rws := []rw{{Domain: "*." + st.Box.Domain, Answer: st.Box.LanIP}, {Domain: st.Box.Domain, Answer: st.Box.LanIP}}
+	guests := GuestNames(st)
+	rws := []rw{{Domain: "*." + st.Box.Domain, Answer: st.Box.LanIP}}
+	if !slices.Contains(guests, st.Box.Domain) {
+		rws = append(rws, rw{Domain: st.Box.Domain, Answer: st.Box.LanIP})
+	}
+	for _, g := range guests {
+		rws = append(rws, rw{Domain: g, Answer: "A"}, rw{Domain: g, Answer: "AAAA"})
+	}
 	b, _ := json.MarshalIndent(rws, "", "  ")
 	return string(b) + "\n"
 }
