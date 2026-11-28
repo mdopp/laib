@@ -36,6 +36,7 @@ type Decision struct {
 	Details    string   `json:"details"`            // technical: the files, the proposer, the tier, the review's reasons
 	Primary    string   `json:"primary"`            // the safe default button: "Freigeben" or "Später"
 	Risky      bool     `json:"risky"`              // the primary is Später
+	Approve    string   `json:"approve,omitempty"`  // hoch (ADR 0037 §7): the approve button names what it does, shown only with the details open
 }
 
 // Line is one line of "Was sich ändert": Op "+" added, "−" removed, "→"
@@ -475,18 +476,19 @@ func Card(p *Proposal, domain string, box ...string) Decision {
 	// --- the weight, and the safe default that follows from it
 	data := len(p.Snapshot) > 0 && len(p.Adds) == 0 // a service with data: its data do not come back with a tap (#852)
 	d.Risky = p.Class == "human" || len(p.Adds) > 0 || len(p.Mints) > 0 || data || p.Tier == "destroy"
-	exposed := slices.ContainsFunc(p.Reasons, func(r string) bool {
-		return strings.Contains(r, "aus dem Internet erreichbar") || strings.Contains(r, "ohne Anmeldung") || strings.Contains(r, "schwächt die Anmeldung")
-	})
+	exposed := anyMentions(p.Reasons, "aus dem Internet erreichbar", "ohne Anmeldung", "schwächt die Anmeldung")
+	host := anyMentions(p.Reasons, "direkt auf der Box aus", "(Host-Unit)")
 	switch {
 	case len(p.Adds) > 0:
-		d.Risk, d.RiskWhy = "hoch", "Ein neuer Dienst kommt auf die Box."
+		d.Risk, d.RiskWhy, d.Approve = "hoch", "Ein neuer Dienst kommt auf die Box.", "Neuen Dienst freigeben"
 	case len(p.Mints) > 0:
-		d.Risk, d.RiskWhy = "hoch", "Ein Programm bekommt einen eigenen Schlüssel zur Box."
+		d.Risk, d.RiskWhy, d.Approve = "hoch", "Ein Programm bekommt einen eigenen Schlüssel zur Box.", "Schlüssel freigeben"
 	case exposed:
-		d.Risk, d.RiskWhy = "hoch", "Etwas wird von außen oder ohne Anmeldung erreichbar."
+		d.Risk, d.RiskWhy, d.Approve = "hoch", "Etwas wird von außen oder ohne Anmeldung erreichbar.", "Öffentlichen Pfad freigeben"
+	case host:
+		d.Risk, d.RiskWhy, d.Approve = "hoch", "Ein Skript oder eine Unit läuft direkt auf der Box.", "Skript auf der Box freigeben"
 	case p.Tier == "destroy":
-		d.Risk, d.RiskWhy = "mittel", "Es lässt sich nicht zurücknehmen."
+		d.Risk, d.RiskWhy, d.Approve = "hoch", "Es lässt sich nicht zurücknehmen.", "Endgültig freigeben"
 	case slices.ContainsFunc(p.Changes, func(c Change) bool { return c.Key == "HA_FIRMWARE" }):
 		d.Risky = true
 		d.Risk, d.RiskWhy = "mittel", "Geräte bekommen neue Firmware; während des Einspielens sind sie kurz weg, und die alte kommt nicht zurück."
@@ -929,4 +931,11 @@ func title(name string) string {
 		}
 	}
 	return strings.Join(words, " ")
+}
+
+// anyMentions: one of the reasons says one of the marks.
+func anyMentions(reasons []string, marks ...string) bool {
+	return slices.ContainsFunc(reasons, func(r string) bool {
+		return slices.ContainsFunc(marks, func(m string) bool { return strings.Contains(r, m) })
+	})
 }

@@ -36,4 +36,5 @@ details summary{cursor:pointer;color:var(--muted)}.frist{display:block;flex-basi
 .tabs a[aria-current]{background:var(--accent-soft);font-weight:600}.tabs a[href="/abmelden"]{margin-top:auto}
 .filter{max-width:32rem}.liste{grid-template-columns:repeat(auto-fill,minmax(22rem,1fr))}}
 .risk{display:inline-block;padding:1px 8px;border-radius:9px;font-size:.8rem;font-weight:600;color:#fff;background:var(--ok)}.risk.mittel{background:var(--warn)}.risk.hoch{background:var(--bad)}ul.changes{list-style:none;padding-left:4px}
+.card.mittel{border-left-color:var(--warn)}.card.hoch{border-left-color:var(--bad)}.schritte{margin:16px 0 0;font-weight:600;color:var(--muted)}
 .card form{display:flex;gap:8px;align-items:center}.card input[type=date]{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:0 10px;min-height:40px}
