@@ -105,6 +105,20 @@ type Updates struct {
 	// auto (the default: the newest release with binaries), off, or the
 	// version to hold.
 	Laib string `yaml:"laib"`
+	// Auto (ADR 0037): a routine new image applies itself; "aus" stops it
+	// and every new image is a card again. On by default (owner, 2026-11-28).
+	Auto Switch `yaml:"auto"`
+}
+
+// Switch is an, aus or unset; box.yml with another value does not load.
+type Switch string
+
+func (w *Switch) UnmarshalYAML(n *yaml.Node) error {
+	if n.Value != "an" && n.Value != "aus" {
+		return fmt.Errorf("updates.auto: %q is neither an nor aus (ADR 0037)", n.Value)
+	}
+	*w = Switch(n.Value)
+	return nil
 }
 
 // Notify is the webhook Laib posts red results, proposals and readiness
@@ -292,6 +306,9 @@ type Contract struct {
 	// Instances: the persons' instances of a per-person template this
 	// service talks to, wired into one of its containers (laib#1016).
 	Instances []Reach `yaml:"instances"`
+	// Soak: the days a third-party image's new digest waits before it may
+	// apply itself (ADR 0037); 0 = three.
+	Soak int `yaml:"soak"`
 }
 
 // Privacy is Contract.Private: "", sealed or approval (ADR 0032); a laib.yml

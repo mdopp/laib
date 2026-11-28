@@ -60,6 +60,9 @@ func describe(ctx context.Context, env *Env, u *Row, p Pinned) {
 	u.Source = "https://github.com/" + repo
 	const rev = "org.opencontainers.image.revision"
 	u.Notes = env.GitHub.Changelog(ctx, repo, u.OldVersion, u.NewVersion, old[rev], labels[rev])
+	if !Own(u.Image) { // the soak's public signal (ADR 0037): our own images have their CI instead
+		u.Issues, u.IssueLinks = env.GitHub.Issues(ctx, repo, u.NewVersion)
+	}
 }
 
 func tail(s string, n int) string {

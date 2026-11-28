@@ -51,6 +51,7 @@ type Proposal struct {
 	Recomputed  bool      `json:"recomputed,omitempty"`  // approved as computed again on the current main (#637)
 	Refiled     int       `json:"refiled,omitempty"`     // stale because the recomputed content differs; filed fresh as this one (#637)
 	Karte       string    `json:"karte,omitempty"`       // one card for several (#1239): the box's template updates, "Laib 2.31.0"; decided together (Fold)
+	Routine     string    `json:"routine,omitempty"`     // ADR 0037: normal | sicherheit, the Operator's word; set only when laib let it apply itself
 	Anchor
 	// what came of it (#544), recorded by laib, never by the proposer:
 	// waiting (approved, no run has applied it yet, #609) | effective |

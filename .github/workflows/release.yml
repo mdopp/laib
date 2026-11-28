@@ -32,6 +32,10 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          # ADR 0037 §8: a PR opened with GITHUB_TOKEN starts no workflow, so main could not require
+          # green checks; with the owner's PR_BOT_TOKEN the release PR runs test, ratchet and quadlet
+          # like any other. Without the secret it is as before.
+          token: ${{ secrets.PR_BOT_TOKEN || github.token }}
   binary:
     needs: release-please
     if: needs.release-please.outputs.released == 'true'

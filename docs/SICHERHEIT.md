@@ -228,7 +228,7 @@ Nur die Namen, aus `secrets:` jeder `laib.yml`; die Werte liegen nur in `secrets
 **Schicht 1 · Bausteine**
 
 - fremde Programme in Containern, rootless, keine Host-Rechte außer begründeten Ausnahmen (Liste
-- Image per Prüfsumme, neue Version nur per Karte
+- Image per Prüfsumme; eine neue Version spielt sich als Routine selbst ein (vom Modell geprüft, fremde nach drei Tagen, Sicherung davor, bei Rot zurück, ADR 0037), sonst per Karte; was Rechte ändert, nie von selbst
 - eigene Dienstkonten statt Admin-Zugang
 - Tresor ist ein Baustein: Entsperren, Sitzung, Rechte je Bereich, Protokoll
 

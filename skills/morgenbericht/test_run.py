@@ -42,6 +42,23 @@ class Lines(unittest.TestCase):
             self.assertEqual(run.due_line(none), "")
 
 
+class Routine(unittest.TestCase):
+    """ADR 0037: the morning names what applied itself, one line per service, with the way back."""
+
+    def test_one_line_per_service_and_a_take_back(self):
+        # Ablauf L-74
+        inbox = [{"id": 31, "routine": "normal", "decided": "2026-10-21T04:31:00Z", "outcome": "applied",
+                  "changes": [{"service": "immich", "key": "IMAGE", "oldVersion": "v2.4.0", "newVersion": "v2.5.0"}]},
+                 {"id": 32, "routine": "sicherheit", "decided": "2026-10-21T04:40:00Z", "outcome": "rolled-back",
+                  "changes": [{"service": "llama", "key": "IMAGE", "oldVersion": "b5000", "newVersion": "b5100"}]},
+                 {"id": 20, "routine": "normal", "decided": "2026-10-19T04:00:00Z", "changes": [{"service": "alt"}]},
+                 {"id": 33, "decided": "2026-10-21T04:00:00Z", "changes": [{"service": "von-hand"}]}]
+        self.assertEqual(run.routine_lines(inbox, run.when(DAY)),
+                         "Heute Nacht eingespielt: immich v2.4.0 → v2.5.0 · Zurücknehmen: Inbox, Karte #31. "
+                         "Heute Nacht zurückgenommen: llama b5100 lief nicht grün, es läuft wieder b5000.")
+        self.assertEqual(run.routine_lines(None, run.when(DAY)), "")
+
+
 class Fallback(unittest.TestCase):
     """#858: a failing model consumed the slot with no report."""
 

@@ -1,6 +1,6 @@
 # scripts/ratchet.py mutation: surviving mutants, the number is how many on that line's text
 # written by `scripts/ratchet.py --update`; lowered in the PR that fixes one, raised only with --accept
-# total 526
+# total 525
 3 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: Warum: "Der Bote kam bei " + svc.Name + " nicht weiter; was er wusste und der Stand liegen in " + p}, env.Actor, time.Now())
 2 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: bad = append(bad, c.What+" "+c.Detail)
 1 internal/envelope/envelope.go: not-covered ARITHMETIC_BASE: case args[i] == "--container" && i+1 < len(args):
@@ -197,7 +197,6 @@
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if limit, err = strconv.Atoi(args[i]); err != nil {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if need = slices.Compact(need); len(need) > 0 {
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if p.Class == "human" {
-3 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if policy.Auto(st.Policy, p.Class) && len(p.Warnings) == 0 && proposal.Hand(env.Actor) != "human" && env.Ceiling == "" { // Auto is never true for human or remove; approvals[tier] binds hands, not laib's own delegation
 2 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if policy.Index(st.Policy.Hands[h].Ceiling) > mine || h == "human" {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if proposal.Hand(env.Actor) != "human" {
 1 internal/inbox/inbox.go: not-covered CONDITIONALS_NEGATION: if r := []rune(strings.Join(strings.Fields(text), " ")); len(r) > 400 {

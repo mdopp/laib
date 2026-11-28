@@ -4,9 +4,12 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,7 +62,38 @@ func (g GitHub) Changelog(ctx context.Context, repo, oldV, newV, oldRev, newRev 
 	return clip(strings.Join(text, "\n"), 6000)
 }
 
+// Issues (ADR 0037): how many issues of repo were opened since version's
+// release and name it — the soak's signal that others have problems with
+// it — and up to three links; nothing found, or no release, is 0.
+func (g GitHub) Issues(ctx context.Context, repo, version string) (int, []string) {
+	var rel struct {
+		Published string `json:"published_at"`
+	}
+	for _, tag := range slices.Compact([]string{version, "v" + strings.TrimPrefix(version, "v")}) {
+		if rel.Published == "" && ghTag.MatchString(tag) && ghRepo.MatchString(repo) {
+			g.get(ctx, "/repos/"+repo+"/releases/tags/"+tag, &rel)
+		}
+	}
+	if len(rel.Published) < 10 {
+		return 0, nil
+	}
+	var found struct {
+		Total int `json:"total_count"`
+		Items []struct {
+			URL string `json:"html_url"`
+		} `json:"items"`
+	}
+	q := url.QueryEscape(fmt.Sprintf(`repo:%s is:issue "%s" created:>=%s`, repo, strings.TrimPrefix(version, "v"), rel.Published[:10]))
+	g.get(ctx, "/search/issues?per_page=3&q="+q, &found)
+	var links []string
+	for _, it := range found.Items[:min(3, len(found.Items))] {
+		links = append(links, it.URL)
+	}
+	return found.Total, links
+}
+
 var (
+	ghTag   = regexp.MustCompile(`^v?\d+(\.\d+){0,3}([-.+][A-Za-z0-9.]+)?$`)
 	ghRepo  = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9_-][A-Za-z0-9_.-]*$`)
 	ghRev   = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
 	ghMu    sync.Mutex

@@ -21,6 +21,7 @@ import (
 	"github.com/mdopp/laib/internal/diag"
 	"github.com/mdopp/laib/internal/inbox"
 	"github.com/mdopp/laib/internal/journal"
+	"github.com/mdopp/laib/internal/proposal"
 	"github.com/mdopp/laib/internal/state"
 	"github.com/mdopp/laib/internal/sysd"
 )
@@ -58,6 +59,13 @@ type ImageUpdate struct {
 	Source     string `json:"source,omitempty"`
 	Notes      string `json:"notes,omitempty"`
 	Unsigned   string `json:"unsigned,omitempty"`
+	// ADR 0037: when a new digest may apply itself (RFC 3339) — our own at
+	// once, a third party's after its soak; "" while updates.auto is aus.
+	// Issues: the upstream's GitHub issues since the release that name the
+	// new version, as the updater counts them, with up to three links
+	Ready      string   `json:"ready,omitempty"`
+	Issues     int      `json:"issues,omitempty"`
+	IssueLinks []string `json:"issueLinks,omitempty"`
 
 	PatchDigest string `json:"patchDigest,omitempty"` // Patch's digest: its proposal keeps the value pinned (#1130)
 }
@@ -227,6 +235,7 @@ func Updates(ctx context.Context, env *cli.Env, args []string) int {
 		}
 	}
 	diag.SeeBehind(env.Paths.Home, time.Now(), behind)
+	ready(env.Paths.Home, st, ups)
 	if env.JSON {
 		if ups == nil {
 			ups = []ImageUpdate{}
@@ -244,10 +253,56 @@ func Updates(ctx context.Context, env *cli.Env, args []string) int {
 			continue
 		}
 		if u.Digest != "" || !semverTag.MatchString(u.Current) {
-			fmt.Fprintf(env.W(), "%-14s %s:%s  %s %s\n", u.Service, u.Image, u.Current, cmp.Or(u.Digest, "aktuell"), u.Error)
+			fmt.Fprintf(env.W(), "%-14s %s:%s  %s%s %s\n", u.Service, u.Image, u.Current, cmp.Or(u.Digest, "aktuell"), readyWord(u), u.Error)
 			continue
 		}
 		fmt.Fprintf(env.W(), "%-14s %s:%s  patch %s  minor %s %s\n", u.Service, u.Image, u.Current, cmp.Or(u.Patch, "—"), cmp.Or(u.Minor, "—"), u.Error)
 	}
+	routineLines(env, st, time.Now())
 	return code
+}
+
+// ready fills Ready (ADR 0037): from when laib first saw a new digest, a
+// third party's after its soak; none while updates.auto is aus.
+func ready(home string, st *state.State, ups []ImageUpdate) {
+	for i, u := range ups {
+		if _, since := diag.Seen(home, u.Service, u.Key); u.Digest != "" && st.Box.Updates.Auto != "aus" {
+			if !strings.HasPrefix(u.Image, "ghcr.io/mdopp/") {
+				since = since.Add(inbox.Soak(st, u.Service))
+			}
+			ups[i].Ready = since.UTC().Format(time.RFC3339)
+		}
+	}
+}
+
+// readyWord: whether a new digest applies itself (ADR 0037), in words.
+func readyWord(u ImageUpdate) string {
+	t, err := time.Parse(time.RFC3339, u.Ready)
+	switch {
+	case u.Digest == "":
+		return ""
+	case err != nil:
+		return " (als Karte: updates.auto ist aus)"
+	case time.Now().Before(t):
+		return " (wartet bis " + t.Local().Format("02.01. 15:04") + ", dann von selbst, wenn das Modell es normal findet)"
+	}
+	return " (spielt sich ein, wenn das Modell es normal findet)"
+}
+
+// routineLines (ADR 0037): what applied itself in seven days and how it
+// ended, and the new images held for a person, with the model's reason.
+func routineLines(env *cli.Env, st *state.State, now time.Time) {
+	all, _ := proposal.List(cli.InboxDir(env), false)
+	if st.Box.Updates.Auto == "aus" {
+		fmt.Fprintln(env.W(), "Updates spielen sich nicht selbst ein (box.yml updates.auto: aus).")
+	}
+	for _, p := range all {
+		images := slices.ContainsFunc(p.Changes, func(c proposal.Change) bool { return strings.HasSuffix(c.Key, "IMAGE") })
+		switch {
+		case p.Routine != "" && now.Sub(p.Decided) < 7*24*time.Hour:
+			fmt.Fprintf(env.W(), "eingespielt    #%d %s, %s: %s\n", p.ID, p.Reason, p.Decided.Local().Format("02.01. 15:04"), cmp.Or(p.Outcome, "fertig"))
+		case p.Status == "open" && images:
+			fmt.Fprintf(env.W(), "angehalten     #%d %s: %s\n", p.ID, p.Reason, strings.Join(slices.Sorted(maps.Values(p.Notes)), " · "))
+		}
+	}
 }

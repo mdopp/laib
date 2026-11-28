@@ -57,3 +57,37 @@ func TestChangelogReadsTheReleasesBetweenTwoVersions(t *testing.T) {
 		t.Fatal("asked GitHub again before its reset")
 	}
 }
+
+// ADR 0037: during a third party's soak the updater counts the upstream's
+// issues opened since the release that name the version, with up to three
+// links; no release (or no version) asks no search and is 0.
+func TestIssuesCountsTheReportsSinceTheRelease(t *testing.T) {
+	var queries []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/repos/immich-app/immich/releases/tags/v2.5.0":
+			json.NewEncoder(w).Encode(map[string]string{"published_at": "2026-11-25T18:00:00Z"})
+		case r.URL.Path == "/search/issues":
+			queries = append(queries, r.URL.Query().Get("q"))
+			json.NewEncoder(w).Encode(map[string]any{"total_count": 5, "items": []map[string]string{{"html_url": "https://github.com/immich-app/immich/issues/1"},
+				{"html_url": "https://github.com/immich-app/immich/issues/2"}, {"html_url": "https://github.com/immich-app/immich/issues/3"}, {"html_url": "https://github.com/immich-app/immich/issues/4"}}})
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	gh, ctx := GitHub{API: srv.URL}, context.Background()
+	n, links := gh.Issues(ctx, "immich-app/immich", "2.5.0")
+	if n != 5 || len(links) != 3 || links[0] != "https://github.com/immich-app/immich/issues/1" {
+		t.Fatalf("issues: %d %v", n, links)
+	}
+	if len(queries) != 1 || queries[0] != `repo:immich-app/immich is:issue "2.5.0" created:>=2026-11-25` {
+		t.Fatalf("the search: %q", queries)
+	}
+	if n, _ := gh.Issues(ctx, "immich-app/immich", ""); n != 0 || len(queries) != 1 {
+		t.Fatal("no version asked the search")
+	}
+	if n, _ := gh.Issues(ctx, "immich-app/immich", "9.9.9"); n != 0 || len(queries) != 1 {
+		t.Fatal("no release asked the search")
+	}
+}

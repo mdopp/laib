@@ -23,21 +23,23 @@ type Pinned struct {
 // Row is one line of laib updates (registry.ImageUpdate in the kernel; the
 // two meet over HTTP, never by import).
 type Row struct {
-	Service     string `json:"service"`
-	Key         string `json:"key"`
-	Image       string `json:"image"`
-	Current     string `json:"current"`
-	Patch       string `json:"patch,omitempty"`
-	Minor       string `json:"minor,omitempty"`
-	Error       string `json:"error,omitempty"`
-	Digest      string `json:"digest,omitempty"`
-	Pin         string `json:"pin,omitempty"`
-	PatchDigest string `json:"patchDigest,omitempty"`
-	OldVersion  string `json:"oldVersion,omitempty"`
-	NewVersion  string `json:"newVersion,omitempty"`
-	Source      string `json:"source,omitempty"`
-	Notes       string `json:"notes,omitempty"`
-	Unsigned    string `json:"unsigned,omitempty"`
+	Service     string   `json:"service"`
+	Key         string   `json:"key"`
+	Image       string   `json:"image"`
+	Current     string   `json:"current"`
+	Patch       string   `json:"patch,omitempty"`
+	Minor       string   `json:"minor,omitempty"`
+	Error       string   `json:"error,omitempty"`
+	Digest      string   `json:"digest,omitempty"`
+	Pin         string   `json:"pin,omitempty"`
+	PatchDigest string   `json:"patchDigest,omitempty"`
+	OldVersion  string   `json:"oldVersion,omitempty"`
+	NewVersion  string   `json:"newVersion,omitempty"`
+	Source      string   `json:"source,omitempty"`
+	Notes       string   `json:"notes,omitempty"`
+	Unsigned    string   `json:"unsigned,omitempty"`
+	Issues      int      `json:"issues,omitempty"`     // ADR 0037: the upstream's issues since the release naming the new version
+	IssueLinks  []string `json:"issueLinks,omitempty"` // up to three of them, for the card's sources
 }
 
 var semverTag = regexp.MustCompile(`^(v?)(\d+)\.(\d+)(?:\.(\d+))?$`)

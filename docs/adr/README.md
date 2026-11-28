@@ -1,7 +1,7 @@
 # Laib ADRs
 
 Status · Context · Decision · Consequences. One file per decision, next free
-number: **0035**. Each file's first paragraph after the title says *in which
+number: **0038** (0036 is #1280's). Each file's first paragraph after the title says *in which
 situation* it applies, so an agent can self-select.
 
 | # | Decision |
@@ -39,6 +39,7 @@ situation* it applies, so an agent can self-select.
 | [0031](0031-haus-is-renamed-homes.md) | Haus is renamed Homes: program, app and assistant share one name; the box moves in one proposal (`was:`), the old app kept `haus.<domain>`'s `/napi/` until every phone switched; the program's logins are renamed `homes` too (owner, option b); amended 2026-11-07: Homes lives on `www.<domain>`, `homes.` and `haus.` are gone without a redirect |
 | [0032](0032-agents-stay-out-of-the-familys-data.md) | Agents stay out of the family's data: a template marks it `private:`; nobody looks into a `sealed` one (the archive), an agent into an `approval` one only for an hour after a human's Einblick in the Inbox, and the journal keeps no output of it |
 | [0033](0033-the-copy-off-the-box-is-append-only.md) | The copy off the box is append-only: an S3 bucket with Object Lock (`backup.offsite.objectLock`), its keys box secrets the owner enters; the box never forgets or prunes there, the lock is the retention |
-| [0034](0034-images-are-pinned-by-digest-and-change-by-proposal.md) | Accepted (owner's choice c): every image pinned by digest, every newer digest — upstreams' and our own — one grouped card per night a person taps, each with the box's model's summary of its changelog; our own images verified by their CI signature (#1130); amended: the build is pinned too, actions by commit and base images by digest (#1165) |
+| [0034](0034-images-are-pinned-by-digest-and-change-by-proposal.md) | Accepted (owner's choice c): every image pinned by digest, every newer digest — upstreams' and our own — one grouped card per night a person taps, each with the box's model's summary of its changelog; our own images verified by their CI signature (#1130); amended: the build is pinned too, actions by commit and base images by digest (#1165); amended by 0037: a routine image applies itself |
 | [0035](0035-three-layers-two-rings-inside-laib.md) | Accepted: three layers by purpose (0 Laib, 1 building blocks, 2 value), dependencies only point down; inside Laib ring 0a (trust kernel) and 0b (helper containers: updater, household verbs, observer); Laib stands without Homes; layer 2 has no tie to the OS (#1047) |
 | [0036](0036-the-operator-puts-a-choice-on-one-card.md) | Accepted: the Operator puts a choice on one card (`laib wahl anlegen`): problem, cause, N ways with their consequence each, a recommendation; every way is a proposal (a repair, a patch, „nachdenken“ with more steps, „ticket“ as a Box-Aufgabe); choosing one rejects the rest |
+| [0037](0037-updates-apply-themselves.md) | Accepted: a routine new image (own or third party) applies itself — judged by the box's model and the script's rules, a third party's after a three-day soak with the upstream's issues counted, snapshot, verify and rollback as for any approval, one line per service the next morning with „Zurücknehmen“; only new digests of running services pass the kernel, every right stays a tap; box.yml `updates.auto` pauses it; amends 0034. Also: the Inbox's card compact and ordered (on 0036), main only with green checks |

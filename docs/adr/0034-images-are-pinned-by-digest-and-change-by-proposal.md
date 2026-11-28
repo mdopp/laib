@@ -187,3 +187,15 @@ A digest or signature that does not hold then takes the run's approvals
 back before anything is snapshotted or written, and their cards say why.
 The card the owner taps, the nightly `versionen` and its summaries are
 unchanged.
+
+## Amendment 2026-11-28 (ADR 0037): a routine image applies itself
+
+Decisions 5 and 6 hold only for what is not routine. The owner, „Lass uns
+locker sein“: a new digest the nightly `versionen` judges normal — the
+script's rules and the box's model, a third party's after a three-day soak
+in which the upstream's issues are counted — goes to laib as `laib propose
+--routine`, and laib approves and carries it itself when it changes nothing
+but images of running services (the kernel's `routineWhy`). Snapshot,
+verify, rollback, the pins, the signatures and the checks before the run
+are this ADR's, unchanged. „Aufpassen“ and every change of rights stay a
+card; box.yml `updates.auto: aus` brings back (c) for everything.

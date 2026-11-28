@@ -22,6 +22,7 @@ import (
 type Behind struct {
 	Want  string    `json:"want"`
 	Since time.Time `json:"since"`
+	Seen  time.Time `json:"seen"` // since when Want is the channel's newest (ADR 0037: a soak counts from here)
 }
 
 func readBehind(home string) map[string]Behind {
@@ -36,13 +37,23 @@ func readBehind(home string) map[string]Behind {
 func SeeBehind(home string, now time.Time, want map[string]string) {
 	old, out := readBehind(home), map[string]Behind{}
 	for k, w := range want {
-		out[k] = Behind{Want: w, Since: now}
+		out[k] = Behind{Want: w, Since: now, Seen: now}
 		if o, ok := old[k]; ok {
-			out[k] = Behind{Want: w, Since: o.Since}
+			out[k] = Behind{Want: w, Since: o.Since, Seen: now}
+			if o.Want == w && !o.Seen.IsZero() {
+				out[k] = o
+			}
 		}
 	}
 	b, _ := json.Marshal(out)
 	os.WriteFile(filepath.Join(home, "updates.json"), b, 0o644)
+}
+
+// Seen (ADR 0037): the newest digest laib updates found for a service's
+// value key, and since when it is the newest; "" when none is behind.
+func Seen(home, service, key string) (string, time.Time) {
+	b := readBehind(home)[service+" "+key]
+	return b.Want, b.Seen
 }
 
 // imageFindings: yellow for an image more than 30 days behind, and for a box

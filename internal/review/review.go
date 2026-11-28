@@ -105,12 +105,17 @@ func (r *Result) data(svc, why string) {
 	}
 }
 
+// NewImage begins every reason and warning newImage gives, and no other:
+// a proposal with only these may apply itself as a routine (ADR 0037).
+const NewImage = "ein neues Image für "
+
 // newImage: every new image is a person's tap (ADR 0034, the owner's
-// choice c); one with data (no AutoUpdate=registry) is snapshotted first.
+// choice c) unless laib lets it apply itself as a routine (ADR 0037); one
+// with data (no AutoUpdate=registry) is snapshotted first.
 func (r *Result) newImage(svc, old, img string, auto bool) {
-	r.Human = append(r.Human, fmt.Sprintf("ein neues Image für %s (%s → %s): neue Software nur auf deinen Tipp (ADR 0034)", svc, old, img))
+	r.Human = append(r.Human, fmt.Sprintf(NewImage+"%s (%s → %s): neue Software nur auf deinen Tipp (ADR 0034)", svc, old, img))
 	if !auto {
-		r.data(svc, fmt.Sprintf("ein neues Image für %s (%s → %s), dessen Daten es migrieren kann", svc, old, img))
+		r.data(svc, fmt.Sprintf(NewImage+"%s (%s → %s), dessen Daten es migrieren kann", svc, old, img))
 	}
 }
 

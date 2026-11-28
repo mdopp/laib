@@ -31,7 +31,7 @@ flowchart LR
   durchsicht -- "wish (1 je Woche, eine Zeile je Fund)" --> inbox
   nutzung -- "wish (≤ 3)" --> inbox
   aktualisierung -- "propose (Patch)" --> inbox
-  versionen -- "eine Karte: neue Images mit Zusammenfassung" --> inbox
+  versionen -- "Routine: spielt sich selbst ein; sonst eine Karte mit Grund" --> inbox
   inbox -- "freigegebener Wunsch: wishes/" --> durchsicht
   durchsicht -- "note: Aussortiert …" --> journal[(Journal)]
   sicherung -- note --> journal
@@ -54,10 +54,10 @@ kernel's answers the skills read (one source, below).
 | a red: a journal line the kernel posts, or a red the look sees first | `vorfall` | first aid (its script: the service's last real error line, the restart diag offers, diag again), then the model: restart, `propose`, `repair`, `wahl` (one card when ways exclude each other, ADR 0036), `escalate`; an `incident` note | the owner (an incident note reaches the webhook); `lehre` |
 | a red run: an apply of approvals („Freigaben #…“); laib takes it back and applies each approval again alone (#1209) | `durchgang` | its script waits until laib is through, reads the run's journal line and the failing service's error lines of that minute and asks the model for the cause and what only the owner can do; then the cause on the red cards and their follow-ups (`laib note --karten`), a red card that touches no failing service proposed again on its own, as it was, and one Box-Aufgabe for the owner unless laib's precondition filed one; an `incident` note. It never approves, rolls back or passes a consent | the owner in the Inbox and his Box-Aufgaben |
 | daily, 06:30 | `durchsicht` | a `watch` note: the error patterns, and once „Aussortiert, kein Wunsch: …“; once a week one wish, a row per pattern of the week (#1241); the status of the Operator's open log wishes (`laib wish status`) | the owner in the Inbox; `morgenbericht` |
-| daily, report hour | `morgenbericht` | the `report` note: the night, red first, and the lines its script always adds (the rate of the Operator's proposals, a lesson that keeps failing, due Box-Aufgaben, the model's day, durchsicht's „Aussortiert“, the wishes closed) | the owner: the Box page and the morning message |
+| daily, report hour | `morgenbericht` | the `report` note: the night, red first, and the lines its script always adds (what applied itself last night, one line per service with „Zurücknehmen“, ADR 0037; the rate of the Operator's proposals, a lesson that keeps failing, due Box-Aufgaben, the model's day, durchsicht's „Aussortiert“, the wishes closed) | the owner: the Box page and the morning message |
 | daily, report hour | `lehre` | a lesson per solved incident, `lessons/<probe>-<service>.md`, a class-human proposal | the owner in the Inbox; once let in, every session's context and `vorfall`'s first aid |
 | weekly, Monday | `nutzung` | at most three wishes from the family's usage; a `watch` note | the owner in the Inbox |
-| daily, 05:30 | `versionen` | one card with every new image digest, each with the model's short summary of its changelog, and once the pins of the floating values (ADR 0034); a `watch` note | the owner in the Inbox |
+| daily, 05:30 | `versionen` | each new image digest judged (the script's rules, then the model: NORMAL or AUFPASSEN and a short summary); a normal one as `--routine`, one per service, which laib applies itself (ADR 0037) — a third party's after its soak, held when its issues pile up; the rest on one card „Neue Versionen“ with the reason first; once the pins of the floating values (ADR 0034); a `watch` note | laib for a routine, the owner in the Inbox for the rest |
 | weekly, Saturday | `aktualisierung` | at most three patch proposals with their reason; a `watch` note | the owner in the Inbox |
 | weekly, Sunday | `sicherung` | a note on the backup check and the canary restore | `morgenbericht` |
 
