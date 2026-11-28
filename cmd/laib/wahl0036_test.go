@@ -52,7 +52,7 @@ func human(env *cliEnv) *cliEnv {
 	return &cliEnv{Paths: env.Paths, Actor: "human:test", Out: io.Discard, ErrOut: io.Discard}
 }
 
-// Ablauf L-63
+// Ablauf L-67
 func TestAChoiceIsOneCardWithAButtonPerWayAndNoFreigebenOfItsOwn(t *testing.T) {
 	env, h, a, b, out := wahlBox(t, false)
 	if !strings.Contains(out, fmt.Sprintf("Karte #%d", h.ID)) {
@@ -85,7 +85,7 @@ func TestAChoiceIsOneCardWithAButtonPerWayAndNoFreigebenOfItsOwn(t *testing.T) {
 	}
 }
 
-// Ablauf L-64
+// Ablauf L-68
 func TestChoosingAWayRejectsTheOthersAndClosesTheCard(t *testing.T) {
 	env, h, a, b, _ := wahlBox(t, false)
 	if code := inbox.Decide(context.Background(), human(env), []string{strconv.Itoa(a.ID)}, true); code != cli.ExitOK {
@@ -114,7 +114,7 @@ func TestChoosingAWayRejectsTheOthersAndClosesTheCard(t *testing.T) {
 	}
 }
 
-// Ablauf L-64
+// Ablauf L-68
 func TestRejectingTheCardRejectsEveryWay(t *testing.T) {
 	env, h, a, b, _ := wahlBox(t, false)
 	if code := inbox.Decide(context.Background(), human(env), []string{strconv.Itoa(h.ID), "zu", "teuer"}, false); code != cli.ExitOK {
@@ -131,7 +131,7 @@ func TestRejectingTheCardRejectsEveryWay(t *testing.T) {
 	}
 }
 
-// Ablauf L-64
+// Ablauf L-68
 func TestTheTicketWayMakesABoxAufgabeAndNachdenkenOpensAnIncidentForTheOperator(t *testing.T) {
 	env, h, a, _, _ := wahlBox(t, false)
 	since := time.Now().Add(-time.Second)
