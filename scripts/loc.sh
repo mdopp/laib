@@ -28,8 +28,8 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
-# 22,805: field failure 2026-11-28 (Gast-Link im Heimnetz von Chrome blockiert) — the raise to be
-# OK'd in the PR: the guest names (render.GuestNames) excepted from AdGuard's LAN rewrite, their line
+# 22,805: field failure 2026-11-28 (Gast-Link im Heimnetz von Chrome blockiert), owner approved
+# 2026-11-28 „Ja“: the guest names (render.GuestNames) excepted from AdGuard's LAN rewrite, their line
 # in laib net, and diag's gast-dns probe (AdGuard against a public resolver, the NAT loopback); the
 # kernel at 22,701 before, 103 lines, the cap one above (the count stays under it).
 # 22,702: owner approved 2026-11-26, homes ADR 0004 §5: a bypass of one file, Homes'
