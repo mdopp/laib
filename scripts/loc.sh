@@ -28,6 +28,11 @@ budget() { # budget <name> <cap> <dir…>
 diet=""
 [ "${1:-}" = --diet ] && diet=1
 lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null | wc -l; }
+# 22,997: the owner's ADR 0037 §7 (2026-11-28, „viel Text, Reihenfolge unklar, viel Scrollen, obwohl
+# man meist eh nur freigibt. Das ist gefährlich“ … „Der Rest klingt gut!“): the Inbox's card compact
+# (headline, one line, weight, rückgängig, the rest under Details), hoch first and the cards that wait
+# on one another together as steps, a hoch card's Freigeben only in its details and named for what it
+# does (the card's approve), and „Alle freigeben“ leaves it. On #1280's 22,889, 22,996 with it: raised by what came in, no more.
 # 22,890: the owner's ADR 0036 (2026-11-21, „B hilft mir mehr“: the Operator puts a choice on one card,
 # „mir Optionen zu geben und in einer Karte freigegeben zu lassen“): the choice card (proposal.Wahl, its
 # ways each a proposal, laib wahl anlegen / nachdenken / ticket), choosing one closes the rest where an
@@ -93,7 +98,7 @@ lines() { find "$@" -name '*.go' ! -name '*_test.go' -exec cat {} + 2>/dev/null 
 # owner, 2026-10-17, #309.) 
 # operator 3,305: ADR 0036: a choice card sent back with „nachdenken“ gets three times the steps on the same model (3 lines), the
 # card's proposals count as the ones a session filed (2 lines); 3,299 before, 3,302 with it
-budget kernel 22890 cmd internal
+budget kernel 22997 cmd internal
 budget operator 3305 operator
 # the skills' scripts (#839): the deterministic steps that left the Operator's Go, Python run by
 # its runner, their own line so they are counted and not hidden in the Operator's; laibskill.py,

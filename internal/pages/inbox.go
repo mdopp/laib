@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"cmp"
 	"fmt"
 	"html"
 	"net/http"
@@ -67,6 +68,7 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 	dir, locked := cli.InboxDir(env), apply.LockHolder(env.Paths) != ""
 	all = proposal.Fold(all) // the box's template updates as one card (#1239)
 	slices.SortFunc(all, func(a, b *proposal.Proposal) int { return a.ID - b.ID })
+	heads := order(all, domain) // hoch first, steps together (ADR 0037 §7)
 	var top, ended strings.Builder
 	type past struct {
 		at   time.Time
@@ -87,7 +89,7 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 				red = failure(f.say, f.raw)
 			}
 			c := card(r, env, all, p, domain, box, red)
-			top.WriteString(c)
+			top.WriteString(heads[p.ID] + c)
 			if failed {
 				ended.WriteString(c)
 			}
@@ -108,7 +110,7 @@ func placed(r *http.Request, env *cli.Env, all []*proposal.Proposal, taps map[in
 		}
 		if here {
 			c := decidedCard(p, all, domain, text, class, running, failed, f.raw, true)
-			top.WriteString(c)
+			top.WriteString(heads[p.ID] + c)
 			ended.WriteString(c)
 			continue
 		}
@@ -239,16 +241,26 @@ func progress(p *proposal.Proposal, decision string, locked bool) (text, class s
 	return "fertig", "grün", false
 }
 
-// card is one open proposal's decision card (#58, #616): headline and
-// weight, what changes, what it means, who and why, the way back — the
-// diff only behind the technical details. red: a tap on it that failed,
-// above everything else. One button row on every card (#941): Freigeben
-// left, Ablehnen right; a no takes a second tap, with its reason.
+// card is one open proposal's decision card (#58, #616), compact (ADR
+// 0037 §7, owner 2026-11-28: „viel Text, Reihenfolge unklar, viel Scrollen,
+// obwohl man meist eh nur freigibt“): the headline, what it does in one
+// line, its weight niedrig · mittel · hoch and whether it comes back, the
+// button row — everything else under Details, the diff only under the
+// technical details inside. red: a tap on it that failed, above everything
+// else. One button row on every card (#941): Freigeben (or its ways, ADR
+// 0036) left, Ablehnen right; a no takes a second tap, with its reason. A
+// „hoch“ card's Freigeben is in its details, named for what it does.
 func card(r *http.Request, env *cli.Env, all []*proposal.Proposal, p *proposal.Proposal, domain string, box []string, red string) string {
 	c := proposal.Card(p, domain, box...)
 	b := &strings.Builder{}
-	fmt.Fprintf(b, "<section class=card id=%d data-f><h2>Vorschlag #%d · %s</h2>%s", p.ID, p.ID, html.EscapeString(c.Summary), red) // /inbox#N, where a message links (#857)
-	waits := inbox.WaitsOf(env, p)                                                                                                  // #1194: what it waits for, where that is done
+	fmt.Fprintf(b, "<section class=\"card %s\" id=%d data-f><h2>#%d · %s</h2>%s", c.Risk, p.ID, p.ID, html.EscapeString(c.Summary), red) // /inbox#N, where a message links (#857)
+	fmt.Fprintf(b, "<p>%s</p>", html.EscapeString(cmp.Or(append(slices.Clone(c.Impact), c.RiskWhy)[0], c.RiskWhy)))
+	fmt.Fprintf(b, "<p><span class=\"risk %s\">%s</span> · rückgängig: %s", c.Risk, map[string]string{"gering": "niedrig"}[c.Risk]+strings.TrimPrefix(c.Risk, "gering"), map[bool]string{true: "ja", false: "nein"}[c.Undoable])
+	if c.Decider != "" {
+		fmt.Fprintf(b, " · <strong>%s</strong>", html.EscapeString(c.Decider))
+	}
+	b.WriteString("</p>")
+	waits := inbox.WaitsOf(env, p) // #1194: what it waits for, where that is done
 	for _, w := range waits {
 		fmt.Fprintf(b, "<p class=gelb>%s", html.EscapeString(w.Text))
 		if w.Link != "" {
@@ -262,11 +274,23 @@ func card(r *http.Request, env *cli.Env, all []*proposal.Proposal, p *proposal.P
 	if p.Freigabe != "" && len(waits) > 0 {
 		b.WriteString("<p>Freigegeben: Laib wendet ihn von selbst an, sobald nichts mehr fehlt.</p>")
 	}
-	fmt.Fprintf(b, "<p><span class=\"risk %s\">%s</span> %s", c.Risk, c.Risk, html.EscapeString(c.RiskWhy))
-	if c.Decider != "" {
-		fmt.Fprintf(b, " · <strong>%s</strong>", html.EscapeString(c.Decider))
+	accent := "go"
+	if c.Risky { // „Freigeben“ does not read as the default (#852)
+		accent = ""
 	}
-	b.WriteString("</p>")
+	// a no asks for its reason (#544), optional, only after the first tap (#941)
+	approve, inside := DecisionForm(p.ID, "approve", "Freigeben", accent), ""
+	switch {
+	case p.Freigabe != "" && len(waits) > 0:
+		approve = ""
+	case len(p.Wahl) > 0:
+		approve = wayButtons(all, p)
+	case c.Approve != "": // hoch: only with the details open, and it says what it does
+		approve, inside = "<span class=muted>Freigeben unter Details</span>", "<div class=knoepfe>"+DecisionForm(p.ID, "approve", c.Approve, "")+"</div>"
+	}
+	fmt.Fprintf(b, `<div class=knoepfe>%s<button type=button aria-expanded=false onclick="const f=this.parentNode.nextElementSibling;f.hidden=false;this.setAttribute('aria-expanded','true');f.querySelector('input').focus()">Ablehnen</button></div>`, approve)
+	fmt.Fprintf(b, `<form class=nein method=post action=/inbox/%d/reject hidden onsubmit="const b=this.querySelector('button');b.disabled=true;b.textContent='wird abgelehnt …'"><input name=grund maxlength=200 placeholder="Warum nicht? (optional)" aria-label="Warum nicht? (optional)"><span class=knoepfe><button>Ablehnen bestätigen</button><button type=button onclick="this.form.hidden=true;this.form.previousElementSibling.lastChild.setAttribute('aria-expanded','false')">Abbrechen</button></span></form>`, p.ID)
+	fmt.Fprintf(b, "<details><summary>Details</summary><p>%s</p>", html.EscapeString(c.RiskWhy))
 	if len(c.Changes) > 0 {
 		b.WriteString("<h3>Was sich ändert</h3><ul class=changes>")
 		for _, l := range c.Changes {
@@ -293,22 +317,11 @@ func card(r *http.Request, env *cli.Env, all []*proposal.Proposal, p *proposal.P
 	for _, w := range c.Warnings {
 		fmt.Fprintf(b, "<p class=gelb>Hinweis: %s</p>", html.EscapeString(w))
 	}
-	accent := "go"
-	if c.Risky { // „Freigeben“ does not read as the default (#852); the risk stands above the row
-		accent = ""
+	if c.Risky { // the risk stands above the button
 		fmt.Fprintf(b, "<p class=risiko>Vorsicht: %s Lies oben, was sich ändert, bevor du freigibst.</p>", html.EscapeString(c.RiskWhy))
 	}
-	// a no asks for its reason (#544), optional, only after the first tap (#941)
-	approve := DecisionForm(p.ID, "approve", "Freigeben", accent)
-	if p.Freigabe != "" && len(waits) > 0 {
-		approve = ""
-	} else if len(p.Wahl) > 0 {
-		approve = wayButtons(all, p)
-	}
-	fmt.Fprintf(b, `<div class=knoepfe>%s<button type=button aria-expanded=false onclick="const f=this.parentNode.nextElementSibling;f.hidden=false;this.setAttribute('aria-expanded','true');f.querySelector('input').focus()">Ablehnen</button></div>`, approve)
-	fmt.Fprintf(b, `<form class=nein method=post action=/inbox/%d/reject hidden onsubmit="const b=this.querySelector('button');b.disabled=true;b.textContent='wird abgelehnt …'"><input name=grund maxlength=200 placeholder="Warum nicht? (optional)" aria-label="Warum nicht? (optional)"><span class=knoepfe><button>Ablehnen bestätigen</button><button type=button onclick="this.form.hidden=true;this.form.previousElementSibling.lastChild.setAttribute('aria-expanded','false')">Abbrechen</button></span></form>`, p.ID)
-	fmt.Fprintf(b, "<details><summary>Technische Details</summary><p class=muted>%s</p><pre>%s</pre></details>",
-		html.EscapeString(c.Details), html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
+	fmt.Fprintf(b, "%s<details><summary>Technische Details</summary><p class=muted>%s</p><pre>%s</pre></details></details>",
+		inside, html.EscapeString(c.Details), html.EscapeString(proposal.Diff(r.Context(), env.Paths.State, p)))
 	return b.String() + "</section>"
 }
 
@@ -358,6 +371,8 @@ func oneByOne(may []*proposal.Proposal) ([]*proposal.Proposal, string) {
 			why = "entfernt einen Dienst"
 		case p.Class == "human":
 			why = "Laib will, dass du ihn dir selbst ansiehst"
+		case proposal.Card(p, "").Approve != "": // hoch (ADR 0037 §7): only after its details
+			why = "ist „hoch“: freigeben erst, wenn du die Details gelesen hast"
 		case len(p.Warnings) > 0:
 			why = "hat einen Hinweis"
 		default:

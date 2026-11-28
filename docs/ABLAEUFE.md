@@ -31,13 +31,28 @@ Und antwortet der Bote nicht, kommt dieselbe Zeile per Mail.
 
 ### L-2 Jede Karte sagt in Klartext, was sich ändert
 Wenn der Owner die Inbox öffnet,
-Dann sagt jede Karte in einem Satz, was sich ändert, was es für die Familie heißt, ob man es zurücknehmen kann, wer es will und warum.
+Dann sagt jede Karte in einem Satz, was sich ändert, was es für die Familie heißt, ob man es zurücknehmen kann, wer es will und warum, das Meiste davon unter „Details“ (L-77).
 Und der Diff steht nur unter „Details“, nie roher Fehlertext.
 
 ### L-3 Jede Karte hat dieselbe Knopfreihe
 Wenn eine Karte offen ist,
 Dann steht links „Freigeben“, rechts „Ablehnen“.
-Und bei einer riskanten Karte steht das Risiko über der Reihe und „Freigeben“ ist nicht hervorgehoben.
+Und bei einer riskanten Karte ist „Freigeben“ nicht hervorgehoben; bei „hoch“ steht es erst unter „Details“ (L-78).
+
+### L-77 Eine Karte ist kurz, der Rest steht unter „Details“
+Wenn der Owner die Inbox öffnet,
+Dann zeigt jede Karte nur ihre Überschrift, eine Zeile, was sie tut, „niedrig“, „mittel“ oder „hoch“ und „rückgängig: ja“ oder „nein“, und darunter die Knöpfe.
+Und was sich ändert, wer es will und warum, und das Technische stehen unter „Details“.
+
+### L-78 Bei „hoch“ gibt es „Freigeben“ erst unter „Details“, mit dem, was es tut
+Wenn eine Karte einen neuen Dienst, einen Schlüssel, einen öffentlichen Pfad, ein Skript auf der Box oder Löschen bringt,
+Dann steht in der Knopfreihe nur „Freigeben unter Details“ und „Ablehnen“,
+Und erst unter „Details“ steht der Knopf, und er sagt, was er tut, etwa „Öffentlichen Pfad freigeben“.
+
+### L-79 Hoch zuerst, Schritte beieinander
+Wenn mehrere Karten offen sind,
+Dann stehen die mit „hoch“ oben, dann „mittel“, dann „niedrig“,
+Und eine Karte, die auf eine andere wartet, steht direkt hinter ihr, beide unter einer Zeile wie „Mosquitto vor Scanner – 2 Schritte“.
 
 ### L-4 Nach „Freigeben“ bleibt die Karte an ihrem Platz
 Wenn der Owner eine Karte freigibt,

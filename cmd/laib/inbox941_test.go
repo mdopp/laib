@@ -141,7 +141,7 @@ func TestADecidedCardKeepsItsPlace(t *testing.T) {
 var buttonRe = regexp.MustCompile(`<button[^>]*>([^<]*)</button>`)
 
 // #941 (2, 3, 4): every open card has one row, Freigeben then Ablehnen,
-// risky or not; a risky one says its risk above the row and its Freigeben
+// risky or not — a hoch one's Freigeben in its details (ADR 0037 §7); a risky one says its risk above the row and its Freigeben
 // has no accent; no „Später“; the reason and „Ablehnen bestätigen“ come
 // only after the first tap on Ablehnen.
 // Ablauf L-3, L-5
@@ -166,8 +166,12 @@ func TestEveryCardHasTheSameButtonRow(t *testing.T) {
 		for _, m := range buttonRe.FindAllStringSubmatch(row, -1) {
 			labels = append(labels, m[1])
 		}
-		if !slices.Equal(labels, []string{"Freigeben", "Ablehnen"}) {
-			t.Errorf("#%d: buttons %q, want Freigeben, Ablehnen:\n%s", id, labels, c)
+		want := []string{"Freigeben", "Ablehnen"}
+		if id == risky.ID { // hoch (ADR 0037 §7): Freigeben only inside the details, named for what it does
+			want = []string{"Ablehnen", "Öffentlichen Pfad freigeben"}
+		}
+		if !slices.Equal(labels, want) {
+			t.Errorf("#%d: buttons %q, want %q:\n%s", id, labels, want, c)
 		}
 		if strings.Contains(row, "name=grund") {
 			t.Errorf("#%d: the reason shows before the first tap:\n%s", id, row)

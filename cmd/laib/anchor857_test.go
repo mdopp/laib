@@ -12,7 +12,7 @@ func TestAnOpenCardIsItsOwnAnchor(t *testing.T) {
 	env, _ := testBox(t)
 	p := proposeService(t, env, "w1")
 	body := inboxMux(env)("GET", "/inbox", nil)
-	if !strings.Contains(body, fmt.Sprintf("<section class=card id=%d ", p.ID)) {
+	if !strings.Contains(body, fmt.Sprintf(` id=%d data-f>`, p.ID)) || !strings.Contains(body, `<section class="card `) { // its weight beside it (ADR 0037 §7)
 		t.Fatalf("the card of #%d has no anchor:\n%s", p.ID, body)
 	}
 }

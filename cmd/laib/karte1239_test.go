@@ -86,7 +86,7 @@ func TestTheTemplateUpdatesOfOneReleaseComeAsOneCardAndOneTap(t *testing.T) {
 		t.Fatalf("under the card, one proposal per service: %d", len(open))
 	}
 	page := inboxMux(env)("GET", "/inbox", nil)
-	if strings.Count(page, "<section class=card") != 1 || !strings.Contains(page, "W2: W2 kann jetzt mehr") || strings.Contains(page, "template update") {
+	if strings.Count(page, " data-f><h2>#") != 1 || !strings.Contains(page, "W2: W2 kann jetzt mehr") || strings.Contains(page, "template update") {
 		t.Fatalf("the Inbox page does not show one card in words:\n%s", page)
 	}
 

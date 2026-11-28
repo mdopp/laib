@@ -24,7 +24,7 @@
 54 internal/plan/plan.go: plan.Compute
 48 internal/plan/plan.go: plan.Conflicts
 41 internal/policy/policy.go: policy.Validate
-99 internal/proposal/card.go: proposal.Card
+98 internal/proposal/card.go: proposal.Card
 35 internal/proposal/content.go: proposal.addService
 45 internal/proposal/content.go: proposal.prepare
 49 internal/proposal/content.go: proposal.updateService

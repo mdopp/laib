@@ -668,7 +668,18 @@ no „Zurücknehmen“ and say what stays. **Who proposed it and why** (quoted),
 and **the safe default**: for a risky class (human, a new service, a minted
 token, a service with data, the destroy tier) „Freigeben“ loses its accent
 and a risk line stands above the button row (#941; the card's `primary`
-still names „Später“ for the apps that show cards), and the diff sits behind „Details“. The card is built mechanically from
+still names „Später“ for the apps that show cards), and the diff sits behind „Details“.
+**Compact, and ordered** (ADR 0037 §7): the Inbox page shows a card as its
+headline, one line of what it does, its weight (niedrig · mittel · hoch)
+and „rückgängig: ja | nein“ above the buttons, everything else under
+„Details“. Its order is hoch first, then mittel, then niedrig; a card that
+waits on another (`wartet: vorschlag:N`) stands right behind it, the steps
+under one line („Mosquitto vor Scanner – 2 Schritte“). A „hoch“ card — a new
+service, a key, a public path or no login, a script or unit on the host, the
+destroy tier — has its Freigeben inside its details, named for what it does
+(the card's `approve`: „Öffentlichen Pfad freigeben“, „Schlüssel freigeben“,
+„Skript auf der Box freigeben“, „Neuen Dienst freigeben“, „Endgültig
+freigeben“). The card is built mechanically from
 the classified change (`proposal.Card`), never by a model. What the
 proposer saw (`evidence`) follows its reason, and its way back (`undo`)
 follows laib's own.
