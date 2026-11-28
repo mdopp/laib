@@ -244,21 +244,21 @@ Keeps the box alive, safe and reachable. Ring 0a is the trust kernel, ring 0b La
 
 #### Ring 0a · the trust kernel
 
-The part the house trusts: it must work when everything else is broken. **22,903 / 22,904, at 95 % or more** lines (`cmd/`, `internal/`).
+The part the house trusts: it must work when everything else is broken. **23,222 / 23,223, at 95 % or more** lines (`cmd/`, `internal/`).
 
 | Part | What it does | Code | Lines |
 |---|---|---|---:|
 | State | box.yml, every service's values and the age secrets, a git repo with history | [`state`](internal/state/), [`secrets`](internal/secrets/), [`boxfs`](internal/boxfs/), [`staterepo.go`](cmd/laib/staterepo.go), [`secret.go`](cmd/laib/secret.go) | 2,642 |
-| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 4,130 |
-| Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 5,595 |
+| Render, apply, converge | template and values to Quadlet, Caddy, Authelia, AdGuard and nftables files; snapshot, write, restart, verify; keep the box on its state | [`render`](internal/render/), [`plan`](internal/plan/), [`apply`](internal/apply/), [`sysd`](internal/sysd/), [`plan.go`](cmd/laib/plan.go) | 4,164 |
+| Inbox, proposal, review | proposals, the judge every proposal passes, approval by content; the owner's to-do list | [`inbox`](internal/inbox/), [`proposal`](internal/proposal/), [`review`](internal/review/), [`aufgaben`](internal/aufgaben/) | 5,787 |
 | Policy and hands | which hand may call which verb up to which tier; the hands' verbs on one service; the Operator's skills | [`policy`](internal/policy/), [`token`](internal/token/), [`envelope`](internal/envelope/), [`skill`](internal/skill/), [`token.go`](cmd/laib/token.go) | 1,459 |
-| Journal | append-only JSONL, everything that happened | [`journal`](internal/journal/), [`journal.go`](cmd/laib/journal.go) | 430 |
-| Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,862 |
+| Journal | append-only JSONL, everything that happened | [`journal`](internal/journal/), [`journal.go`](cmd/laib/journal.go) | 431 |
+| Diag and repair | what is red, and the card that fixes it | [`diag`](internal/diag/) | 1,931 |
 | Backup | the nightly restic backup, restore, the recovery sheet | [`backup`](internal/backup/) | 885 |
 | Self-update | Laib itself, the services' images and templates, with the previous one back on red | [`self.go`](cmd/laib/self.go), [`updates.go`](cmd/laib/updates.go), [`registry`](internal/registry/) | 1,115 |
-| Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 2,085 |
-| MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,314 |
-| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,386 |
+| Admin pages | `laib.<domain>`: Status, Inbox, Keys, Journal | [`pages`](internal/pages/) | 2,102 |
+| MCP and verb door | how everyone talks to Laib: MCP, the verb table, the door to the household verbs | [`mcp`](internal/mcp/), [`cli`](internal/cli/), [`door.go`](cmd/laib/door.go) | 1,319 |
+| The verbs | the one binary, CLI and daemon (`laib serve`): the verb table and the verbs no part above holds | [`cmd/laib`](cmd/laib/) | 1,387 |
 
 #### Ring 0b and the programs beside the kernel
 
@@ -276,7 +276,7 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 | [`lease/`](lease/) | helfer | laib-lease: the model role's policy proxy and the GPU lease (ADR 0011) | 1,238 / 1,430 |
 | [`mcpserver/`](mcpserver/) | blatt | The smallest MCP server, shared by the Bote's tools (frage, automat, directory) | 111 / 220 |
 | [`notify/`](notify/) | helfer | laib-notify: the outside watchdog ping and messages to the owner, the chat first, else mail | **658 / 660, at 95 % or more** |
-| [`operator/`](operator/) | helfer | The Operator, the admin agent: incidents, the morning report, the review (ADR 0013, 0027) | **3,299 / 3,300, at 95 % or more** |
+| [`operator/`](operator/) | helfer | The Operator, the admin agent: incidents, the morning report, the review (ADR 0013, 0027) | **3,302 / 3,303, at 95 % or more** |
 | [`stick/`](stick/) | laptop | laib-stick on the laptop: builds the install stick for a new box | 1,468 / 1,980 |
 | [`updater/`](updater/) | helfer | laib-updater: the registries, changelogs and signatures of laib updates; no key, no token (ADR 0035) | 646 / 760 |
 
@@ -297,7 +297,7 @@ In this repo, each with its own cap in `scripts/loc.sh`. They talk to Laib only 
 | [`routineblick`](skills/routineblick/) | Alle zehn Minuten ein Blick auf die Box — eine Zeile, wenn sich etwas geändert hat. | every tick (`OPERATOR_TICK`, 10 min by default) | frei | `status`, `diag`, `repair`, `aufgabe`, `note` | — |
 | [`sicherung`](skills/sicherung/) | Einmal pro Woche — die Sicherung prüfen und probeweise wiederherstellen; was nicht stimmt, steht im Morgenbericht. | weekly, Sunday 05:00 | nein | `backup`, `journal`, `note` | 62 / 220 |
 | [`versionen`](skills/versionen/) | Jede Nacht — neue Stände aller Images geprüft; Routine spielt sich selbst ein, der Rest kommt als ein Vorschlag mit dem Grund. | daily at 05:30 | kurz | `updates`, `propose`, `note`, `inbox` | 181 / 220 |
-| [`vorfall`](skills/vorfall/) | Wenn etwas rot wird — nachsehen, Ursache finden, rückgängig machbar reparieren oder eskalieren. | when something turns red | frei | `diag`, `logs`, `inspect`, `restart`, `propose`, `repair`, `escalate`, `note`; with a capable model also `look`, `read`, `journal`, `plan`, `apply`, `planned` | 102 / 220 |
+| [`vorfall`](skills/vorfall/) | Wenn etwas rot wird — nachsehen, Ursache finden, rückgängig machbar reparieren oder eskalieren. | when something turns red | frei | `diag`, `logs`, `inspect`, `restart`, `propose`, `repair`, `wahl`, `escalate`, `note`; with a capable model also `look`, `read`, `journal`, `plan`, `apply`, `planned` | 102 / 220 |
 
 #### Foundation services
 
